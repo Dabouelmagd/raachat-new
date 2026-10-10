@@ -1,0 +1,12 @@
+<!-- ضيف دول في ios/App/App/Info.plist (جوه <dict> الرئيسي). الجُمل دي بتظهر للمستخدم في طلب الإذن وآبل بتراجعها. -->
+<key>NSMicrophoneUsageDescription</key>
+<string>نستخدم الميكروفون للمكالمات الصوتية والغرف الصوتية والرسائل الصوتية.</string>
+<key>NSCameraUsageDescription</key>
+<string>نستخدم الكاميرا للمكالمات المرئية وتصوير الصور والستوري.</string>
+<key>NSContactsUsageDescription</key>
+<string>نطابق أرقام جهات اتصالك بالمسجّلين لنوريكي مين من أصحابك على رع شات، وتقدري تدعي اللي ملوش. الأرقام مش بتتخزّن.</string>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>لاختيار صور وملفات لإرسالها أو نشرها في الستوري.</string>
+<key>UIBackgroundModes</key>
+<array><string>remote-notification</string></array>
+<!-- فعّل Push Notifications capability في Xcode، وارفع APNs key في Firebase/خادمك -->

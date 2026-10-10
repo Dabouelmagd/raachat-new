@@ -1,0 +1,1639 @@
+openapi: 3.0.3
+info:
+  title: Raa Chat API
+  version: 0.1.0
+  description: |
+    عقد الـ API لتطبيق رع شات. يطابق الأنواع في src/types.ts والأكشنز في useAppActions().
+    مستقل عن اختيار الباك إند (Supabase أو Node/Express+Prisma).
+servers:
+  - url: https://api.example.com/v1
+security:
+  - bearer: []
+tags:
+  - { name: auth }
+  - { name: threads }
+  - { name: messages }
+  - { name: rooms }
+  - { name: stories }
+  - { name: wallet }
+  - { name: ads }
+  - { name: search }
+  - { name: translate }
+  - { name: calls }
+  - { name: admin }
+  - { name: push }
+  - { name: reports }
+paths:
+  /auth/otp/request:
+    post:
+      tags: [auth]
+      security: []
+      summary: طلب رمز OTP على رقم أو إيميل
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, target]
+              properties:
+                channel: { type: string, enum: [phone, email] }
+                target: { type: string }
+      responses:
+        "204": { description: تم الإرسال }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /auth/otp/verify:
+    post:
+      tags: [auth]
+      security: []
+      summary: التحقق من الرمز (صلاحية 5 دقائق، 5 محاولات)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, target, code]
+              properties:
+                channel: { type: string, enum: [phone, email] }
+                target: { type: string }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: جلسة جديدة
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /auth/refresh:
+    post:
+      tags: [auth]
+      security: []
+      summary: تجديد الجلسة (يدوّر الـ refresh token؛ القديم يتبطّل)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties: { refreshToken: { type: string } }
+      responses:
+        "200":
+          description: توكنات جديدة
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { accessToken: { type: string }, refreshToken: { type: string } }
+        "401": { $ref: "#/components/responses/Error" }
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: إنهاء الجلسة الحالية
+      responses:
+        "204": { description: تم }
+  /sessions:
+    get:
+      tags: [auth]
+      summary: الجلسات النشطة
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    device: { type: string }
+                    createdAt: { type: string, format: date-time }
+                    lastUsed: { type: string, format: date-time }
+                    current: { type: boolean }
+    delete:
+      tags: [auth]
+      summary: إنهاء كل الجلسات الأخرى
+      responses:
+        "204": { description: تم }
+  /sessions/{id}:
+    delete:
+      tags: [auth]
+      summary: إنهاء جلسة معيّنة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: تم }
+  /me:
+    get:
+      tags: [auth]
+      summary: بياناتي
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    patch:
+      tags: [auth]
+      summary: تعديل الملف الشخصي (الاسم/الحالة/اللون/الصورة/اللغة)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                status: { type: string }
+                color: { type: string, example: "#E1523E" }
+                photoUrl: { type: string, nullable: true }
+                lang: { type: string, enum: [ar, en, zh, fr] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    delete:
+      tags: [account]
+      summary: "حذف الحساب نهائيًا (إخفاء الهوية)"
+      description: "لازم code صحيح. لو الرصيد أكبر من صفر لازم forfeitBalance=true. بيمسح البيانات الشخصية والرسائل والستوري والجلسات ويحتفظ بسجل المعاملات بدون هوية."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+                forfeitBalance: { type: boolean }
+      responses:
+        "204": { description: "تم الحذف" }
+        "400": { $ref: "#/components/responses/Error" }
+  /blocks:
+    get:
+      tags: [safety]
+      summary: "قايمة المحظورين"
+      responses:
+        "200": { description: "مصفوفة مستخدمين مع blockedAt" }
+    post:
+      tags: [safety]
+      summary: "حظر مستخدم"
+      description: "بيمنع الرسائل الخاصة في الاتجاهين ويخفي رسائله وستوريزه عندك."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string }
+      responses:
+        "204": { description: "تم" }
+        "404": { $ref: "#/components/responses/Error" }
+  /blocks/{userId}:
+    delete:
+      tags: [safety]
+      summary: "إلغاء حظر"
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "تم" }
+  /users:
+    get:
+      tags: [auth]
+      summary: بحث في المستخدمين (اسم/رقم/إيميل) لبدء دردشة أو إضافة أعضاء
+      parameters: [{ name: q, in: query, schema: { type: string } }]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+  /uploads:
+    post:
+      tags: [messages]
+      summary: رفع ملف (حد 10MB) — يرجّع رابط يتحط في attachment.url
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties: { file: { type: string, format: binary } }
+      responses:
+        "201":
+          description: تم
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { name: { type: string }, size: { type: integer }, mime: { type: string }, url: { type: string } }
+  /threads/public:
+    get:
+      tags: [threads]
+      summary: اكتشاف الجروبات العامة
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Thread" }
+  /threads/{id}:
+    patch:
+      tags: [threads]
+      summary: تعديل شكل الجروب (اسم/لون/أيقونة/صورة) — للمالك والمشرفين
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                color: { type: string, nullable: true }
+                icon: { type: string, nullable: true }
+                photoUrl: { type: string, nullable: true }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Thread" }
+  /threads/{id}/members:
+    post:
+      tags: [threads]
+      summary: إضافة أعضاء لجروب (بلا حد أقصى)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberIds]
+              properties: { memberIds: { type: array, items: { type: string } } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Thread" }
+  /threads/{id}/read:
+    post:
+      tags: [threads]
+      summary: تعليم المحادثة كمقروءة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: تم }
+  /threads:
+    get:
+      tags: [threads]
+      summary: قائمة المحادثات
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Thread" }
+    post:
+      tags: [threads]
+      summary: إنشاء dm (يرجع الموجود إن وُجد) أو جروب
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: { type: string, enum: [dm, group] }
+                name: { type: string }
+                memberIds: { type: array, items: { type: string }, description: "بدون حد أقصى" }
+                color: { type: string, example: "#2F6DB5" }
+                icon: { type: string }
+                photoUrl: { type: string }
+                isPublic: { type: boolean }
+      responses:
+        "200":
+          description: dm موجود
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Thread" }
+        "201":
+          description: تم الإنشاء
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Thread" }
+  /threads/{id}/join:
+    post:
+      tags: [threads]
+      summary: انضمام لجروب عام
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Thread" }
+  /threads/{id}/members/me:
+    delete:
+      tags: [threads]
+      summary: مغادرة المحادثة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: تمت المغادرة }
+  /threads/{id}/messages:
+    get:
+      tags: [messages]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: before, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Message" }
+    post:
+      tags: [messages]
+      summary: إرسال رسالة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                replyToId: { type: string }
+                attachment: { $ref: "#/components/schemas/Attachment" }
+      responses:
+        "201":
+          description: تم
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /messages/{id}:
+    patch:
+      tags: [messages]
+      summary: تعديل رسالة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties: { text: { type: string } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+    delete:
+      tags: [messages]
+      summary: حذف رسالة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: تم }
+  /messages/{id}/reactions/{emoji}:
+    put:
+      tags: [messages]
+      summary: تبديل تفاعل (toggle)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: emoji, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /rooms:
+    get:
+      tags: [rooms]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VoiceRoom" }
+    post:
+      tags: [rooms]
+      summary: إنشاء غرفة صوتية (غرفة LiveKit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties: { name: { type: string } }
+      responses:
+        "201":
+          description: تم
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VoiceRoom" }
+  /rooms/{id}/join:
+    post:
+      tags: [rooms]
+      summary: دخول غرفة بهوية حقيقية أو مؤقتة
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityMode]
+              properties:
+                identityMode: { type: string, enum: [real, temp] }
+      responses:
+        "200":
+          description: توكن LiveKit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, url]
+                properties:
+                  token: { type: string }
+                  url: { type: string }
+                  displayName: { type: string }
+  /rooms/{id}/leave:
+    post:
+      tags: [rooms]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: تم }
+  /stories:
+    get:
+      tags: [stories]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Story" }
+    post:
+      tags: [stories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caption]
+              properties:
+                caption: { type: string }
+                colorFrom: { type: string }
+                colorTo: { type: string }
+                imageUrl: { type: string }
+                colorFrom: { type: string }
+                colorTo: { type: string }
+      responses:
+        "201":
+          description: تم
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Story" }
+  /stories/{id}/seen:
+    post:
+      tags: [stories]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: تم }
+  /wallet:
+    get:
+      tags: [wallet]
+      summary: الرصيد وآخر العمليات (الرصيد مشتق من الدفتر)
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wallet" }
+  /bills/inquiry:
+    post:
+      tags: [wallet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serviceKey, account]
+              properties:
+                serviceKey: { type: string }
+                account: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillInquiry" }
+  /bills/pay:
+    post:
+      tags: [wallet]
+      summary: دفع فاتورة. Idempotency-Key إجباري، والـ PIN يُتحقق منه على الخادم.
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serviceKey, account, amount, pin]
+              properties:
+                serviceKey: { type: string }
+                account: { type: string }
+                amount: { type: integer, description: بالقروش }
+                offerCode: { type: string }
+                pin: { type: string }
+      responses:
+        "200":
+          description: إيصال
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Receipt" }
+        "402": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /offers/validate:
+    post:
+      tags: [wallet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, amount]
+              properties:
+                code: { type: string }
+                amount: { type: integer }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valid]
+                properties:
+                  valid: { type: boolean }
+                  discount: { type: integer }
+  /ads/catalog:
+    get:
+      tags: [ads]
+      summary: الحملات الشغالة النهارده (معتمدة وفي فترتها)
+      description: التطبيق بيستخدمها بدل الكتالوج المحلي. التاريخ بتوقيت القاهرة.
+      responses:
+        "200":
+          description: القائمة بترتيب الأولوية
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdPublic" }
+  /ads/today:
+    get:
+      tags: [ads]
+      summary: مواعيد النوافذ اللي اتعرضت للمستخدم النهارده
+      parameters:
+        - { name: day, in: query, required: true, schema: { type: string, example: "2026-10-10" } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { shown: { type: array, items: { type: integer, minimum: 0, maximum: 23 } } }
+  /ads/events:
+    post:
+      tags: [ads]
+      summary: تسجيل ظهور/ضغط/إغلاق (مرة واحدة لكل مستخدم في اليوم)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [day, adId, kind]
+              properties:
+                day: { type: string, example: "2026-10-10" }
+                slot: { type: integer, minimum: 0, maximum: 23, description: موعد النافذة المنبثقة }
+                adId: { type: string }
+                kind: { type: string, enum: [shown, clicked, closed] }
+                placement: { type: string, enum: [modal, banner, services, story] }
+      responses:
+        "204": { description: تم }
+  /push/key:
+    get:
+      tags: [push]
+      summary: المفتاح العام VAPID (null لو الإشعارات غير مفعّلة)
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, properties: { publicKey: { type: string, nullable: true } } }
+  /push/subscribe:
+    post:
+      tags: [push]
+      summary: تسجيل جهاز للإشعارات (أقصى ١٠ أجهزة للمستخدم)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string, format: uri }
+                keys:
+                  type: object
+                  required: [p256dh, auth]
+                  properties: { p256dh: { type: string }, auth: { type: string } }
+      responses:
+        "204": { description: تم }
+  /push/unsubscribe:
+    post:
+      tags: [push]
+      summary: إلغاء تسجيل جهاز
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [endpoint], properties: { endpoint: { type: string } } }
+      responses:
+        "204": { description: تم }
+  /rtc/config:
+    get:
+      tags: [calls]
+      summary: إعدادات STUN/TURN (بيانات TURN مؤقتة بـ HMAC)
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, properties: { iceServers: { type: array, items: { type: object } } } }
+  /auth/handoff/exchange:
+    post:
+      tags: [admin]
+      security: []
+      summary: استبدال تذكرة الدخول المباشر بجلسة للوحة الإدارة
+      description: التذكرة تُستخدم مرة واحدة وصلاحيتها ٦٠ ثانية. ترفض لو الحساب موقوف أو مش من الفريق.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string, minLength: 20 } } }
+      responses:
+        "200":
+          description: جلسة جديدة
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /search/ai:
+    post:
+      tags: [search]
+      summary: بحث عميق بالذكاء الاصطناعي (فهم السؤال + بحث دلالي + إجابة مُلخّصة)
+      description: |
+        الباك إند يعمل embeddings (مثلاً pgvector) + BM25 + إعادة ترتيب بنموذج لغوي،
+        ويبحث في رسائل المستخدم وجهات الاتصال والجروبات والغرف والخدمات والعروض والإعدادات.
+        لازم يحترم صلاحيات المستخدم: ما يرجّعش إلا محادثات هو عضو فيها.
+        الواجهة الحالية بتستدعي نفس الشكل ده من src/search/aiSearch.ts (محلي للديمو).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string, maxLength: 300 }
+                deep: { type: boolean, default: true, description: "false = بحث نصي عادي بدون ذكاء اصطناعي" }
+                kinds:
+                  type: array
+                  items: { $ref: "#/components/schemas/SearchKind" }
+      responses:
+        "200":
+          description: النتائج
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResponse" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /translate:
+    post:
+      tags: [translate]
+      summary: ترجمة نص (للرسائل والترجمة الفورية في المكالمات)
+      description: |
+        الواجهة بتستدعيها من src/translate/engine.ts (translate). في الديمو بتترجم عبارات محدودة محليًا.
+        الباك إند يوصّل محرك ترجمة (Google Cloud Translation / DeepL / نموذج لغوي) ويدعم أي لغة (كود BCP-47).
+        للمكالمات: الأفضل بث (WebSocket/SSE) — الكلام يتحوّل لنص (STT) ثم يترجم ثم (اختياري) ينطق (TTS).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, to]
+              properties:
+                text: { type: string, maxLength: 5000 }
+                to: { type: string, example: zh-CN }
+                from: { type: string, example: ar, description: "اتركه فاضي للكشف التلقائي" }
+      responses:
+        "200":
+          description: النتيجة
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+                  from: { type: string }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /calls:
+    get:
+      tags: [calls]
+      summary: سجل المكالمات
+      responses:
+        "200":
+          description: القائمة (الأحدث أولاً)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CallRecord" }
+    post:
+      tags: [calls]
+      summary: تسجيل مكالمة منتهية
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallRecord" }
+      responses:
+        "201": { description: تم }
+  /admin/handoff:
+    post:
+      tags: [admin]
+      summary: إصدار تذكرة دخول مباشر (٦٠ ثانية، مرة واحدة)
+      description: "الصلاحية: أي عضو فريق"
+      security: [{ bearer: [] }]
+      responses:
+        "201": { description: "{ code, expiresIn: 60 }" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/me:
+    get:
+      tags: [admin]
+      summary: بيانات عضو الفريق الحالي وصلاحياته الفعلية وكتالوج الصلاحيات
+      description: "الصلاحية: عضو فريق"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/roles:
+    get:
+      tags: [admin]
+      summary: الأدوار
+      description: "الصلاحية: team.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: إنشاء دور مخصص (لا يتجاوز صلاحيات المنشئ)
+      description: "الصلاحية: team.manage"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, permissions], properties: { name: { type: string }, permissions: { type: array, items: { type: string } } } }
+      responses:
+        "201": { description: تم }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/roles/{id}:
+    patch:
+      tags: [admin]
+      summary: تعديل دور
+      description: "الصلاحية: team.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, permissions: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: حذف دور (لو فاضي وغير نظامي)
+      description: "الصلاحية: team.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/staff:
+    get:
+      tags: [admin]
+      summary: أعضاء الفريق
+      description: "الصلاحية: team.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: إضافة عضو بالإيميل/الموبايل (الصلاحية الفعلية = دور + منح − سحب)
+      description: "الصلاحية: team.manage"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [contact, roleId], properties: { contact: { type: string }, name: { type: string }, roleId: { type: string }, grant: { type: array, items: { type: string } }, revoke: { type: array, items: { type: string } } } }
+      responses:
+        "201": { description: تم }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/staff/{userId}:
+    patch:
+      tags: [admin]
+      summary: تعديل عضو (دور/منح/سحب/تعطيل). المالك لا يُعدّل
+      description: "الصلاحية: team.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { roleId: { type: string }, grant: { type: array, items: { type: string } }, revoke: { type: array, items: { type: string } }, active: { type: boolean } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: إزالة عضو
+      description: "الصلاحية: team.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/audit:
+    get:
+      tags: [admin]
+      summary: سجل التدقيق (الأحدث أولًا)
+      description: "الصلاحية: audit.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
+        - { name: before, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: المستخدمون (بحث وفلتر حالة)
+      description: "الصلاحية: users.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended, banned] } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 200 } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/users/{id}/status:
+    patch:
+      tags: [admin]
+      summary: إيقاف/حظر/تفعيل مستخدم (يلغي جلساته ويقطع اتصاله)
+      description: "الصلاحية: users.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [status], properties: { status: { type: string, enum: [active, suspended, banned] }, reason: { type: string } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/finance/tx:
+    get:
+      tags: [admin]
+      summary: معاملات المحفظة
+      description: "الصلاحية: finance.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string, enum: [topup, bill, refund] } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 200 } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/finance/summary:
+    get:
+      tags: [admin]
+      summary: ملخص مالي
+      description: "الصلاحية: finance.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/finance/tx/{id}/refund:
+    post:
+      tags: [admin]
+      summary: استرداد فاتورة (ذرّي، مرة واحدة، بالمبلغ المدفوع فعلًا)
+      description: "الصلاحية: finance.refund"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { reason: { type: string } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/offers:
+    get:
+      tags: [admin]
+      summary: العروض والخصومات
+      description: "الصلاحية: finance.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/offers/{code}:
+    put:
+      tags: [admin]
+      summary: إنشاء/تعديل كود خصم
+      description: "الصلاحية: finance.offers"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [percent, max], properties: { service: { type: string, nullable: true }, percent: { type: integer, minimum: 1, maximum: 100 }, max: { type: number }, active: { type: boolean } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: حذف كود خصم
+      description: "الصلاحية: finance.offers"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/placements:
+    get:
+      tags: [admin]
+      summary: مواضع الإعلانات (مقاس/سعة/سعر يومي)
+      description: "الصلاحية: ads.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/placements/{key}:
+    put:
+      tags: [admin]
+      summary: تعديل موضع (ممنوع تقليل السعة تحت الحجوزات القادمة)
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, kind, width, height, slots, pricePerDay], properties: { name: { type: string }, kind: { type: string, enum: [modal, banner, story, room] }, width: { type: integer }, height: { type: integer }, slots: { type: integer, minimum: 1, maximum: 20 }, pricePerDay: { type: number }, dailyImpressions: { type: integer }, active: { type: boolean }, note: { type: string, nullable: true } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/inventory:
+    get:
+      tags: [admin]
+      summary: خريطة الإتاحة (حجز/معلّق/محظور/متاح) لكل موضع ويوم
+      description: "الصلاحية: ads.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: days, in: query, schema: { type: integer, default: 30, maximum: 92 } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/quote:
+    post:
+      tags: [admin]
+      summary: تسعير وفحص تعارض قبل الحجز (مع كود هدية اختياري)
+      description: "الصلاحية: ads.view"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [placements, start, end], properties: { placements: { type: array, items: { type: string } }, start: { type: string, example: "2026-10-10" }, end: { type: string, example: "2026-10-10" }, excludeId: { type: string }, giftCode: { type: string } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/campaigns:
+    get:
+      tags: [admin]
+      summary: الحملات
+      description: "الصلاحية: ads.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, paused, rejected, cancelled] } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: إنشاء حملة (حجز تحت قفل؛ 409 عند التعارض). أقصى مدة سنة
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [advertiser, headline, link, start, end, placements], properties: { advertiser: { type: string }, headline: { type: string }, body: { type: string }, cta: { type: string }, link: { type: string, format: uri, description: https فقط }, grad: { type: integer, minimum: 0, maximum: 5 }, audience: { type: string }, priority: { type: integer, minimum: 1, maximum: 3 }, dailyCap: { type: integer, minimum: 1, maximum: 10 }, note: { type: string }, start: { type: string, example: "2026-10-10" }, end: { type: string, example: "2026-10-10" }, placements: { type: array, items: { type: string } }, giftCode: { type: string }, approve: { type: boolean } } }
+      responses:
+        "201": { description: تم }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/campaigns/{id}:
+    patch:
+      tags: [admin]
+      summary: تعديل حملة (إعادة فحص التعارض)
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { advertiser: { type: string }, headline: { type: string }, body: { type: string }, cta: { type: string }, link: { type: string, format: uri, description: https فقط }, grad: { type: integer, minimum: 0, maximum: 5 }, audience: { type: string }, priority: { type: integer, minimum: 1, maximum: 3 }, dailyCap: { type: integer, minimum: 1, maximum: 10 }, note: { type: string }, start: { type: string, example: "2026-10-10" }, end: { type: string, example: "2026-10-10" }, placements: { type: array, items: { type: string } }, giftCode: { type: string }, approve: { type: boolean } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/campaigns/{id}/stats:
+    get:
+      tags: [admin]
+      summary: إحصائيات حملة يوميًا (ظهور/ضغط/إغلاق، مستخدمون فريدون)
+      description: "الصلاحية: ads.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/campaigns/{id}/{action}:
+    post:
+      tags: [admin]
+      summary: اعتماد/رفض/إيقاف/استئناف/إلغاء (الرفض والإلغاء قبل البداية يُرجعان كود الهدية)
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [approve, reject, pause, resume, cancel] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { reason: { type: string } } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/gifts:
+    get:
+      tags: [admin]
+      summary: أكواد الهدايا
+      description: "الصلاحية: ads.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: توليد أكواد هدية RA-XXXX-XXXX (١/٣/٦/١٢ شهر، استخدام واحد)
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [months], properties: { months: { type: integer, enum: [1, 3, 6, 12] }, count: { type: integer, maximum: 50 }, recipient: { type: string }, note: { type: string }, placements: { type: array, items: { type: string } }, expiresAt: { type: string, example: "2026-10-10" } } }
+      responses:
+        "201": { description: تم }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/gifts/{id}:
+    delete:
+      tags: [admin]
+      summary: إلغاء كود هدية غير مستخدم
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/blocks:
+    post:
+      tags: [admin]
+      summary: قفل موضع لفترة (صيانة/حجز داخلي). ممنوع لو فيه حجوزات
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [placement, reason, from, to], properties: { placement: { type: string }, reason: { type: string }, from: { type: string, example: "2026-10-10" }, to: { type: string, example: "2026-10-10" } } }
+      responses:
+        "201": { description: تم }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ads/blocks/{id}:
+    delete:
+      tags: [admin]
+      summary: رفع القفل
+      description: "الصلاحية: ads.manage"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /me/delete/otp:
+    post:
+      tags: [account]
+      summary: "طلب كود تأكيد لحذف الحساب"
+      description: "بيبعت OTP على القناة المسجّلة ويرجّع { channel, hint, balance } عشان يتأكد المستخدم من الرصيد اللي هيضيع."
+      responses:
+        "200": { description: "{ channel, hint, balance }" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /blocks:
+    get:
+      tags: [safety]
+      summary: "قايمة المحظورين"
+      responses:
+        "200": { description: "مصفوفة مستخدمين مع blockedAt" }
+    post:
+      tags: [safety]
+      summary: "حظر مستخدم"
+      description: "بيمنع الرسائل الخاصة في الاتجاهين ويخفي رسائله وستوريزه عندك."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string }
+      responses:
+        "204": { description: "تم" }
+        "404": { $ref: "#/components/responses/Error" }
+  /blocks/{userId}:
+    delete:
+      tags: [safety]
+      summary: "إلغاء حظر"
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "تم" }
+  /reports:
+    post:
+      tags: [reports]
+      summary: إبلاغ عن رسالة/Story/غرفة/مستخدم/جروب (حد ٢٠ بلاغ يوميًا)
+      description: تكرار نفس البلاغ من نفس الشخص يرجّع نفس السجل. غير العضو لا يعرف بوجود الرسالة (404).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, targetId, reason]
+              properties:
+                kind: { type: string, enum: [message, story, room, user, thread] }
+                targetId: { type: string }
+                reason: { type: string, enum: [abuse, spam, inappropriate, impersonation, scam, other] }
+                note: { type: string, maxLength: 300 }
+      responses:
+        "201": { description: "{ id }" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /admin/reports:
+    get:
+      tags: [admin]
+      summary: البلاغات (مع عدد البلاغات على نفس الهدف)
+      description: "الصلاحية: content.view"
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved], default: open } }
+        - { name: kind, in: query, schema: { type: string, enum: [message, story, room, user, thread] } }
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/reports/summary:
+    get:
+      tags: [admin]
+      summary: عدد البلاغات المفتوحة والمعالجة
+      description: "الصلاحية: content.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: "{ open, resolved }" }
+  /admin/reports/{id}/resolve:
+    post:
+      tags: [admin]
+      summary: معالجة بلاغ (تقفل كل البلاغات المفتوحة على نفس الهدف)
+      description: "الصلاحية: content.moderate. delete_ban تحتاج users.manage كمان. delete: يحذف الرسالة/الـ Story أو يقفل الغرفة. warn: إشعار للمستخدم. dismiss: تجاهل."
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [action], properties: { action: { type: string, enum: [delete, delete_ban, warn, dismiss] } } }
+      responses:
+        "200": { description: "{ id, resolved, action }" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/stories:
+    get:
+      tags: [admin]
+      summary: الـ Stories النشطة مع عدد البلاغات
+      description: "الصلاحية: content.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+  /admin/stories/{id}:
+    delete:
+      tags: [admin]
+      summary: حذف Story
+      description: "الصلاحية: content.moderate"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204": { description: تم }
+  /admin/overview:
+    get:
+      tags: [admin]
+      summary: أرقام الصفحة الرئيسية (الأقسام حسب صلاحيات الموظف)
+      description: "أي عضو فريق"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/spaces/groups:
+    get:
+      tags: [admin]
+      summary: الجروبات
+      description: "الصلاحية: content.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/spaces/groups/{id}:
+    patch:
+      tags: [admin]
+      summary: تقييد/رفع تقييد جروب (يمنع الإرسال)
+      description: "الصلاحية: content.moderate"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [restricted], properties: { restricted: { type: boolean } } }
+      responses:
+        "200": { description: ok }
+    delete:
+      tags: [admin]
+      summary: حذف جروب
+      description: "الصلاحية: content.moderate"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204": { description: تم }
+  /admin/spaces/rooms:
+    get:
+      tags: [admin]
+      summary: الغرف (المباشرة وآخر ٧ أيام)
+      description: "الصلاحية: content.view"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/spaces/rooms/{id}/close:
+    post:
+      tags: [admin]
+      summary: إغلاق غرفة
+      description: "الصلاحية: content.moderate"
+      security: [{ bearer: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204": { description: تم }
+  /admin/notifications:
+    get:
+      tags: [admin]
+      summary: سجل الإشعارات الجماعية والجماهير المتاحة
+      description: "الصلاحية: notifications.send"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+    post:
+      tags: [admin]
+      summary: "إرسال إشعار جماعي (push + لحظي) — حد واحد كل دقيقة"
+      description: "الصلاحية: notifications.send"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [title, audience], properties: { title: { type: string }, body: { type: string }, audience: { type: string, enum: [all, active7, inactive30, wallet] } } }
+      responses:
+        "201": { description: "{ id, reach, devices }" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /admin/settings:
+    get:
+      tags: [admin]
+      summary: إعدادات التطبيق
+      description: "الصلاحية: settings.manage"
+      security: [{ bearer: [] }]
+      responses:
+        "200": { description: ok }
+    put:
+      tags: [admin]
+      summary: تعديل الإعدادات (وضع الصيانة / قفل التسجيل)
+      description: "الصلاحية: settings.manage"
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { maintenance: { type: boolean }, maintenanceMessage: { type: string }, registrationOpen: { type: boolean } } }
+      responses:
+        "200": { description: ok }
+  /public/settings:
+    get:
+      tags: [admin]
+      security: []
+      summary: حالة الصيانة والتسجيل (عام، بدون تسجيل دخول)
+      responses:
+        "200": { description: "{ maintenance, message, registrationOpen }" }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string } }
+  responses:
+    Error:
+      description: خطأ
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooMany:
+      description: محاولات كثيرة
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    SearchKind:
+      type: string
+      enum: [message, chat, person, group, room, service, offer, setting, story]
+    SearchHit:
+      type: object
+      required: [id, kind, title, to, score]
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/SearchKind" }
+        title: { type: string }
+        sub: { type: string }
+        to: { type: string, description: "مسار الفتح داخل التطبيق" }
+        score: { type: number }
+        via: { type: string, enum: [exact, synonym, fuzzy] }
+    SearchResponse:
+      type: object
+      required: [results]
+      properties:
+        answer: { type: string, nullable: true, description: "إجابة مُلخّصة (في البحث العميق فقط)" }
+        interpretation:
+          type: object
+          properties:
+            topic: { type: array, items: { type: string } }
+            kinds: { type: array, items: { $ref: "#/components/schemas/SearchKind" } }
+            person: { type: string }
+            expanded: { type: array, items: { type: string } }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/SearchHit" }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+    Session:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+    User:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [user, support, admin, owner] }
+    Thread:
+      type: object
+      required: [id, type, name]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [dm, group] }
+        name: { type: string }
+        memberIds: { type: array, items: { type: string } }
+        createdByMe: { type: boolean }
+        color: { type: string, example: "#2F6DB5", description: لون الجروب }
+        icon: { type: string, description: مفتاح أيقونة (users, heart, code…) }
+        photo: { type: string, description: رابط صورة الجروب }
+    CallRecord:
+      type: object
+      required: [threadId, mode, dir, at, dur]
+      properties:
+        id: { type: string }
+        threadId: { type: string }
+        mode: { type: string, enum: [voice, video] }
+        dir: { type: string, enum: [in, out, missed] }
+        at: { type: integer, description: وقت البدء (ms) }
+        dur: { type: integer, description: المدة بالثواني }
+    Message:
+      type: object
+      required: [id, threadId, authorId, authorName, text, time, reactions]
+      properties:
+        id: { type: string }
+        threadId: { type: string }
+        authorId: { type: string }
+        authorName: { type: string }
+        text: { type: string }
+        time: { type: string, format: date-time }
+        read: { type: boolean }
+        replyToId: { type: string }
+        reactions:
+          type: object
+          additionalProperties: { type: array, items: { type: string } }
+        edited: { type: boolean }
+        deleted: { type: boolean }
+        attachment: { $ref: "#/components/schemas/Attachment" }
+    Attachment:
+      type: object
+      required: [name, size, mime, url]
+      properties:
+        name: { type: string }
+        size: { type: integer }
+        mime: { type: string }
+        url: { type: string, description: "/uploads/… أو https" }
+        text: { type: string, description: أول جزء من الملفات النصية }
+        voice:
+          type: object
+          properties: { duration: { type: integer }, waveform: { type: array, items: { type: number } } }
+    RoomParticipant:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        muted: { type: boolean }
+        speaking: { type: boolean }
+        isHost: { type: boolean }
+    VoiceRoom:
+      type: object
+      required: [id, name, participants]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        createdByMe: { type: boolean }
+        participants: { type: array, items: { $ref: "#/components/schemas/RoomParticipant" } }
+    Story:
+      type: object
+      required: [id, authorId, authorName, caption, time]
+      properties:
+        id: { type: string }
+        authorId: { type: string }
+        authorName: { type: string }
+        colorFrom: { type: string }
+        colorTo: { type: string }
+        caption: { type: string }
+        seen: { type: boolean }
+        image: { type: string }
+        time: { type: string, format: date-time }
+    Wallet:
+      type: object
+      required: [balance, entries]
+      properties:
+        balance: { type: integer, description: بالقروش }
+        entries: { type: array, items: { $ref: "#/components/schemas/LedgerEntry" } }
+    LedgerEntry:
+      type: object
+      required: [id, title, amount, time]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        amount: { type: integer, description: سالب للسحب }
+        time: { type: string, format: date-time }
+    BillInquiry:
+      type: object
+      required: [customerName, amountDue]
+      properties:
+        customerName: { type: string }
+        amountDue: { type: integer }
+    Receipt:
+      type: object
+      required: [id, title, amount, balanceAfter, time]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        amount: { type: integer }
+        balanceAfter: { type: integer }
+        time: { type: string, format: date-time }
+    AdPublic:
+      type: object
+      required: [id, advertiser, headline, link, placements]
+      properties:
+        id: { type: string }
+        advertiser: { type: string }
+        headline: { type: string }
+        body: { type: string }
+        cta: { type: string }
+        link: { type: string }
+        grad: { type: integer }
+        priority: { type: integer }
+        dailyCap: { type: integer }
+        placements: { type: array, items: { type: string } }
+    Ad:
+      type: object
+      required: [id, placement, title]
+      properties:
+        id: { type: string }
+        placement: { type: string }
+        title: { type: string }
+        body: { type: string }
+        ctaLabel: { type: string }
+        ctaUrl: { type: string }
+        skipAfterSec: { type: integer, example: 5 }

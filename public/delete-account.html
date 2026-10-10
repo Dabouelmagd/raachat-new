@@ -1,0 +1,44 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حذف الحساب — رع شات</title><meta name="robots" content="index,follow"><style>
+:root{--bg:#14100F;--fg:#F5EFE6;--mut:#b9ada0;--red:#E1523E;--gold:#C9A227;--card:#1f1917;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#F5EFE6;--fg:#14100F;--mut:#6b5f55;--card:#fff;color-scheme:light}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.85 "Cairo",system-ui,sans-serif}
+main{max-width:800px;margin:0 auto;padding:24px 18px 64px}h1{font-size:1.7rem;margin:.2em 0 .1em}h2{font-size:1.15rem;color:var(--gold);margin:1.8em 0 .3em}
+p,li{color:var(--fg)}.mut{color:var(--mut);font-size:.9rem}a{color:var(--red)}ul{padding-inline-start:1.3em}
+.note{background:var(--card);border:1px dashed var(--gold);border-radius:12px;padding:12px 14px;margin:14px 0;font-size:.92rem}
+nav.top{display:flex;gap:14px;flex-wrap:wrap;font-size:.9rem;margin-bottom:8px}hr{border:0;border-top:1px solid #8884;margin:36px 0}
+.en{direction:ltr;text-align:left}table{width:100%;border-collapse:collapse;font-size:.88rem;margin:10px 0;display:block;overflow-x:auto}th,td{border:1px solid #8885;padding:7px 9px;text-align:start;vertical-align:top}th{background:var(--card);color:var(--gold)}
+label{display:block;margin:12px 0 4px}input,button{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #8886;background:var(--card);color:var(--fg);width:100%}
+button{background:var(--red);color:#fff;border:0;font-weight:700;cursor:pointer;margin-top:12px}button:disabled{opacity:.5}
+</style></head><body><main><nav class="top"><a href="/legal/privacy.html">سياسة الخصوصية · Privacy</a><a href="/legal/terms.html">الشروط · Terms</a><a href="/legal/community.html">معايير المجتمع · Community</a><a href="/delete-account.html">حذف الحساب · Delete account</a><a href="/legal/data-requests.html">طلبات البيانات · Data requests</a></nav>
+<div class="note" id="draft">استبدل القيم بين الأقواس <code>[ ]</code> وعنوان <code>support@YOUR-DOMAIN</code> بالبيانات الحقيقية بأمر <code>node scripts/fill-legal.mjs</code> (ويختفي هذا التنبيه تلقائيًا).<br><span class="en">Replace the bracketed values by running <code>node scripts/fill-legal.mjs</code>; this notice disappears automatically.</span></div>
+<h1>حذف حساب رع شات</h1><p>من حقك محو بياناتك الشخصية في أي وقت وبنفسك ودون التواصل مع الدعم، وفق حق المحو في قانون حماية البيانات الشخصية رقم ١٥١ لسنة ٢٠٢٠.</p>
+<h2>الطريقة الأولى: من التطبيق</h2><p><b>الحساب ← حذف الحساب نهائيًا</b> ← اكتب كود التأكيد الذي يصلك على رقمك/بريدك.</p>
+<h2>الطريقة الثانية: من هنا (بدون التطبيق)</h2>
+<form id="f" onsubmit="return false"><label for="c">رقم الهاتف أو البريد الإلكتروني المسجّل</label><input id="c" dir="ltr" autocomplete="username" placeholder="01xxxxxxxxx أو name@example.com">
+<button id="b1">ابعتلي كود التأكيد</button>
+<div id="s2" hidden><label for="k">كود التأكيد</label><input id="k" dir="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="10">
+<label style="display:flex;gap:8px;align-items:flex-start"><input id="fo" type="checkbox" style="width:auto;margin-top:6px"> <span>أفهم أن رصيد محفظتي (إن وُجد) سيضيع</span></label>
+<button id="b2">احذف حسابي نهائيًا</button></div><p id="m" role="status" class="mut"></p></form>
+<h2>ما الذي يُحذف فورًا؟</h2><ul><li>اسمك وصورتك ورقمك/بريدك وحالتك.</li><li>رسائلك ومرفقاتك وStories وسجل مكالماتك واشتراكات الإشعارات وأحداث الإعلانات وقائمة الحظر.</li><li>عضويتك في الجروبات، والغرف التي تديرها تُغلق.</li><li>رصيد المحفظة يُصفَّر — اسحبه قبل الحذف.</li></ul>
+<h2>ما الذي نحتفظ به ولماذا؟</h2><ul><li>سجلات المعاملات المالية بدون بيانات تعرّفك، للمدد التي تفرضها قوانين المحاسبة والضرائب المصرية.</li><li>سجلات الأمان والنظام ١٨٠ يومًا على الأقل (القانون ١٧٥ لسنة ٢٠١٨).</li><li>البلاغات والإجراءات المتعلقة بالسلامة لمدة أقصاها سنتان، أو لحين الفصل في نزاع قائم.</li><li>نسخ احتياطية مشفّرة تُستبدل دوريًا.</li></ul>
+<p class="mut">لو واجهت مشكلة: <a href="mailto:support@YOUR-DOMAIN">support@YOUR-DOMAIN</a> · رع شات — [اسم الشركة]. لباقي حقوقك: <a href="/legal/data-requests.html">طلبات البيانات</a>.</p><hr><div class="en" lang="en"><h1>Delete your Raa Chat account</h1><p>You can erase your personal data yourself at any time, without contacting support (right to erasure under Egypt's Personal Data Protection Law No. 151 of 2020). Use the form above (Arabic) or in the app: <b>Account → Delete my account</b>.</p>
+<p><b>Erased immediately:</b> name, photo, phone/email, status; messages, attachments, Stories, call log, push subscriptions, ad events and block list; group memberships (rooms you host are closed); the wallet balance is zeroed — withdraw it first.</p>
+<p><b>Retained:</b> financial transaction records without identifying data, for the periods required by Egyptian accounting/tax law; security and system logs for at least 180 days (Law 175/2018); reports and safety records for up to 2 years or until a dispute ends; encrypted backups that rotate out.</p>
+<p>Help: <a href="mailto:support@YOUR-DOMAIN">support@YOUR-DOMAIN</a> · Raa Chat — [Company name]. Other rights: <a href="/legal/data-requests.html">data requests</a>.</p></div><script>
+(function(){
+  var h=location.hostname, API=(window.RACHAT_API||(/^app\./.test(h)?location.protocol+'//'+h.replace(/^app\./,'api.'):''));
+  var $=function(i){return document.getElementById(i)}, m=$('m'), tok='';
+  function say(t,bad){m.textContent=t;m.style.color=bad?'#E1523E':''}
+  function chan(v){return v.indexOf('@')>-1?'email':'phone'}
+  async function j(p,o){var r=await fetch(API+p,o);var b={};try{b=await r.json()}catch(e){}if(!r.ok){var e=new Error(b.message||'تعذّر تنفيذ الطلب');e.code=b.code;e.status=r.status;throw e}return b}
+  $('b1').onclick=async function(){var v=$('c').value.trim();if(!v)return say('اكتب رقمك أو بريدك',1);if(!API)return say('الصفحة غير مضبوطة على السيرفر',1);
+    this.disabled=true;try{await j('/auth/otp/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel:chan(v),target:v})});$('s2').hidden=false;say('بعتنا كود على '+v)}catch(e){say(e.message,1)}this.disabled=false};
+  $('b2').onclick=async function(){var v=$('c').value.trim(),k=$('k').value.trim();if(k.length<4)return say('اكتب الكود',1);this.disabled=true;
+    try{
+      var s=await j('/auth/otp/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel:chan(v),target:v,code:k})});
+      var auth={'Content-Type':'application/json',Authorization:'Bearer '+s.accessToken};
+      await j('/me/delete/otp',{method:'POST',headers:auth}); say('بعتنا كود تأكيد تاني — اكتبه واضغط حذف مرة أخرى'); $('k').value=''; tok=s.accessToken; this.textContent='تأكيد الحذف النهائي'; this.onclick=async function(){
+        var k2=$('k').value.trim();this.disabled=true;try{await j('/me',{method:'DELETE',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({code:k2,forfeitBalance:$('fo').checked})});say('تم حذف حسابك نهائيًا.');$('f').querySelectorAll('input,button').forEach(function(x){x.disabled=true})}catch(e){say(e.message,1)}this.disabled=false}
+    }catch(e){say(e.message,1)}this.disabled=false};
+})();
+</script></main></body></html>

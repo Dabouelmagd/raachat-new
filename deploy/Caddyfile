@@ -1,0 +1,45 @@
+# DOMAIN و ACME_EMAIL من ملف .env (docker-compose.prod.yml بيمرّرهم)
+{
+	email {$ACME_EMAIL}
+}
+
+app.{$DOMAIN} {
+	root * /srv
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# الكاميرا/المايك مسموحين لنفس الموقع بس (للمكالمات)
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=()"
+		Strict-Transport-Security "max-age=31536000"
+	}
+	# الـ service worker ماينفعش يتكاش (عشان التحديثات توصل)
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+}
+
+admin.{$DOMAIN} {
+	root * /srv-admin
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		# اللوحة مينفعش تتحط في iframe، ومتتفهرسش
+		X-Frame-Options DENY
+		X-Robots-Tag "noindex, nofollow"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000"
+	}
+}
+
+api.{$DOMAIN} {
+	encode zstd gzip
+	# Socket.IO (WebSocket) بيعدّي من نفس الـ proxy تلقائيًا
+	reverse_proxy api:4000
+}

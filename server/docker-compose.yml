@@ -1,0 +1,47 @@
+# تشغيل محلي: docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rachat
+      POSTGRES_PASSWORD: rachat
+      POSTGRES_DB: rachat
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rachat"]
+      interval: 5s
+      retries: 10
+  api:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://rachat:rachat@db:5432/rachat?schema=public
+      JWT_SECRET: ${JWT_SECRET:?ضع JWT_SECRET في ملف .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      NODE_ENV: ${NODE_ENV:-production}
+      TWILIO_SID: ${TWILIO_SID:-}
+      TWILIO_TOKEN: ${TWILIO_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      RESEND_KEY: ${RESEND_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      GOOGLE_TRANSLATE_KEY: ${GOOGLE_TRANSLATE_KEY:-}
+      STUN_URLS: ${STUN_URLS:-stun:stun.l.google.com:19302}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+    ports: ["4000:4000"]
+    volumes: [uploads:/app/uploads]
+  # TURN (لازم لمكالمات الناس اللي ورا شبكات مقفولة/موبايل). فعّليه بـ: docker compose --profile turn up
+  # وبعدين TURN_URLS=turn:<IP-السيرفر>:3478 و TURN_SECRET=<نفس السر> في .env. لازم network_mode host عشان نطاق الـ relay.
+  turn:
+    profiles: ["turn"]
+    image: coturn/coturn:4.6
+    network_mode: host
+    command: >
+      -n --realm=rachat --use-auth-secret --static-auth-secret=${TURN_SECRET:?ضع TURN_SECRET}
+      --listening-port=3478 --min-port=49160 --max-port=49200 --fingerprint --no-multicast-peers
+      --no-cli --denied-peer-ip=10.0.0.0-10.255.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255 --denied-peer-ip=192.168.0.0-192.168.255.255
+volumes:
+  pgdata:
+  uploads:

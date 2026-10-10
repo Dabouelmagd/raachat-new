@@ -1,0 +1,1 @@
+{"name":"rachat-admin","private":true,"type":"module","scripts":{"build":"vite build"},"dependencies":{"lucide-react":"^1.54.0","react":"^18.3.1","react-dom":"^18.3.1"},"devDependencies":{"@vitejs/plugin-react":"^4.3.1","vite":"^5.4.0","vite-plugin-singlefile":"^2.0.2"}}

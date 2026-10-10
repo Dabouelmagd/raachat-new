@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ثيم التطبيق: متغيرات RGB حتى تشتغل معاها شفافية Tailwind (مثل /40).
+   الوضع الداكن هو الأصل. [data-rc-theme="dark"] على عنصر داخلي يرجّعه داكن (شاشات المكالمة والغرف). */
+:root,
+[data-rc-theme="dark"] {
+  --rc-black: 20 16 15;
+  --rc-card: 31 24 21;
+  --rc-papyrus: 245 239 230;
+  --rc-maroon: 91 38 33;
+}
+[data-rc-theme="light"] {
+  --rc-black: 245 239 230;
+  --rc-card: 255 255 255;
+  --rc-papyrus: 42 29 25;
+  --rc-maroon: 224 208 190;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: "Cairo", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+@keyframes rcToast {
+  from { transform: translateY(-120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="rcToast"] { animation: none !important; }
+}

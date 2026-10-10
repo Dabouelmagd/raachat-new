@@ -1,0 +1,504 @@
+// رع شات — مخطط قاعدة البيانات (PostgreSQL)
+// يطابق src/types.ts في الواجهة وعقد openapi.yaml
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ThreadType {
+  dm
+  group
+}
+
+enum MemberRole {
+  owner
+  admin
+  member
+}
+
+enum CallMode {
+  voice
+  video
+}
+
+enum CallDir {
+  in
+  out
+  missed
+}
+
+enum TxKind {
+  topup
+  bill
+  refund
+}
+
+model User {
+  id          String    @id @default(cuid())
+  phone       String?   @unique
+  email       String?   @unique
+  name        String
+  status      String    @default("")
+  color       String    @default("#E1523E")
+  photoUrl    String?
+  lang        String    @default("ar")
+  isAdmin     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime?
+  deletedAt   DateTime? // حذف الحساب (إخفاء هوية)
+
+  memberships Membership[]
+  messages    Message[]
+  reactions   Reaction[]
+  stories     Story[]
+  storySeen   StorySeen[]
+  calls       CallLog[]
+  wallet      Wallet?
+  sessions    Session[]
+  roomsOwned  Room[]       @relation("RoomOwner")
+  threadsMade Thread[]     @relation("ThreadCreator")
+  reportsMade Report[]     @relation("Reporter")
+  blocksMade  Block[]      @relation("Blocker")
+  blockedBy   Block[]      @relation("Blocked")
+  roomParticipants RoomParticipant[]
+  pushSubs    PushSub[]
+  modStatus   String    @default("active") // active | suspended | banned (من لوحة الإدارة)
+  staff       Staff?
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  channel   String // phone | email
+  target    String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([channel, target, createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device    String   @default("")
+  refreshHash String  @unique
+  refreshExpiresAt DateTime
+  createdAt DateTime @default(now())
+  lastUsed  DateTime @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+}
+
+model Thread {
+  id        String     @id @default(cuid())
+  type      ThreadType
+  name      String? // للجروبات فقط
+  color     String? // لون الجروب (hex)
+  icon      String? // مفتاح أيقونة
+  photoUrl  String?
+  restrictedAt DateTime? // تقييد من الإدارة: لا إرسال رسائل
+  isPublic  Boolean    @default(false)
+  dmKey     String?    @unique // "userA:userB" مرتّبين — يمنع تكرار الـ dm
+  createdById String?
+  createdBy   User?    @relation("ThreadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt DateTime   @default(now())
+
+  members  Membership[]
+  messages Message[]
+  calls    CallLog[]
+}
+
+// لا يوجد حد أقصى لعدد أعضاء الجروب
+model Membership {
+  threadId  String
+  userId    String
+  role      MemberRole @default(member)
+  joinedAt  DateTime   @default(now())
+  lastReadAt DateTime?
+  thread    Thread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([threadId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  authorId  String
+  text      String   @default("")
+  replyToId String?
+  edited    Boolean  @default(false)
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo   Message? @relation("Replies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("Replies")
+  attachment Attachment?
+  reactions Reaction[]
+
+  @@index([threadId, createdAt])
+}
+
+model Attachment {
+  id        String  @id @default(cuid())
+  messageId String  @unique
+  name      String
+  size      Int
+  mime      String
+  url       String
+  text      String? // أول جزء من النصوص للمعاينة
+  voiceDuration Int?
+  voiceWave Json?
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model Reaction {
+  messageId String
+  userId    String
+  emoji     String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId, emoji])
+}
+
+model Story {
+  id        String   @id @default(cuid())
+  authorId  String
+  caption   String   @default("")
+  colorFrom String
+  colorTo   String
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime // 24 ساعة
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  seenBy    StorySeen[]
+
+  @@index([expiresAt])
+}
+
+model StorySeen {
+  storyId String
+  userId  String
+  at      DateTime @default(now())
+  story   Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, userId])
+}
+
+model CallLog {
+  id       String   @id @default(cuid())
+  userId   String // صاحب السجل
+  threadId String
+  mode     CallMode
+  dir      CallDir
+  at       DateTime
+  dur      Int      @default(0)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread   Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([userId, at])
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  createdAt DateTime @default(now())
+  closedAt  DateTime?
+  owner     User     @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  participants RoomParticipant[]
+}
+
+model RoomParticipant {
+  roomId   String
+  userId   String
+  identity String   @default("real") // real | temp
+  tempName String?
+  muted    Boolean  @default(false)
+  joinedAt DateTime @default(now())
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@index([userId])
+}
+
+model Wallet {
+  userId   String @id
+  balance  Decimal @default(0) @db.Decimal(12, 2)
+  currency String  @default("EGP")
+  pinHash  String?
+  pinFails Int     @default(0)
+  pinLockedUntil DateTime?
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  txs      WalletTx[]
+}
+
+model WalletTx {
+  id        String   @id @default(cuid())
+  userId    String
+  kind      TxKind
+  service   String?
+  amount    Decimal  @db.Decimal(12, 2)
+  discount  Decimal  @default(0) @db.Decimal(12, 2)
+  ref       String   @unique
+  idemKey   String?
+  refundedAt DateTime?
+  createdAt DateTime @default(now())
+  wallet    Wallet   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, idemKey])
+  @@index([userId, createdAt])
+}
+
+model Offer {
+  code     String   @id
+  service  String?
+  percent  Int
+  maxOff   Decimal  @db.Decimal(12, 2)
+  active   Boolean  @default(true)
+}
+
+model AdEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  adKey     String
+  kind      String // shown | clicked | closed
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PushSub {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model StaffRole {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  permissions String[] @default([])
+  system      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  staff       Staff[]
+}
+
+model Staff {
+  userId    String    @id
+  roleId    String?
+  grant     String[]  @default([])
+  revoke    String[]  @default([])
+  isOwner   Boolean   @default(false)
+  active    Boolean   @default(true)
+  addedById String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      StaffRole? @relation(fields: [roleId], references: [id], onDelete: Restrict)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorName String
+  action    String
+  target    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// موضع إعلاني (مخزون): مقاس + سعة (عدد معلنين في نفس اليوم) + سعر اليوم
+model AdPlacement {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  name        String
+  kind        String // modal | banner | story | room
+  width       Int
+  height      Int
+  slots       Int       @default(1)
+  pricePerDay Decimal   @db.Decimal(10, 2)
+  active      Boolean   @default(true)
+  note        String?
+  sort        Int       @default(0)
+  dailyImpressions Int  @default(0) // تقدير داخلي لظهور اليوم، لحساب سعر الألف ظهور الفعلي
+  bookings    AdBooking[]
+  blocks      AdBlock[]
+}
+
+/// حملة/إعلان. التواريخ نصوص YYYY-MM-DD (بتوقيت القاهرة) عشان المقارنة ما تتأثرش بالتوقيت.
+model AdCampaign {
+  id          String    @id @default(cuid())
+  advertiser  String
+  headline    String
+  body        String    @default("")
+  cta         String    @default("")
+  link        String
+  grad        Int       @default(0)
+  audience    String    @default("كل المستخدمين")
+  priority    Int       @default(2)
+  dailyCap    Int       @default(3)
+  startDate   String
+  endDate     String
+  status      String    @default("pending") // pending | approved | paused | rejected | cancelled
+  total       Decimal   @db.Decimal(12, 2) // المطلوب دفعه بعد الهدية
+  discount    Decimal   @default(0) @db.Decimal(12, 2)
+  giftCode    String?
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bookings    AdBooking[]
+  stats       AdStat[]
+
+  @@index([status, startDate, endDate])
+}
+
+model AdBooking {
+  id          String      @id @default(cuid())
+  campaignId  String
+  placementId String
+  pricePerDay Decimal     @db.Decimal(10, 2)
+  campaign    AdCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  placement   AdPlacement @relation(fields: [placementId], references: [id], onDelete: Restrict)
+
+  @@unique([campaignId, placementId])
+  @@index([placementId])
+}
+
+/// إغلاق موضع لفترة (صيانة/حدث/حجز داخلي)
+model AdBlock {
+  id          String      @id @default(cuid())
+  placementId String
+  fromDate    String
+  toDate      String
+  reason      String
+  createdById String?
+  createdAt   DateTime    @default(now())
+  placement   AdPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  @@index([placementId])
+}
+
+/// إحصائيات يومية لكل حملة/موضع (ظهور فريد للمستخدم في اليوم، نقرات، إغلاقات)
+model AdStat {
+  campaignId String
+  day        String
+  placement  String
+  shown      Int        @default(0)
+  clicked    Int        @default(0)
+  closed     Int        @default(0)
+  campaign   AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, day, placement])
+}
+
+/// كود هدية إعلانية: مدة مجانية (30/90/180/365 يوم) بتتخصم من سعر الحملة عند الحجز
+model AdGift {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  months            Int
+  days              Int
+  recipient         String?
+  note              String?
+  placements        String[] @default([])
+  expiresAt         String?
+  usedAt            DateTime?
+  usedByCampaignId  String?
+  voidedAt          DateTime?
+  createdById       String?
+  createdAt         DateTime @default(now())
+
+  @@index([usedByCampaignId])
+}
+
+/// تذكرة دخول لمرة واحدة (60 ثانية) لنقل الموظف من التطبيق للوحة الإدارة بدون كود تحقق جديد
+model AdminHandoff {
+  hash      String   @id
+  userId    String
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// بلاغ من مستخدم عن رسالة/ستوري/غرفة/مستخدم/جروب. الهدف بدون FK عشان البلاغ يفضل بعد حذف المحتوى.
+model Report {
+  id           String    @id @default(cuid())
+  reporterId   String
+  kind         String // message | story | room | user | thread
+  targetId     String
+  targetUserId String? // صاحب المحتوى المبلَّغ عنه
+  targetLabel  String    @default("")
+  reason       String // abuse | spam | inappropriate | impersonation | scam | other
+  note         String    @default("")
+  snippet      String    @default("") // نسخة من النص وقت البلاغ
+  place        String    @default("")
+  status       String    @default("open") // open | resolved
+  resolution   String? // delete | delete_ban | warn | dismiss
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  reporter     User      @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, kind, targetId])
+  @@index([status, createdAt])
+  @@index([kind, targetId])
+}
+
+// إشعار جماعي من الإدارة
+model Broadcast {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @default("")
+  audience  String // all | active7 | inactive30 | wallet
+  reach     Int // عدد المستخدمين المستهدفين
+  devices   Int      @default(0) // عدد الأجهزة اللي اتبعتلها push
+  sentById  String
+  sentByName String  @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// إعدادات التطبيق (مفتاح/قيمة)
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// حظر مستخدم (شرط متاجر التطبيقات للمحتوى اللي بيكتبه المستخدمين)
+model Block {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+}

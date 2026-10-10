@@ -1,0 +1,11 @@
+{
+  "company": "اسم الشركة كما في السجل التجاري",
+  "address": "العنوان بالتفصيل، القاهرة، مصر",
+  "supportEmail": "support@yourdomain.com",
+  "privacyEmail": "privacy@yourdomain.com",
+  "dpo": "اسم مسؤول حماية البيانات",
+  "messagingProvider": "Twilio / Resend",
+  "hostingProvider": "Hetzner / AWS ...",
+  "hostingRegion": "Frankfurt, Germany",
+  "paymentProvider": "Paymob / Fawry"
+}

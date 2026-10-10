@@ -1,0 +1,57 @@
+import type { Db } from "./db.js";
+
+export const publicUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null }) => ({
+  id: u.id, name: u.name, status: u.status, color: u.color, photo: u.photoUrl ?? undefined,
+});
+
+export const meUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null; phone: string | null; email: string | null; lang: string; isAdmin: boolean }) => ({
+  ...publicUser(u), phone: u.phone ?? undefined, email: u.email ?? undefined, lang: u.lang, role: u.isAdmin ? "admin" : "user",
+});
+
+type ThreadRow = Awaited<ReturnType<typeof loadThreadFor>>;
+export function loadThreadFor(db: Db, threadId: string) {
+  return db.thread.findUnique({ where: { id: threadId }, include: { members: { include: { user: true } } } });
+}
+
+/** شكل المحادثة بالنسبة لمستخدم معيّن (الـ dm اسمها اسم الطرف التاني) */
+export function threadView(t: NonNullable<ThreadRow>, me: string) {
+  const others = t.members.filter((m) => m.userId !== me);
+  if (t.type === "dm") {
+    const o = others[0]?.user;
+    return {
+      id: t.id, type: t.type, name: o?.name ?? "—", color: o?.color, photo: o?.photoUrl ?? undefined,
+      memberIds: others.map((m) => m.userId), createdByMe: false,
+    };
+  }
+  return {
+    id: t.id, type: t.type, name: t.name ?? "", color: t.color ?? undefined, icon: t.icon ?? undefined,
+    photo: t.photoUrl ?? undefined, memberIds: others.map((m) => m.userId), createdByMe: t.createdById === me,
+    isPublic: t.isPublic, memberCount: t.members.length,
+  };
+}
+
+export const messageInclude = { author: true, attachment: true, reactions: true } as const;
+type MsgRow = Awaited<ReturnType<Db["message"]["findFirstOrThrow"]>> & {
+  author: { name: string };
+  attachment: { name: string; size: number; mime: string; url: string; text: string | null; voiceDuration: number | null; voiceWave: unknown } | null;
+  reactions: { userId: string; emoji: string }[];
+};
+
+export function messageView(m: MsgRow, read = false) {
+  const reactions: Record<string, string[]> = {};
+  for (const r of m.reactions) (reactions[r.emoji] ??= []).push(r.userId);
+  return {
+    id: m.id, threadId: m.threadId, authorId: m.authorId, authorName: m.author.name,
+    text: m.deleted ? "" : m.text, time: m.createdAt.toISOString(), read, replyToId: m.replyToId ?? undefined,
+    reactions, edited: m.edited, deleted: m.deleted,
+    attachment: m.attachment && !m.deleted
+      ? {
+          name: m.attachment.name, size: m.attachment.size, mime: m.attachment.mime, url: m.attachment.url,
+          text: m.attachment.text ?? undefined,
+          voice: m.attachment.voiceDuration != null
+            ? { duration: m.attachment.voiceDuration, waveform: (m.attachment.voiceWave as number[]) ?? [] }
+            : undefined,
+        }
+      : undefined,
+  };
+}

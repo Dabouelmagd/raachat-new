@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-single/
+*.log
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.tsbuildinfo
+server/src/generated/
+.DS_Store
+legal.config.json

@@ -1,0 +1,97 @@
+# الإنتاج على سيرفر واحد (Hetzner مثلًا). التشغيل:  docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# الـ DB والـ API مش بيتفتحوا على الإنترنت خالص: بس Caddy (80/443) — والـ TURN لو فعّلتيه.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rachat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ضع POSTGRES_PASSWORD}
+      POSTGRES_DB: rachat
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rachat"]
+      interval: 5s
+      retries: 10
+    # ⚠️ مفيش ports: هنا عمدًا — قاعدة البيانات مش لازم تتشاف من برّه الشبكة الداخلية
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://rachat:${POSTGRES_PASSWORD}@db:5432/rachat?schema=public
+      JWT_SECRET: ${JWT_SECRET:?ضع JWT_SECRET (٣٢ حرف عشوائي على الأقل)}
+      CORS_ORIGIN: https://app.${DOMAIN:?ضع DOMAIN},https://admin.${DOMAIN}
+      OWNER_CONTACTS: ${OWNER_CONTACTS:?ضع OWNER_CONTACTS (رقمك أو إيميلك)}
+      TWILIO_SID: ${TWILIO_SID:-}
+      TWILIO_TOKEN: ${TWILIO_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      RESEND_KEY: ${RESEND_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      GOOGLE_TRANSLATE_KEY: ${GOOGLE_TRANSLATE_KEY:-}
+      STUN_URLS: ${STUN_URLS:-stun:stun.l.google.com:19302}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      VAPID_PUBLIC: ${VAPID_PUBLIC:-}
+      VAPID_PRIVATE: ${VAPID_PRIVATE:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+    volumes: [uploads:/app/uploads]
+    expose: ["4000"]
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: https://api.${DOMAIN}
+        VITE_ADMIN_URL: https://admin.${DOMAIN}
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?ضع ACME_EMAIL}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: [caddy_data:/data, caddy_config:/config]
+
+  # نسخة احتياطية يومية (قاعدة البيانات + الملفات المرفوعة) في volume "backups"، بتحتفظ بآخر ١٤ نسخة
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [backups:/backups, uploads:/uploads:ro]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          ts=$$(date +%Y%m%d-%H%M%S)
+          pg_dump -h db -U rachat -Fc rachat > /backups/db-$$ts.dump && tar -czf /backups/uploads-$$ts.tgz -C /uploads . \
+            && echo "backup $$ts ok" || echo "backup $$ts FAILED"
+          ls -1t /backups/db-*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
+          ls -1t /backups/uploads-*.tgz 2>/dev/null | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+
+  # TURN للمكالمات: docker compose -f docker-compose.prod.yml --profile turn up -d
+  turn:
+    profiles: ["turn"]
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    network_mode: host
+    command: >
+      -n --realm=${DOMAIN} --use-auth-secret --static-auth-secret=${TURN_SECRET:?ضع TURN_SECRET}
+      --listening-port=3478 --min-port=49160 --max-port=49200 --fingerprint --no-multicast-peers --no-cli
+      --denied-peer-ip=10.0.0.0-10.255.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255 --denied-peer-ip=192.168.0.0-192.168.255.255
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:
+  backups:

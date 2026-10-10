@@ -1,0 +1,81 @@
+// أنواع البيانات المشتركة — هي نفسها الشكل المتوقع لاحقًا من الـ API الحقيقي
+// (راجع src/store لطبقة الحالة الوهمية الحالية، وREADME لخطة الربط بباك إند حقيقي)
+
+export type ThreadType = "dm" | "group";
+
+export interface Contact {
+  id: string;
+  name: string;
+  initial: string;
+  colorClass: string; // Tailwind bg-* class
+}
+
+export interface Thread {
+  id: string;
+  type: ThreadType;
+  name: string;
+  colorClass: string;
+  initial: string;
+  memberIds: string[]; // لأعضاء الجروب فقط، غير مستخدمة في dm
+  createdByMe?: boolean;
+  color?: string; // لون الجروب (hex)
+  icon?: string; // مفتاح أيقونة من GROUP_ICONS
+  photo?: string; // صورة الجروب (data URL / رابط)
+}
+
+export interface Attachment {
+  name: string;
+  size: number; // bytes
+  mime: string;
+  url: string; // مؤقت (blob) في الديمو؛ مع الباك إند: رابط ملف مرفوع على التخزين
+  text?: string; // أول جزء من محتوى الملفات النصية للمعاينة
+  voice?: { duration: number; waveform: number[]; simulated?: boolean }; // رسالة صوتية
+}
+
+export interface Message {
+  id: string;
+  threadId: string;
+  authorId: string; // "me" أو معرّف جهة اتصال
+  authorName: string;
+  text: string;
+  time: string;
+  at?: number; // وقت الإرسال بالملّي ثانية (لفواصل الأيام والتاريخ الكامل)
+  read?: boolean;
+  replyToId?: string;
+  reactions: Record<string, string[]>; // emoji -> [authorIds]
+  edited?: boolean;
+  deleted?: boolean;
+  attachment?: Attachment;
+}
+
+export interface RoomParticipant {
+  id: string;
+  name: string;
+  color: string;
+  muted?: boolean;
+  speaking?: boolean;
+  isHost?: boolean;
+}
+
+export interface VoiceRoom {
+  id: string;
+  name: string;
+  createdByMe: boolean;
+  participants: RoomParticipant[];
+  joined: boolean;
+  myIdentityMode: "real" | "temp" | null;
+  me?: { name: string; color: string } | null; // هويتي في الغرفة (من السيرفر)
+  count?: number;
+}
+
+export interface Story {
+  id: string;
+  authorId: string;
+  authorName: string;
+  colorFrom: string;
+  colorTo: string;
+  caption: string;
+  seen: boolean;
+  time: string;
+  image?: string; // صورة الستوري (data URL)
+}
