@@ -1,9 +1,10 @@
 # DOMAIN و ACME_EMAIL من ملف .env (docker-compose.prod.yml بيمرّرهم)
 {
-	email {$ACME_EMAIL}
+	# نجنكس قدّام Caddy وهو اللي بيعمل HTTPS؛ هنا HTTP داخلي بس
+	auto_https off
 }
 
-app.{$DOMAIN} {
+http://app.{$DOMAIN} {
 	root * /srv
 	encode zstd gzip
 	try_files {path} /index.html
@@ -22,7 +23,7 @@ app.{$DOMAIN} {
 	header @assets Cache-Control "public, max-age=31536000, immutable"
 }
 
-admin.{$DOMAIN} {
+http://admin.{$DOMAIN} {
 	root * /srv-admin
 	encode zstd gzip
 	try_files {path} /index.html
@@ -38,7 +39,7 @@ admin.{$DOMAIN} {
 	}
 }
 
-api.{$DOMAIN} {
+http://api.{$DOMAIN} {
 	encode zstd gzip
 	# Socket.IO (WebSocket) بيعدّي من نفس الـ proxy تلقائيًا
 	reverse_proxy api:4000

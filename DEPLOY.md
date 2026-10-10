@@ -1,5 +1,12 @@
 # نشر رع شات على سيرفر واحد (Hetzner أو أي VPS)
 
+> **السيرفر ده مشترك (نجنكس + مشاريع Docker تانية).** نجنكس هو اللي على 80/443 وبيعمل HTTPS، ورع شات (Caddy الداخلي) على `127.0.0.1:8085` بس. التشغيل على السيرفر المشترك:
+> 1. DNS: A records لـ `app` و`api` و`admin` على IP السيرفر.
+> 2. `cp .env.production.example .env.production && nano .env.production` (DOMAIN، OWNER_CONTACTS، POSTGRES_PASSWORD، JWT_SECRET، Twilio/Resend…).
+> 3. `FORCE=1 bash scripts/deploy-rachat.sh` (يبني ويشغّل الحاويات).
+> 4. `sudo bash scripts/add-nginx-site.sh` (يضيف مواقع نجنكس + شهادات certbot، وبيعمل `nginx -t` قبل الـ reload).
+> الأقسام تحت (ufw/Caddy على 80/443) لسيرفر مخصّص لرع شات بس، **ماتنفّذيهاش هنا**.
+
 النتيجة: `https://app.دومينك` (التطبيق) و`https://api.دومينك` (الـ API + WebSocket) بشهادات HTTPS تلقائية، وقاعدة بيانات مش مفتوحة للإنترنت، ونسخ احتياطي يومي.
 
 ## ١. قبل ما تبدئي

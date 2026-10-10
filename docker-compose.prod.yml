@@ -1,4 +1,4 @@
-# الإنتاج على سيرفر واحد (Hetzner مثلًا). التشغيل:  docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# الإنتاج على سيرفر Hetzner المشترك (نجنكس بيعمل HTTPS ويحوّل لـ Caddy على 127.0.0.1:8085). التشغيل:  docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 # الـ DB والـ API مش بيتفتحوا على الإنترنت خالص: بس Caddy (80/443) — والـ TURN لو فعّلتيه.
 services:
   db:
@@ -53,8 +53,8 @@ services:
     depends_on: [api]
     environment:
       DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL:?ضع ACME_EMAIL}
-    ports: ["80:80", "443:443", "443:443/udp"]
+    # السيرفر مشترك ونجنكس هو اللي على 80/443 وبيعمل HTTPS؛ Caddy هنا داخلي على localhost بس
+    ports: ["127.0.0.1:8085:80"]
     volumes: [caddy_data:/data, caddy_config:/config]
 
   # نسخة احتياطية يومية (قاعدة البيانات + الملفات المرفوعة) في volume "backups"، بتحتفظ بآخر ١٤ نسخة

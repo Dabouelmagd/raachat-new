@@ -40,5 +40,5 @@ $DC up -d --build $SVC
 sleep 6
 $DC ps
 DOMAIN=$(grep -E '^DOMAIN=' .env.production | cut -d= -f2)
-if curl -fsS "https://api.${DOMAIN}/health" >/dev/null; then echo "✅ api.${DOMAIN}/health تمام — النسخة ${NEW:0:7}"; else
+if curl -fsS -H "Host: api.${DOMAIN}" http://127.0.0.1:8085/health >/dev/null; then echo "✅ الـ API شغّال (127.0.0.1:8085) — النسخة ${NEW:0:7}"; else
   echo "❌ الـ API مش بيرد. آخر لوج:"; $DC logs --tail 50 api; exit 1; fi

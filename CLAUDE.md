@@ -21,6 +21,9 @@ Claude يعدّل ويختبر ويعمل commit + push على `main` ← دال
 (Docker Compose: `db` / `api` / `caddy` (الواجهة + HTTPS) / `backup`، و`turn` اختياري). السكربت بيعمل `git pull --ff-only`، نسخة احتياطية لو فيه migration، وبيبني اللازم بس، وبيفحص `https://api.<DOMAIN>/health`.
 `FORCE=1` لإعادة البناء، `BACKUP=0` لتخطّي النسخة.
 
+## السيرفر (مشترك)
+Hetzner `ubuntu-4gb-fsn1-1`، نجنكس على 80/443 لكل المواقع. رع شات: Docker، Caddy داخلي `127.0.0.1:8085`، ونجنكس بيحوّل له (`deploy/nginx-rachat.conf.template` + `scripts/add-nginx-site.sh`). منافذ محجوزة لمشاريع تانية: 3001-3004 و3010 و8002-8004 و5432 و5672 و6379 و27017-27019. **أي تغيير في نجنكس بسكربت بيعمل `nginx -t` قبل الـ reload، ومنلمسش مواقع المشاريع التانية.**
+
 ## الاختبار قبل الـ push
 - السيرفر: `cd server && npx vitest run` (لازم يعدّي كله — حاليًا ٧٨). لو الشِل root شغّليه كمستخدم عادي (`runuser -u claude -- env HOME=/home/claude PATH="$PATH" npx vitest run`) لأن postgres المدمج مابيشتغلش كـ root.
 - الواجهة: `npx tsc -b` ثم `npx vite build -c vite.single.config.ts`، وPlaywright على `dist-single/index.html` (حساب الديمو: 01000000000 / 123456).
