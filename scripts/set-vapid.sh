@@ -34,6 +34,9 @@ $DC up -d api
 sleep 5
 $DC logs --tail 5 api
 echo
-echo "التحقق:"
-curl -fsS -H "Host: api.$(grep -E '^DOMAIN=' .env.production | cut -d= -f2)" http://127.0.0.1:8085/push/key | head -c 120; echo
+# /push/key محمي بتسجيل دخول، فالتحقق من اللوج: التحذير لازم يختفي
+if $DC logs --tail 40 api | grep -q "VAPID غير متضبط"; then
+  echo "❌ الـ API لسه شايف VAPID مش متضبط — ابعتي ناتج الأمر ده لـ Claude:"
+  echo "   docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail 20 api"; exit 1
+fi
 echo "✅ VAPID اتضبط (الموضوع: $SUBJ). افتحي التطبيق واسمحي بالإشعارات من المتصفح."
