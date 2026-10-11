@@ -32,8 +32,9 @@ Hetzner `ubuntu-4gb-fsn1-1`، نجنكس على 80/443 لكل المواقع. ر
 
 ## الاختبار قبل الـ push
 - السيرفر: `cd server && npx vitest run` (لازم يعدّي كله — حاليًا ٩٦). لو الشِل root شغّليه كمستخدم عادي (`runuser -u claude -- env HOME=/home/claude PATH="$PATH" npx vitest run`) لأن postgres المدمج مابيشتغلش كـ root.
-- الواجهة: `npx tsc -b` ثم `npx vite build -c vite.single.config.ts`، وPlaywright على `dist-single/index.html` (حساب الديمو: 01000000000 / 123456).
-- أي اختبار جديد يتكتب جوه `server/test/` أو `test/` في الريبو (بيئة Claude بتتجدد وأي حاجة برّه بتضيع).
+- الواجهة: `npx tsc -b` ثم `npx vite build -c vite.single.config.ts`، وبعدين `cd test && npm ci && npx playwright install chromium && npm test` (١٧ اختبار — سن الخدمات والصفحات القانونية والأساسيات). تفاصيل: `test/README.md`. حساب الديمو: 01000000000 / 123456.
+- **CI:** `.github/workflows/ci.yml` بيشغّل الاختبارات والبناء على كل push لـ `main` وكل PR (سيرفر · واجهة + Playwright · لوحة الإدارة). بيختبر بس — مابينشرش.
+- أي اختبار جديد يتكتب جوه `server/test/` (سيرفر) أو `test/ui/` (واجهة) في الريبو (بيئة Claude بتتجدد وأي حاجة برّه بتضيع). تبعيات اختبارات الواجهة في `test/package.json` لوحدها عشان ما تدخلش في صورة الإنتاج.
 - Claude لازم يقول بوضوح إيه **اللي ما اتجرّبش** (موبايل حقيقي، جهات اتصال حقيقية، Twilio/Resend حقيقي، build السيرفر…).
 
 ## الممنوعات

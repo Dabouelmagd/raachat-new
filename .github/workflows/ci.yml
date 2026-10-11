@@ -1,0 +1,93 @@
+name: اختبارات رع شات
+
+# بيشتغل على كل push لـ main وكل pull request — عشان مايوصلش كود مكسور للسيرفر.
+# ملحوظة: ده بيختبر بس، مابينشرش. النشر لسه بإيد داليا على السيرفر.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: السيرفر (vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: تنزيل التبعيات
+        working-directory: server
+        run: npm ci
+      - name: توليد Prisma Client
+        working-directory: server
+        run: npx prisma generate
+      - name: فحص الأنواع
+        working-directory: server
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: الاختبارات
+        working-directory: server
+        # postgres المدمج (embedded-postgres) مابيشتغلش كـ root — مستخدم runner عادي فتمام
+        run: npx vitest run
+
+  web:
+    name: الواجهة (بناء + Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: تنزيل التبعيات
+        run: npm ci
+      - name: فحص الأنواع
+        run: npx tsc -b
+      - name: بناء نسخة الملف الواحد
+        run: npx vite build -c vite.single.config.ts
+      - name: تنزيل تبعيات الاختبارات
+        working-directory: test
+        run: npm ci
+      - name: تنزيل المتصفح
+        working-directory: test
+        run: npx playwright install --with-deps chromium
+      - name: اختبارات الواجهة
+        working-directory: test
+        run: npx playwright test
+      - name: ارفع تقرير الفشل
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            test/playwright-report
+            test/test-results
+          retention-days: 7
+
+  admin:
+    name: لوحة الإدارة (بناء)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - name: تنزيل التبعيات
+        working-directory: admin
+        run: npm ci
+      - name: بناء
+        working-directory: admin
+        run: npx vite build

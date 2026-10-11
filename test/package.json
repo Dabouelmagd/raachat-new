@@ -1,0 +1,14 @@
+{
+  "name": "rachat-ui-tests",
+  "private": true,
+  "version": "0.0.0",
+  "description": "اختبارات واجهة رع شات (Playwright) — مساحة منفصلة بحيث إن تبعياتها ما تدخلش في بناء الإنتاج",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}

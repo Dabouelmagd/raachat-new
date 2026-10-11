@@ -11,3 +11,6 @@ server/src/generated/
 .DS_Store
 legal.config.json
 .deploy-state
+test-results/
+playwright-report/
+.playwright/
