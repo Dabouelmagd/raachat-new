@@ -6,6 +6,7 @@ import { occKind } from "../components/OccasionSticker";
 import { toggleFavorite, useFavorites } from "../store/favorites";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/Header";
+import { ContactsBanner } from "../components/ContactsBanner";
 import { StoriesBar } from "../components/StoriesBar";
 import { NewChatSheet } from "../components/NewChatSheet";
 import { SponsoredCard } from "../ads/SponsoredCard";
@@ -39,6 +40,7 @@ export default function ChatsScreen() {
         }
       />
       <StoriesBar />
+      <ContactsBanner />
       <div className="flex-1 overflow-y-auto px-3">
         <div role="tablist" aria-label={tx("تصفية", "Filter")} className="sticky top-0 z-10 -mx-3 mb-2 flex gap-1.5 overflow-x-auto bg-rachat-black px-3 py-2">
           {FILTERS.map(([k, ar, en]) => (

@@ -9,6 +9,13 @@ export const consentGiven = () => { try { return localStorage.getItem(KEY) === "
 export const consentAsked = () => { try { return localStorage.getItem(KEY) !== null; } catch { return true; } };
 export const setConsent = (v: boolean) => { try { localStorage.setItem(KEY, v ? "1" : "0"); } catch { /* تجاهل */ } };
 
+/** تذكير لطيف لمن أجّل المزامنة — يختفي نهائيًا لو قفله بنفسه */
+const BKEY = "rachat-contacts-banner";
+export const bannerHidden = () => { try { return localStorage.getItem(BKEY) === "off"; } catch { return true; } };
+export const hideBanner = () => { try { localStorage.setItem(BKEY, "off"); } catch { /* تجاهل */ } };
+/** يستحق التذكير: سبق سؤاله ورفض، ولسه ما قفلش التذكير */
+export const shouldRemind = () => consentAsked() && !consentGiven() && !bannerHidden();
+
 type CapContacts = { requestPermissions(): Promise<{ contacts: string }>; getContacts(o: unknown): Promise<{ contacts: { name?: { display?: string }; phones?: { number?: string }[] }[] }> };
 const capPlugin = (): CapContacts | undefined => (window as unknown as { Capacitor?: { Plugins?: { Contacts?: CapContacts } } }).Capacitor?.Plugins?.Contacts;
 
