@@ -19,6 +19,8 @@ sed "s/__DOMAIN__/$DOMAIN/g" deploy/nginx-rachat.conf.template > "$CONF"
 ln -sf "$CONF" /etc/nginx/sites-enabled/rachat
 if ! nginx -t; then echo "❌ nginx -t فشل — رجّعت كل حاجة"; rm -f /etc/nginx/sites-enabled/rachat; exit 1; fi
 systemctl reload nginx
-certbot --nginx -d "app.$DOMAIN" -d "api.$DOMAIN" -d "admin.$DOMAIN" --redirect --non-interactive --agree-tos ${EMAIL:+-m "$EMAIL"} ${EMAIL:---register-unsafely-without-email}
+CB=(certbot --nginx -d "app.$DOMAIN" -d "api.$DOMAIN" -d "admin.$DOMAIN" --redirect --non-interactive --agree-tos)
+if [ -n "$EMAIL" ]; then CB+=(-m "$EMAIL"); else CB+=(--register-unsafely-without-email); fi
+"${CB[@]}"
 nginx -t && systemctl reload nginx
 echo "✅ https://app.$DOMAIN  https://api.$DOMAIN/health  https://admin.$DOMAIN"
