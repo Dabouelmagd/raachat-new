@@ -4,7 +4,10 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, wrap } from "../lib/errors.js";
-import { ADULT_AGE, isAdult } from "../lib/age.js";
+import { ADULT_AGE, FULL_CAPACITY_AGE, YOUNG_LIMITS, isAdult, walletLimits } from "../lib/age.js";
+
+/** الطلب بعد ما الحارس يحسب سقوف السن مرة واحدة (بدل استعلام في كل مسار) */
+type WalletRequest = AuthedRequest & { rcLimits?: typeof YOUNG_LIMITS | null };
 
 const MAX_FAILS = 5;
 const LOCK_MIN = 15;
@@ -37,8 +40,25 @@ export function walletRoutes(ctx: Ctx) {
     const u = await db.user.findUnique({ where: { id: (req as AuthedRequest).userId }, select: { birthDate: true } });
     if (!u?.birthDate) throw new HttpError(403, "birth_date_required", "حدّد تاريخ ميلادك من الملف الشخصي عشان تستخدم المحفظة");
     if (!isAdult(u.birthDate)) throw new HttpError(403, "age_restricted", `المحفظة ودفع الفواتير متاحين من سن ${ADULT_AGE} سنة`);
+    (req as WalletRequest).rcLimits = walletLimits(u.birthDate); // null = ٢١+ بلا سقوف
     next();
   }));
+
+  /** سقوف الفئة ١٨–٢١ (مادة ١١١ مدني: تصرفاتها المالية قابلة للإبطال، فنقلّل حجم التعرّض) */
+  const limitsOf = (req: unknown) => (req as WalletRequest).rcLimits ?? null;
+  const capTx = (req: unknown, amount: number) => {
+    const L = limitsOf(req);
+    if (L && amount > L.tx) {
+      throw new HttpError(403, "young_tx_limit", `أقصى مبلغ للعملية ${L.tx} جنيه لحد سن ${FULL_CAPACITY_AGE} سنة`);
+    }
+  };
+  /** مجموع الفواتير في الشهر الميلادي الحالي (بالتوقيت العالمي) */
+  async function billsThisMonth(userId: string) {
+    const n = new Date();
+    const from = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1));
+    const agg = await db.walletTx.aggregate({ _sum: { amount: true }, where: { userId, kind: "bill", createdAt: { gte: from } } });
+    return money(agg._sum.amount ?? 0);
+  }
 
   async function ensureWallet(userId: string) {
     return db.wallet.upsert({ where: { userId }, update: {}, create: { userId } });
@@ -61,7 +81,12 @@ export function walletRoutes(ctx: Ctx) {
     const me = (req as AuthedRequest).userId;
     const w = await ensureWallet(me);
     const txs = await db.walletTx.findMany({ where: { userId: me }, orderBy: { createdAt: "desc" }, take: 50 });
-    res.json({ balance: money(w.balance), currency: w.currency, hasPin: !!w.pinHash, txns: txs.map(txView) });
+    const L = limitsOf(req);
+    res.json({
+      balance: money(w.balance), currency: w.currency, hasPin: !!w.pinHash, txns: txs.map(txView),
+      // الواجهة بتعرض السقوف للمستخدم؛ null = مفيش سقوف
+      limits: L ? { ...L, monthUsed: await billsThisMonth(me) } : null,
+    });
   }));
 
   r.get("/wallet/offers", wrap(async (_req, res) => {
@@ -85,7 +110,12 @@ export function walletRoutes(ctx: Ctx) {
     const me = (req as AuthedRequest).userId;
     if (ctx.config.NODE_ENV === "production") throw new HttpError(501, "no_gateway", "شحن المحفظة محتاج بوابة دفع (غير متوصّلة بعد)");
     const b = z.object({ amount: z.number().positive().max(10000) }).parse(req.body);
-    await ensureWallet(me);
+    capTx(req, b.amount);
+    const w0 = await ensureWallet(me);
+    const L = limitsOf(req);
+    if (L && money(w0.balance) + b.amount > L.balance) {
+      throw new HttpError(403, "young_balance_limit", `أقصى رصيد في المحفظة ${L.balance} جنيه لحد سن ${FULL_CAPACITY_AGE} سنة`);
+    }
     const [, tx] = await db.$transaction([
       db.wallet.update({ where: { userId: me }, data: { balance: { increment: b.amount.toFixed(2) } } }),
       db.walletTx.create({ data: { userId: me, kind: "topup", amount: b.amount.toFixed(2), ref: "RC-" + crypto.randomInt(100000, 999999) + crypto.randomInt(10, 99) } }),
@@ -120,6 +150,16 @@ export function walletRoutes(ctx: Ctx) {
     }
     const { discount, code } = await discountFor(b.code, b.service, b.amount);
     const total = +(b.amount - discount).toFixed(2);
+
+    // سقوف ١٨–٢١: على المبلغ المدفوع فعلًا (بعد الخصم) وعلى مجموع الشهر
+    capTx(req, total);
+    const L = limitsOf(req);
+    if (L) {
+      const used = await billsThisMonth(me);
+      if (used + total > L.month) {
+        throw new HttpError(403, "young_month_limit", `أقصى فواتير في الشهر ${L.month} جنيه لحد سن ${FULL_CAPACITY_AGE} سنة (المستخدم: ${used})`);
+      }
+    }
 
     try {
       const tx = await db.$transaction(async (t) => {

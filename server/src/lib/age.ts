@@ -1,6 +1,24 @@
 /** حساب السن من تاريخ الميلاد وقواعد خدمات ١٨+ */
 export const ADULT_AGE = 18;
 
+/**
+ * سن الأهلية الكاملة في القانون المصري ٢١ سنة (المادة ٤٤ مدني).
+ * اللي بين ١٨ و٢١ لسه «ناقص أهلية»، وتصرفاته المالية الدائرة بين النفع والضرر
+ * قابلة للإبطال لمصلحته (المادة ١١١). فالمحفظة مفتوحة له بسقوف منخفضة، عشان
+ * لو حصل إبطال يكون المبلغ محدود. التفاصيل: docs/legal/age-and-capacity-egypt.md
+ */
+export const FULL_CAPACITY_AGE = 21;
+
+/** سقوف الفئة ١٨–٢١ بالجنيه المصري (أرقام قابلة للتغيير من مكان واحد) */
+export const YOUNG_LIMITS = {
+  /** أقصى مبلغ للعملية الواحدة (شحن أو دفع فاتورة) */
+  tx: 500,
+  /** أقصى رصيد في المحفظة في أي وقت */
+  balance: 1000,
+  /** أقصى مجموع فواتير في الشهر الميلادي الحالي */
+  month: 2000,
+} as const;
+
 /** السن بالسنين الكاملة في تاريخ معيّن (افتراضيًا النهارده) */
 export function ageOn(birth: Date, now: Date = new Date()): number {
   let a = now.getUTCFullYear() - birth.getUTCFullYear();
@@ -12,6 +30,17 @@ export function ageOn(birth: Date, now: Date = new Date()): number {
 /** بالغ؟ تاريخ ميلاد غير محدد = لأ (الأحوط)، عشان الخدمات المالية ما تتفتحش من غير تحديد سن. */
 export const isAdult = (birth: Date | null | undefined, now?: Date): boolean =>
   !!birth && ageOn(birth, now) >= ADULT_AGE;
+
+/** كامل الأهلية (٢١+)؟ */
+export const isFullCapacity = (birth: Date | null | undefined, now?: Date): boolean =>
+  !!birth && ageOn(birth, now) >= FULL_CAPACITY_AGE;
+
+/**
+ * سقوف المحفظة للمستخدم ده: `null` = مفيش سقوف (٢١+).
+ * البالغ اللي لسه تحت ٢١ بيرجّع السقوف، والأصغر من ١٨ مابيوصلش هنا أصلًا (الحارس بيمنعه).
+ */
+export const walletLimits = (birth: Date | null | undefined, now?: Date): typeof YOUNG_LIMITS | null =>
+  isFullCapacity(birth, now) ? null : YOUNG_LIMITS;
 
 /** تاريخ ميلاد مقبول: مش في المستقبل ومش أقدم من ١٢٠ سنة */
 export function validBirthDate(d: Date, now: Date = new Date()): boolean {

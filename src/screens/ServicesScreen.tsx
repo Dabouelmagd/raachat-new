@@ -1,4 +1,4 @@
-import { Bell, Zap, Droplet, Flame, Wifi, CreditCard, Smartphone, Phone, ShieldCheck, Tag, Copy, Check } from "lucide-react";
+import { Bell, Zap, Droplet, Flame, Wifi, CreditCard, Smartphone, Phone, ShieldCheck, Tag, Copy, Check, Info } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/Header";
@@ -7,8 +7,9 @@ import { SponsoredCard } from "../ads/SponsoredCard";
 import { useWallet, refreshWallet } from "../store/wallet";
 import { useIsAdult } from "../store/profile";
 import { AgeLock } from "../components/AgeLock";
+import { FULL_CAPACITY_AGE } from "../age";
 import { API_ON, api } from "../api/client";
-import { useT, loc } from "../i18n";
+import { useT, loc, num } from "../i18n";
 import { Scarab } from "../components/PharaohIcons";
 
 export const ICONS: Record<string, typeof Zap> = {
@@ -21,7 +22,7 @@ const fmt = (n: number) => n.toLocaleString(loc(), { minimumFractionDigits: 2, m
 export default function ServicesScreen() {
   const t = useT();
   const navigate = useNavigate();
-  const { balance, txns } = useWallet();
+  const { balance, txns, limits } = useWallet();
   const adult = useIsAdult();
   const [copied, setCopied] = useState("");
 
@@ -59,6 +60,19 @@ export default function ServicesScreen() {
             </div>
           </div>
         </div>
+
+        {limits && (
+          <div className="mb-5 rounded-2xl border border-rachat-gold/40 bg-rachat-card p-3.5">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-extrabold text-rachat-gold">
+              <Info size={14} /> {t(`سقوف لحد سن ${num(FULL_CAPACITY_AGE)} سنة`, `Limits until age ${FULL_CAPACITY_AGE}`)}
+            </div>
+            <ul className="space-y-0.5 text-[11.5px] leading-[19px] text-neutral-400">
+              <li>{t(`أقصى مبلغ للعملية: ${num(limits.tx)} ج.م`, `Max per transaction: ${limits.tx} EGP`)}</li>
+              <li>{t(`أقصى رصيد في المحفظة: ${num(limits.balance)} ج.م`, `Max wallet balance: ${limits.balance} EGP`)}</li>
+              <li>{t(`فواتير هذا الشهر: ${num(limits.monthUsed)} من ${num(limits.month)} ج.م`, `Bills this month: ${limits.monthUsed} of ${limits.month} EGP`)}</li>
+            </ul>
+          </div>
+        )}
 
         <h2 className="mb-2 text-sm font-extrabold">{t("ادفع فواتيرك", "Pay your bills")}</h2>
         <div className="grid grid-cols-4 gap-2">

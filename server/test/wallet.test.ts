@@ -112,6 +112,44 @@ describe("wallet", () => {
     await setBirth(a, "1850-01-01").expect(400);
   });
 
+  it("الفئة ١٨–٢١: سقف العملية والرصيد ومجموع الشهر، و٢١+ بلا سقوف", async () => {
+    const a = await env.login("01070000009", "شاب");
+    await setBirth(a, `${new Date().getUTCFullYear() - 19}-03-15`).expect(200); // ١٩ سنة
+    const auth = a.auth;
+    const wallet = () => request(env.app).get("/wallet").set(auth);
+    const topup = (amount: number) => request(env.app).post("/wallet/topup").set(auth).send({ amount });
+
+    const w = await wallet().expect(200);
+    expect(w.body.limits).toMatchObject({ tx: 500, balance: 1000, month: 2000, monthUsed: 0 });
+
+    // سقف العملية الواحدة على الشحن
+    expect((await topup(600).expect(403)).body.code).toBe("young_tx_limit");
+    await topup(500).expect(201);
+    await topup(500).expect(201); // الرصيد بقى ١٠٠٠ = السقف
+    expect((await topup(100).expect(403)).body.code).toBe("young_balance_limit");
+
+    // سقف العملية الواحدة على الدفع (على المبلغ بعد الخصم)
+    await request(env.app).put("/wallet/pin").set(auth).send({ pin: "3333" }).expect(204);
+    const p = (amount: number, key: string) => pay(a, { service: "elec", account: "123456", amount, pin: "3333", idempotencyKey: key });
+    expect((await p(700, "young-key-001").expect(403)).body.code).toBe("young_tx_limit");
+    await p(500, "young-key-002").expect(201);
+    expect((await wallet()).body.limits.monthUsed).toBe(500);
+
+    // مجموع الشهر: ٥٠٠ × ٤ = ٢٠٠٠، واللي بعدها مرفوض
+    for (const i of [1, 2, 3]) { await topup(500).expect(201); await p(500, "young-month-00" + i).expect(201); }
+    await topup(500).expect(201); // فيه رصيد كفاية، فالرفض سببه سقف الشهر مش الرصيد
+    const over = await p(100, "young-month-004").expect(403);
+    expect(over.body.code).toBe("young_month_limit");
+    expect((await wallet()).body.limits.monthUsed).toBe(2000);
+    expect((await wallet()).body.balance).toBe(1000); // الرصيد ما اتخصمش في العملية المرفوضة
+
+    // ٢١+ مفيش سقوف خالص
+    const old = await login("01070000010");
+    const wo = await request(env.app).get("/wallet").set(old.auth).expect(200);
+    expect(wo.body.limits).toBeNull();
+    await request(env.app).post("/wallet/topup").set(old.auth).send({ amount: 5000 }).expect(201);
+  });
+
   it("‏/me بيرجّع birthDate وisAdult", async () => {
     const a = await env.login("01070000008");
     const before = await request(env.app).get("/me").set(a.auth).expect(200);

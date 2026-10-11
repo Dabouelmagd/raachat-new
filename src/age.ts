@@ -6,6 +6,33 @@
  */
 export const ADULT_AGE = 18;
 
+/**
+ * سن الأهلية الكاملة في مصر ٢١ سنة (م٤٤ مدني). اللي بين ١٨ و٢١ المحفظة مفتوحة له
+ * بسقوف منخفضة، لأن تصرفاته المالية قابلة للإبطال لمصلحته (م١١١).
+ * السقوف نفسها بتيجي من السيرفر في `/wallet` — هو المرجع.
+ */
+export const FULL_CAPACITY_AGE = 21;
+
+/** سقوف المحفظة زي ما السيرفر بيرجّعها */
+export interface WalletLimits {
+  tx: number;
+  balance: number;
+  month: number;
+  monthUsed: number;
+}
+
+/** كامل الأهلية (٢١+)؟ — غير محدد = لأ */
+export const isFullCapacityDay = (day: string | undefined | null, now?: Date): boolean => {
+  const d = parseDay(day);
+  return !!d && ageOn(d, now) >= FULL_CAPACITY_AGE;
+};
+
+/**
+ * أرقام **للمعاينة بدون سيرفر بس** (وضع الديمو). المرجع الحقيقي هو اللي بيرجع من
+ * `/wallet` في `YOUNG_LIMITS` على السيرفر — لو اتغيرت هناك، دي للعرض بس ومش شرط تطابقها.
+ */
+export const DEMO_YOUNG_LIMITS: WalletLimits = { tx: 500, balance: 1000, month: 2000, monthUsed: 0 };
+
 /** السن بالسنين الكاملة (بالتوقيت العالمي عشان ما يختلفش حسب جهاز المستخدم) */
 export function ageOn(birth: Date, now: Date = new Date()): number {
   let a = now.getUTCFullYear() - birth.getUTCFullYear();

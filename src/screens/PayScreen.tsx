@@ -85,7 +85,13 @@ export default function PayScreen() {
           const r = await payBillApi({ service: svc.key, account, amount, code: discount > 0 ? code : undefined, pin: next, title: svc.label });
           if (!r.txn) {
             setPin("");
-            setError(r.error === "pin" ? t("الرقم السري غير صحيح", "Incorrect PIN") : r.error === "locked" ? t("الرقم السري مقفول مؤقتًا، حاول بعد شوية", "PIN temporarily locked, try again later") : r.error === "balance" ? t("الرصيد غير كافي", "Insufficient balance") : t("حصل خطأ، حاول تاني", "Something went wrong, try again"));
+            setError(
+              r.error === "pin" ? t("الرقم السري غير صحيح", "Incorrect PIN")
+              : r.error === "locked" ? t("الرقم السري مقفول مؤقتًا، حاول بعد شوية", "PIN temporarily locked, try again later")
+              : r.error === "balance" ? t("الرصيد غير كافي", "Insufficient balance")
+              // سقوف الفئة ١٨–٢١ — رسالة السيرفر بتحدد السقف اللي اتعدّى
+              : r.error === "limit" ? (r.message ?? t("العملية فوق السقف المسموح لسنك", "This is above the limit allowed for your age"))
+              : t("حصل خطأ، حاول تاني", "Something went wrong, try again"));
             return;
           }
           setTxn(r.txn); setStep("receipt");

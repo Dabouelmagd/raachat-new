@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from "react";
 import { tr } from "../i18n";
 import { API_ON, api, useSession } from "../api/client";
+import { DEMO_YOUNG_LIMITS, isAdultDay, isFullCapacityDay, type WalletLimits } from "../age";
+import { useProfile } from "./profile";
 import { useEffect } from "react";
 
 // متجر محفظة تجريبي — يُستبدل بنداءات الباك إند (رصيد + سجل عمليات) عند الربط
 export interface Txn { id: string; title: string; amount: number; date: string; ref: string }
-interface WalletState { balance: number; txns: Txn[]; hasPin?: boolean }
+interface WalletState { balance: number; txns: Txn[]; hasPin?: boolean; limits?: WalletLimits | null }
 
 let state: WalletState = API_ON ? { balance: 0, txns: [] } : {
   balance: 1240,
@@ -25,22 +27,27 @@ const toTxn = (t: ApiTx): Txn => ({
 });
 
 export async function refreshWallet() {
-  const w = await api<{ balance: number; hasPin: boolean; txns: ApiTx[] }>("/wallet");
-  state = { balance: w.balance, hasPin: w.hasPin, txns: w.txns.map(toTxn) };
+  const w = await api<{ balance: number; hasPin: boolean; txns: ApiTx[]; limits: WalletLimits | null }>("/wallet");
+  state = { balance: w.balance, hasPin: w.hasPin, txns: w.txns.map(toTxn), limits: w.limits };
   emit();
 }
 
 export function useWallet() {
   const session = useSession();
+  const birthDate = useProfile().birthDate;
   useEffect(() => { if (API_ON && session) void refreshWallet().catch(() => {}); }, [session?.meId]); // eslint-disable-line react-hooks/exhaustive-deps
-  return useSyncExternalStore(
+  const w = useSyncExternalStore(
     (f) => { subs.add(f); return () => subs.delete(f); },
     () => state
   );
+  // في وضع الـ API السقوف بتيجي من السيرفر؛ في الديمو بنحسبها محليًا عشان المعاينة تبان صح
+  if (API_ON) return w;
+  const young = isAdultDay(birthDate) && !isFullCapacityDay(birthDate);
+  return { ...w, limits: young ? DEMO_YOUNG_LIMITS : null };
 }
 
 /** دفع حقيقي عبر السيرفر (الخصم والرصيد والـ PIN كلهم بيتحققوا هناك) */
-export async function payBillApi(p: { service: string; account: string; amount: number; code?: string; pin: string; title: string }): Promise<{ txn?: Txn; error?: "pin" | "locked" | "balance" | "other" }> {
+export async function payBillApi(p: { service: string; account: string; amount: number; code?: string; pin: string; title: string }): Promise<{ txn?: Txn; error?: "pin" | "locked" | "balance" | "limit" | "other"; message?: string }> {
   try {
     if (!state.hasPin) { await api("/wallet/pin", { method: "PUT", body: { pin: p.pin } }); state = { ...state, hasPin: true }; }
     const key = (crypto.randomUUID?.() ?? String(Date.now()) + Math.random()).replace(/[^\w-]/g, "").slice(0, 40).padEnd(8, "0");
@@ -49,6 +56,10 @@ export async function payBillApi(p: { service: string; account: string; amount: 
     return { txn: { ...toTxn(r), title: p.title, date: tr("الآن", "Just now") } };
   } catch (e) {
     const code = (e as { code?: string }).code;
+    if (code === "young_tx_limit" || code === "young_month_limit" || code === "young_balance_limit") {
+      void refreshWallet().catch(() => {}); // نحدّث السقوف المعروضة
+      return { error: "limit", message: (e as { message?: string }).message };
+    }
     return { error: code === "bad_pin" ? "pin" : code === "pin_locked" ? "locked" : code === "insufficient" ? "balance" : "other" };
   }
 }
