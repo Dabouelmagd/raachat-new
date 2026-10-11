@@ -22,7 +22,7 @@ ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_ADMIN_URL=$VITE_ADMIN_URL
 COPY admin/package*.json ./
 RUN npm ci
-COPY admin/index.html admin/vite.config.js ./
+COPY admin/index.html admin/vite.config.js admin/postcss.config.js ./
 COPY admin/src ./src
 RUN npx vite build
 
