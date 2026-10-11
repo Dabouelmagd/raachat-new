@@ -111,6 +111,7 @@ describe("admin RBAC", () => {
   it("المالية: عرض، ملخص، استرداد مرة واحدة بيرجّع الرصيد، والعروض CRUD", async () => {
     const acc = await addStaff("01099000060", "accountant");
     const u = await env.login("01099000061", "عميل");
+    await api().patch("/me").set(u.auth).send({ birthDate: "1990-05-20" }).expect(200); // المحفظة ١٨+
     await api().put("/wallet/pin").set(u.auth).send({ pin: "1234" }).expect(204);
     await api().post("/wallet/topup").set(u.auth).send({ amount: 500 }).expect(201);
     await api().put("/admin/offers/TEST20").set(acc.auth).send({ service: "elec", percent: 20, max: 30 }).expect(200);

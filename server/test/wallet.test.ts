@@ -8,9 +8,17 @@ afterAll(async () => { await env?.stop(); }, 60_000);
 
 const pay = (a: any, body: any) => request(env.app).post("/wallet/pay").set(a.auth).send(body);
 
+/** المحفظة خدمة ١٨+، فكل اختباراتها محتاجة حساب حدّد تاريخ ميلاد بالغ */
+const setBirth = (a: any, birthDate: string) => request(env.app).patch("/me").set(a.auth).send({ birthDate });
+const login = async (phone: string, name?: string) => {
+  const a = await env.login(phone, name);
+  await setBirth(a, "1990-05-20").expect(200);
+  return a;
+};
+
 describe("wallet", () => {
   it("محفظة جديدة صفر + شحن تجريبي + ضبط PIN + دفع", async () => {
-    const a = await env.login("01070000001", "ليلى");
+    const a = await login("01070000001", "ليلى");
     let w = await request(env.app).get("/wallet").set(a.auth).expect(200);
     expect(w.body).toMatchObject({ balance: 0, hasPin: false, txns: [] });
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 500 }).expect(201);
@@ -25,7 +33,7 @@ describe("wallet", () => {
   });
 
   it("idempotency: نفس المفتاح مرتين = خصم مرة واحدة", async () => {
-    const a = await env.login("01070000002");
+    const a = await login("01070000002");
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 300 });
     await request(env.app).put("/wallet/pin").set(a.auth).send({ pin: "4321" });
     const body = { service: "net", account: "998877", amount: 100, pin: "4321", idempotencyKey: "same-key-0001" };
@@ -38,7 +46,7 @@ describe("wallet", () => {
   });
 
   it("رصيد غير كافي = 402 ولا يتغير الرصيد، وطلبين متوازيين ما يعمّقوش الرصيد تحت الصفر", async () => {
-    const a = await env.login("01070000003");
+    const a = await login("01070000003");
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 150 });
     await request(env.app).put("/wallet/pin").set(a.auth).send({ pin: "1111" });
     await pay(a, { service: "gas", account: "555555", amount: 500, pin: "1111", idempotencyKey: "big-key-0001" }).expect(402);
@@ -49,7 +57,7 @@ describe("wallet", () => {
   });
 
   it("PIN غلط 5 مرات يقفل المحفظة مؤقتًا حتى مع PIN صحيح", async () => {
-    const a = await env.login("01070000004");
+    const a = await login("01070000004");
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 500 });
     await request(env.app).put("/wallet/pin").set(a.auth).send({ pin: "2222" });
     for (let i = 0; i < 5; i++) await pay(a, { service: "elec", account: "123456", amount: 10, pin: "0000", idempotencyKey: "bad-key-000" + i }).expect(403);
@@ -57,7 +65,7 @@ describe("wallet", () => {
   });
 
   it("الخصم بيتحسب على السيرفر: كود سليم، كود لخدمة تانية، كود غلط", async () => {
-    const a = await env.login("01070000005");
+    const a = await login("01070000005");
     await env.ctx.db.offer.upsert({ where: { code: "RA10" }, update: {}, create: { code: "RA10", service: "elec,water", percent: 10, maxOff: "30" } });
     const q = await request(env.app).post("/wallet/quote").set(a.auth).send({ service: "elec", amount: 200, code: "ra10" }).expect(200);
     expect(q.body).toEqual({ amount: 200, discount: 20, total: 180 });
@@ -68,11 +76,47 @@ describe("wallet", () => {
   });
 
   it("تغيير PIN يتطلب الحالي، ومفيش وصول من غير توكن، وإدخال سالب مرفوض", async () => {
-    const a = await env.login("01070000006");
+    const a = await login("01070000006");
     await request(env.app).put("/wallet/pin").set(a.auth).send({ pin: "1234" }).expect(204);
     await request(env.app).put("/wallet/pin").set(a.auth).send({ pin: "9999" }).expect(403);
     await request(env.app).put("/wallet/pin").set(a.auth).send({ pin: "9999", currentPin: "1234" }).expect(204);
     await request(env.app).get("/wallet").expect(401);
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: -5 }).expect(400);
+  });
+
+  it("خدمة ١٨+: من غير تاريخ ميلاد مقفولة، القاصر مقفول، البالغ مفتوح، وباقي التطبيق مايتأثرش", async () => {
+    const a = await env.login("01070000007", "كريم");
+    // تاريخ الميلاد لسه غير محدد = مقفول (الأحوط)، والكود بيقول للمستخدم يعمل إيه
+    const no = await request(env.app).get("/wallet").set(a.auth).expect(403);
+    expect(no.body.code).toBe("birth_date_required");
+    await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 100 }).expect(403);
+
+    // قاصر (١٢ سنة) = مقفول بكود مختلف
+    const y = new Date().getUTCFullYear() - 12;
+    await setBirth(a, `${y}-01-01`).expect(200);
+    const minor = await request(env.app).get("/wallet").set(a.auth).expect(403);
+    expect(minor.body.code).toBe("age_restricted");
+    await request(env.app).post("/wallet/pay").set(a.auth).send({ service: "elec", account: "1", amount: 10, pin: "1234", idempotencyKey: "minor-key-01" }).expect(403);
+    // لكن باقي التطبيق مفتوح للقاصر — الشات مش ١٨+
+    await request(env.app).get("/threads").set(a.auth).expect(200);
+    await request(env.app).get("/me").set(a.auth).expect(200);
+
+    // بلغ ١٨ النهارده بالظبط = مفتوح
+    const t = new Date();
+    await setBirth(a, `${t.getUTCFullYear() - 18}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`).expect(200);
+    const ok = await request(env.app).get("/wallet").set(a.auth).expect(200);
+    expect(ok.body).toMatchObject({ balance: 0, hasPin: false });
+
+    // تاريخ مستقبلي أو مستحيل مرفوض من /me نفسها
+    await setBirth(a, `${t.getUTCFullYear() + 1}-01-01`).expect(400);
+    await setBirth(a, "1850-01-01").expect(400);
+  });
+
+  it("‏/me بيرجّع birthDate وisAdult", async () => {
+    const a = await env.login("01070000008");
+    const before = await request(env.app).get("/me").set(a.auth).expect(200);
+    expect(before.body).toMatchObject({ birthDate: null, isAdult: false });
+    const after = await setBirth(a, "1988-03-04").expect(200);
+    expect(after.body).toMatchObject({ birthDate: "1988-03-04", isAdult: true });
   });
 });

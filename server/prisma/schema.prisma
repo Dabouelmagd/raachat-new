@@ -52,6 +52,7 @@ model User {
   isAdmin     Boolean   @default(false)
   createdAt   DateTime  @default(now())
   lastSeenAt  DateTime?
+  birthDate   DateTime? @db.Date // تاريخ الميلاد — يحدد إتاحة خدمات ١٨+ (NULL = غير محدد)
   deletedAt   DateTime? // حذف الحساب (إخفاء هوية)
 
   memberships Membership[]

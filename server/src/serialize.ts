@@ -1,11 +1,15 @@
+import { isAdult } from "./lib/age.js";
 import type { Db } from "./db.js";
 
 export const publicUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null }) => ({
   id: u.id, name: u.name, status: u.status, color: u.color, photo: u.photoUrl ?? undefined,
 });
 
-export const meUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null; phone: string | null; email: string | null; lang: string; isAdmin: boolean }) => ({
+export const meUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null; phone: string | null; email: string | null; lang: string; isAdmin: boolean; birthDate?: Date | null }) => ({
   ...publicUser(u), phone: u.phone ?? undefined, email: u.email ?? undefined, lang: u.lang, role: u.isAdmin ? "admin" : "user",
+  // تاريخ الميلاد بيحدد إتاحة خدمات ١٨+؛ null = لسه ما حددش
+  birthDate: u.birthDate ? u.birthDate.toISOString().slice(0, 10) : null,
+  isAdult: isAdult(u.birthDate),
 });
 
 type ThreadRow = Awaited<ReturnType<typeof loadThreadFor>>;

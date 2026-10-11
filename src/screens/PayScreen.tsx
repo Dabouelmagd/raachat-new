@@ -6,6 +6,8 @@ import { SERVICES, OFFERS, mockInquiry } from "../data/services";
 import { payBill, payBillApi, quoteApi, useWallet, Txn } from "../store/wallet";
 import { API_ON } from "../api/client";
 import { useT, loc, num } from "../i18n";
+import { useIsAdult } from "../store/profile";
+import { AgeLock } from "../components/AgeLock";
 import { notify } from "../sound/notify";
 
 // PIN التجربة — يُستبدل بمصادقة حقيقية (PIN/بصمة) من الباك إند
@@ -20,6 +22,7 @@ export default function PayScreen() {
   const navigate = useNavigate();
   const svc = SERVICES.find((s) => s.key === key);
   const { balance, hasPin } = useWallet();
+  const adult = useIsAdult();
 
   const [step, setStep] = useState<Step>("account");
   const [account, setAccount] = useState("");
@@ -34,6 +37,13 @@ export default function PayScreen() {
   const [txn, setTxn] = useState<Txn | null>(null);
 
   if (!svc) return <Header title={t("خدمة غير موجودة", "Service not found")} showBack />;
+  // قفل ١٨+ كمان على الشاشة نفسها، لو حد جه عليها برابط مباشر
+  if (!adult) return (
+    <div className="flex h-full flex-col">
+      <Header title={svc.label} showBack />
+      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-8"><AgeLock /></div>
+    </div>
+  );
 
   const total = +(amount - discount).toFixed(2);
   const accountOk = account.replace(/\D/g, "").length >= 6 && (!svc.amounts || topup);

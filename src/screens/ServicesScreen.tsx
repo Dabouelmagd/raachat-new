@@ -5,6 +5,8 @@ import { Header } from "../components/Header";
 import { SERVICES, OFFERS } from "../data/services";
 import { SponsoredCard } from "../ads/SponsoredCard";
 import { useWallet, refreshWallet } from "../store/wallet";
+import { useIsAdult } from "../store/profile";
+import { AgeLock } from "../components/AgeLock";
 import { API_ON, api } from "../api/client";
 import { useT, loc } from "../i18n";
 import { Scarab } from "../components/PharaohIcons";
@@ -20,6 +22,7 @@ export default function ServicesScreen() {
   const t = useT();
   const navigate = useNavigate();
   const { balance, txns } = useWallet();
+  const adult = useIsAdult();
   const [copied, setCopied] = useState("");
 
   const copy = (code: string) => {
@@ -27,6 +30,16 @@ export default function ServicesScreen() {
     setCopied(code);
     setTimeout(() => setCopied(""), 1500);
   };
+
+  // خدمات ١٨+: القاصر (أو اللي لسه ما حددش تاريخ ميلاده) يشوف القفل بدل المحفظة والفواتير
+  if (!adult) {
+    return (
+      <div className="flex h-full flex-col">
+        <Header title={t("الخدمات", "Services")} />
+        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-8"><AgeLock /></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">

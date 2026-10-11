@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, wrap } from "../lib/errors.js";
+import { ADULT_AGE, isAdult } from "../lib/age.js";
 
 const MAX_FAILS = 5;
 const LOCK_MIN = 15;
@@ -25,6 +26,19 @@ export function walletRoutes(ctx: Ctx) {
   const r = Router();
   r.use(requireAuth(ctx));
   const db = ctx.db;
+
+  /**
+   * المحفظة خدمة ١٨+: التعاقدات المالية مع القاصر مشكلة قانونية.
+   * الحارس على السيرفر عشان ميتلفّش من الواجهة، ومحدود بمسارات /wallet بس
+   * (الراوتر ده متركّب على الجذر، فـ r.use من غير مسار كان بيقفل باقي التطبيق).
+   * تاريخ ميلاد غير محدد = مقفول (الأحوط)، والرسالة بتفرّق بين الحالتين.
+   */
+  r.use("/wallet", wrap(async (req, _res, next) => {
+    const u = await db.user.findUnique({ where: { id: (req as AuthedRequest).userId }, select: { birthDate: true } });
+    if (!u?.birthDate) throw new HttpError(403, "birth_date_required", "حدّد تاريخ ميلادك من الملف الشخصي عشان تستخدم المحفظة");
+    if (!isAdult(u.birthDate)) throw new HttpError(403, "age_restricted", `المحفظة ودفع الفواتير متاحين من سن ${ADULT_AGE} سنة`);
+    next();
+  }));
 
   async function ensureWallet(userId: string) {
     return db.wallet.upsert({ where: { userId }, update: {}, create: { userId } });

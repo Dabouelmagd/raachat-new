@@ -3,8 +3,9 @@ import { assertClean } from "../lib/contentFilter.js";
 import { z } from "zod";
 import { consumeOtp, normalizeTarget, requestOtp, requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
-import { HttpError, notFound, wrap } from "../lib/errors.js";
+import { HttpError, bad, notFound, wrap } from "../lib/errors.js";
 import { meUser, publicUser } from "../serialize.js";
+import { validBirthDate } from "../lib/age.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -23,9 +24,17 @@ export function meRoutes(ctx: Ctx) {
       color: Color.optional(),
       photoUrl: z.string().max(500).nullable().optional(),
       lang: z.enum(["ar", "en", "zh", "fr"]).optional(),
+      birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }).parse(req.body);
     assertClean(ctx, b.name, b.status);
-    const u = await ctx.db.user.update({ where: { id: (req as AuthedRequest).userId }, data: b });
+    const { birthDate, ...rest } = b;
+    const data: Record<string, unknown> = { ...rest };
+    if (birthDate !== undefined) {
+      const d = new Date(birthDate + "T00:00:00Z");
+      if (!validBirthDate(d)) throw bad("bad_birth_date", "تاريخ ميلاد غير صحيح");
+      data.birthDate = d;
+    }
+    const u = await ctx.db.user.update({ where: { id: (req as AuthedRequest).userId }, data });
     res.json(meUser(u));
   }));
   // بحث في المستخدمين (لبدء دردشة/إضافة أعضاء)
