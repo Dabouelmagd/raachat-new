@@ -55,5 +55,6 @@ Hetzner `ubuntu-4gb-fsn1-1`، نجنكس على 80/443 لكل المواقع. ر
 `scripts/setup-env.sh` (يجهّز `.env.production` ويولّد الأسرار) · `scripts/set-otp-keys.sh` (مفاتيح Resend/Twilio بدون إظهارها) · `scripts/set-vapid.sh` (مفاتيح إشعارات Push) · `scripts/seed-demo.sh` (بيانات تجريبية على قاعدة الإنتاج، و`REMOVE=1` لمسحها) · `scripts/add-nginx-site.sh` (مواقع نجنكس + certbot) · `scripts/deploy-rachat.sh` (النشر) · `scripts/fill-legal.mjs` (الصفحات القانونية).
 
 ## نقاط معروفة
-- الصفحات القانونية فيها placeholders لحد ما تتملي `legal.config.json` ويتشغّل `node scripts/fill-legal.mjs`.
+- الصفحات القانونية متملية ببيانات **داتا لايف لخدمات الذكاء الصناعي** (info@datalifeai.com). الباقي: اسم مسؤول حماية البيانات (DPO) — لسه `[ ]` في privacy و data-requests، وتنبيه المسودة ظاهر فيهم. `scripts/fill-legal.mjs` بيقبل مفاتيح `*En` للنسخة الإنجليزية، و`legal.config.json` متجاهل في git.
+- **الاستضافة في ألمانيا = نقل بيانات خارج مصر**، ومحتاج تصريح من مركز حماية البيانات. لازم محامي يراجع قبل الإطلاق.
 - بعد `fill-legal` لازم إعادة بناء `dist-single` قبل النشر كمعاينة.
