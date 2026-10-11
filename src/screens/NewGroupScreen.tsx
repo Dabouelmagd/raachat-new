@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, Check, Infinity as InfinityIcon, Search, Trash2 } from "lucide-react";
+import { Camera, Check, Infinity as InfinityIcon, Pencil, Search, Trash2 } from "lucide-react";
 import { readImage } from "../media/files";
 import { GROUP_COLORS, GROUP_ICONS, ThreadAvatar } from "../components/ThreadAvatar";
 import { useT, num } from "../i18n";
 import { Header } from "../components/Header";
+import { PhotoEditorSheet } from "../components/PhotoEditorSheet";
 import { useAppState, useAppActions } from "../store/AppContext";
 
 export default function NewGroupScreen() {
@@ -19,14 +20,16 @@ export default function NewGroupScreen() {
   const [color, setColor] = useState(GROUP_COLORS[0]);
   const [icon, setIcon] = useState<string | undefined>();
   const [photo, setPhoto] = useState<string | undefined>();
+  const [editing, setEditing] = useState<string | null>(null); // الصورة المفتوحة في المحرّر
   const fileRef = useRef<HTMLInputElement>(null);
   const shown = useMemo(() => contacts.filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase())), [contacts, q]);
   const allShown = shown.length > 0 && shown.every((c) => selected.includes(c.id));
   const toggleAll = () =>
     setSelected((s) => (allShown ? s.filter((id) => !shown.some((c) => c.id === id)) : [...new Set([...s, ...shown.map((c) => c.id)])]));
+  /** الصورة المختارة بتتفتح في المحرّر الأول (قص دائري/تكبير/تدوير) قبل ما تتحفظ */
   const pickPhoto = async (f?: File | null) => {
     if (!f || !f.type.startsWith("image/")) return;
-    try { setPhoto(await readImage(f, 480)); } catch { /* تجاهل */ }
+    try { setEditing(await readImage(f, 1200)); } catch { /* تجاهل */ }
   };
 
   const toggle = (id: string) =>
@@ -40,6 +43,7 @@ export default function NewGroupScreen() {
 
   return (
     <div className="flex h-full flex-col">
+      {editing && <PhotoEditorSheet src={editing} onCancel={() => setEditing(null)} onDone={(d) => { setPhoto(d); setEditing(null); }} />}
       <Header title={step === "pick" ? t("أعضاء الجروب", "Group members") : t("اسم الجروب", "Group name")} showBack />
 
       {step === "pick" ? (
@@ -97,6 +101,7 @@ export default function NewGroupScreen() {
               <button onClick={() => fileRef.current?.click()} aria-label={t("إضافة صورة", "Add photo")} className="absolute -bottom-1 -end-1 flex h-9 w-9 items-center justify-center rounded-full bg-rachat-red text-white ring-2 ring-rachat-black"><Camera size={16} /></button>
             </div>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+            {photo && <button onClick={() => setEditing(photo)} className="flex items-center gap-1 text-xs font-bold text-rachat-gold"><Pencil size={13} /> {t("تعديل الصورة", "Edit photo")}</button>}
             {photo && <button onClick={() => setPhoto(undefined)} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><Trash2 size={13} /> {t("إزالة الصورة", "Remove photo")}</button>}
           </div>
           <label className="mb-2 text-[11px] text-neutral-500">{t("اسم الجروب", "Group name")}</label>
