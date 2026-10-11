@@ -5,7 +5,7 @@ import { z } from "zod";
 import { newSession, normalizeTarget, requireAuth, type AuthedRequest, validTarget } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, forbidden, notFound, wrap } from "../lib/errors.js";
-import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
+import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
 import { randomToken, sha256 } from "../lib/tokens.js";
 import { emitToUsers } from "../realtime.js";
 import { getSettings, saveSettings } from "../lib/settings.js";
@@ -686,7 +686,7 @@ export function adminRoutes(ctx: Ctx) {
     const s = await loadStaff((req as AuthedRequest).userId);
     const has = (p: string) => s.perms.has(p);
     const now = new Date();
-    const startToday = new Date(todayCairo() + "T00:00:00+02:00"); // تقريبي (توقيت القاهرة)
+    const startToday = startOfCairoDay(now); // بداية اليوم بتوقيت القاهرة (بيحسب التوقيت الصيفي)
     const d30 = new Date(now.getTime() - 30 * 86400_000);
     const out: Record<string, unknown> = {};
     if (has("users.view")) {

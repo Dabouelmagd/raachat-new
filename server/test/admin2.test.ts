@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { startTestEnv } from "./helpers.js";
 
@@ -14,6 +14,24 @@ const staff = async (phone: string, key: string) => {
 };
 
 describe("لوحة الإدارة — المرحلة التانية", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("أرقام «النهارده» صح في أي ساعة — حتى ١٢ ونص بالليل بتوقيت القاهرة (توقيت صيفي)", async () => {
+    // الباگ القديم: بداية اليوم كانت بفرق ثابت +02:00، فالساعة دي كانت بتطلع في المستقبل
+    // وكل أرقام «النهارده» بتبقى صفر. التاريخ هنا مثبّت عشان الاختبار ما يعتمدش على ساعة التشغيل.
+    const at = new Date("2026-10-11T21:30:00Z"); // ١٢:٣٠ بالليل بتوقيت القاهرة (١٢ أكتوبر)
+    const a = await env.login("01096000101", "ليل"), b = await env.login("01096000102", "نهار");
+    const th = (await api().post("/threads").set(a.auth).send({ type: "dm", memberIds: [b.user.id] }).expect(201)).body;
+    await env.ctx.db.message.create({ data: { threadId: th.id, authorId: a.user.id, text: "رسالة بعد منتصف الليل", createdAt: new Date(at.getTime() - 5 * 60_000) } });
+    await env.ctx.db.user.update({ where: { id: a.user.id }, data: { lastSeenAt: new Date(at.getTime() - 60_000) } });
+
+    vi.useFakeTimers({ toFake: ["Date"], now: at }); // الساعة بس، التايمرات زي ما هي عشان الشبكة تفضل شغالة
+    const o = (await api().get("/admin/overview").set(owner.auth).expect(200)).body;
+    vi.useRealTimers();
+    expect(o.messagesToday).toBeGreaterThanOrEqual(1);
+    expect(o.activeToday).toBeGreaterThanOrEqual(1);
+  });
+
   it("الصفحة الرئيسية: أرقام حقيقية والأقسام حسب الصلاحية", async () => {
     const a = await env.login("01096000001", "أ"), b = await env.login("01096000002", "ب");
     const th = (await api().post("/threads").set(a.auth).send({ type: "group", name: "ج", memberIds: [b.user.id] }).expect(201)).body;
