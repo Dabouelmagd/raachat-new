@@ -44,6 +44,13 @@ cd /opt/rachat && bash scripts/deploy-rachat.sh
 - في الآخر بيفحص `https://api.<دومينك>/health` ولو فشل بيطبع آخر ٥٠ سطر لوج.
 - الإعداد الأول للسيرفر (Docker، الجدار الناري، DNS، `.env.production`): في `DEPLOY.md`. **السيرفر لازم يكون clone من GitHub** (مش rsync) عشان `git pull` يشتغل: `git clone <رابط الريبو> /opt/rachat` (استخدمي deploy key للقراءة فقط، مش توكن شخصي).
 
+### مشاريع تانية على نفس السيرفر (inmisr / homeme / datalife / govme)
+**قبل أي `docker compose` على مشروع تاني: اعرفي مكان ملف الـ `.env` بتاعه.** مثلًا مشروع inmisr الـ compose في `/var/www/inmisr/docker/` والـ `.env` في `/var/www/inmisr/`، فلازم:
+```
+cd /var/www/inmisr/docker && docker compose --env-file ../.env up -d <الخدمة>
+```
+من غير `--env-file` كل المتغيرات بتبقى فاضية، والحاويات بتتعاد تهيئتها **بكلمات سر فاضية** وبتدخل في حلقة إعادة تشغيل. علامة التحذير: أسطر `WARN ... variable is not set. Defaulting to a blank string`. لو ظهرت، أوقفي وراجعي قبل ما تكملي.
+
 ## ٦. الاختبار قبل الـ push
 - السيرفر: `cd server && npx vitest run` (٧٨ اختبار لازم يعدّوا).
 - الواجهة: `npx tsc -b` + `npx vite build -c vite.single.config.ts` + Playwright على الحساب التجريبي.
