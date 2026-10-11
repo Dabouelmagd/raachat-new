@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, Check, Trash2 } from "lucide-react";
+import { Camera, Check, Pencil, Trash2 } from "lucide-react";
 import { readImage } from "../media/files";
 import { Header } from "../components/Header";
+import { PhotoEditorSheet } from "../components/PhotoEditorSheet";
 import { useT, num } from "../i18n";
 import { AVATAR_COLORS, saveProfile, useProfile } from "../store/profile";
 
@@ -15,10 +16,12 @@ export default function ProfileScreen() {
   const [color, setColor] = useState(p.color);
   const [photo, setPhoto] = useState<string | undefined>(p.photo);
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null); // الصورة المفتوحة في المحرّر
   const fileRef = useRef<HTMLInputElement>(null);
+  /** الصورة المختارة بتتفتح في المحرّر الأول (قص دائري/تكبير/تدوير) قبل ما تتحفظ */
   const pick = async (f?: File | null) => {
     if (!f || !f.type.startsWith("image/")) return;
-    try { setPhoto(await readImage(f, 480)); } catch { /* تجاهل */ }
+    try { setEditing(await readImage(f, 1200)); } catch { /* تجاهل */ }
   };
 
   const save = () => {
@@ -30,6 +33,7 @@ export default function ProfileScreen() {
   return (
     <div className="flex h-full flex-col">
       <Header title={t("الملف الشخصي", "Profile")} showBack />
+      {editing && <PhotoEditorSheet src={editing} onCancel={() => setEditing(null)} onDone={(d) => { setPhoto(d); setEditing(null); }} />}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="my-5 flex flex-col items-center gap-3">
           <div className="relative">
@@ -48,6 +52,7 @@ export default function ProfileScreen() {
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
           <div className="flex gap-3 text-xs font-bold">
             <button onClick={() => fileRef.current?.click()} className="text-rachat-coral">{photo ? t("تغيير الصورة", "Change photo") : t("إضافة صورة", "Add photo")}</button>
+            {photo && <button onClick={() => setEditing(photo)} className="flex items-center gap-1 text-rachat-gold"><Pencil size={13} /> {t("تعديل", "Edit")}</button>}
             {photo && <button onClick={() => setPhoto(undefined)} className="flex items-center gap-1 text-neutral-500"><Trash2 size={13} /> {t("إزالة", "Remove")}</button>}
           </div>
           <div className="flex gap-2.5" role="radiogroup" aria-label={t("لون الصورة", "Avatar color")}>
