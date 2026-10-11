@@ -57,7 +57,8 @@ services:
     ports: ["127.0.0.1:8085:80"]
     volumes: [caddy_data:/data, caddy_config:/config]
 
-  # نسخة احتياطية يومية (قاعدة البيانات + الملفات المرفوعة) في volume "backups"، بتحتفظ بآخر ١٤ نسخة
+  # نسخة احتياطية يومية (قاعدة البيانات + الملفات المرفوعة) في volume "backups"، بتحتفظ بآخر ١٤ نسخة.
+  # للتأكد إنها بترجع فعلًا:  bash scripts/verify-backup.sh
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -70,12 +71,22 @@ services:
     command:
       - |
         while true; do
+          # ١) ننتظر الداتابيز: أول ما الكونتينر يقوم بتكون لسه بتقوم، وده كان بيفشّل الدمب
+          i=0; until pg_isready -h db -U rachat -q; do i=$$((i+1)); [ $$i -gt 60 ] && break; sleep 5; done
           ts=$$(date +%Y%m%d-%H%M%S)
-          pg_dump -h db -U rachat -Fc rachat > /backups/db-$$ts.dump && tar -czf /backups/uploads-$$ts.tgz -C /uploads . \
-            && echo "backup $$ts ok" || echo "backup $$ts FAILED"
-          ls -1t /backups/db-*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
-          ls -1t /backups/uploads-*.tgz 2>/dev/null | tail -n +15 | xargs -r rm -f
-          sleep 86400
+          # ٢) نكتب في ملف مؤقت، وما ناخدش الاسم النهائي إلا لو نجح وحجمه مش صفر —
+          #    فالنسخة الفاشلة ما تتحسبش نسخة ولا تزحزح نسخة سليمة من الـ ١٤
+          if pg_dump -h db -U rachat -Fc rachat > /backups/.db-$$ts.part 2>/tmp/err && [ -s /backups/.db-$$ts.part ]; then
+            mv /backups/.db-$$ts.part /backups/db-$$ts.dump
+            tar -czf /backups/uploads-$$ts.tgz -C /uploads . && echo "backup $$ts ok" || echo "backup $$ts uploads FAILED"
+            ls -1t /backups/db-*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
+            ls -1t /backups/uploads-*.tgz 2>/dev/null | tail -n +15 | xargs -r rm -f
+            sleep 86400
+          else
+            rm -f /backups/.db-$$ts.part
+            echo "backup $$ts FAILED: $$(tail -1 /tmp/err 2>/dev/null)"
+            sleep 900   # ٣) يحاول تاني بعد ربع ساعة بدل ما ينام يوم كامل على فشل
+          fi
         done
 
   # TURN للمكالمات: docker compose -f docker-compose.prod.yml --profile turn up -d
