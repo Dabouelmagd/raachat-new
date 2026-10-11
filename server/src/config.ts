@@ -9,6 +9,7 @@ const Env = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   OTP_DEV_CODE: z.string().regex(/^\d{6}$/).optional(),
   UPLOAD_DIR: z.string().default("./uploads"),
+  APP_URL: z.string().default(""), // رابط التطبيق في الإيميلات؛ فاضي = أول قيمة في CORS_ORIGIN
   PUBLIC_URL: z.string().default(""), // لو الملفات على دومين تاني؛ فاضي = مسار نسبي
   ACCESS_TTL_MIN: z.coerce.number().default(15),
   REFRESH_TTL_DAYS: z.coerce.number().default(30),

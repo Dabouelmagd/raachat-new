@@ -1,4 +1,5 @@
 import type { Config } from "../config.js";
+import { otpEmail } from "./otp-email.js";
 
 /** مُرسِل رمز التحقق — بدّليه بأي مزود SMS/Email */
 export interface OtpSender {
@@ -29,10 +30,12 @@ export function providerSender(c: Config, f: typeof fetch = fetch): OtpSender {
         if (!r.ok) throw new Error("sms_failed");
       } else {
         if (!c.RESEND_KEY || !c.EMAIL_FROM) throw new Error("email_not_configured");
+        const appUrl = (c.APP_URL || c.CORS_ORIGIN.split(",")[0] || "").trim();
+        const mail = otpEmail({ code, appUrl, minutes: 5 });
         const r = await f("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${c.RESEND_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: c.EMAIL_FROM, to: target, subject: "كود التحقق — رع شات", text: `كود التحقق: ${code}` }),
+          body: JSON.stringify({ from: c.EMAIL_FROM, to: target, subject: mail.subject, html: mail.html, text: mail.text }),
         });
         if (!r.ok) throw new Error("email_failed");
       }

@@ -9,6 +9,8 @@ COPY package*.json ./
 RUN npm ci
 COPY index.html vite.config.ts tsconfig*.json postcss.config.js tailwind.config.js ./
 COPY src ./src
+# public/ فيه الصفحات القانونية واللوجو وملف الـ service worker — من غيرها بيطلعوا 404
+COPY public ./public
 RUN npx vite build
 
 # لوحة الإدارة (admin.دومينك)
