@@ -118,6 +118,8 @@ export function meRoutes(ctx: Ctx) {
       db.message.updateMany({ where: { authorId: me }, data: { deleted: true, text: "" } }),
       db.story.deleteMany({ where: { authorId: me } }),
       db.callLog.deleteMany({ where: { userId: me } }),
+      // أحداث الإعلانات باسم المستخدم. (الأقل من ١٨ نقره وإغلاقه متخزنين بمعرّف مستعار
+      // ليوم واحد مش مربوط بهويته — بيتمسح بعمره في routes/ads.ts، ومفيش منه حاجة تُنسب له.)
       db.adEvent.deleteMany({ where: { userId: me } }),
       db.block.deleteMany({ where: { OR: [{ blockerId: me }, { blockedId: me }] } }),
       db.roomParticipant.deleteMany({ where: { userId: me } }),

@@ -123,6 +123,51 @@ describe("خريطة الإعلانات", () => {
     expect(st.map((s) => `${s.placement}:${s.shown}`).sort()).toEqual(["banner:1", "modal:1"]);
   });
 
+  it("الأقل من ١٨: الكتالوج واحد للكل، ومفيش نقر/إغلاق مربوط بهويته، والظهور لتحديد التكرار بس", async () => {
+    const big = await env.login("01099000050", "بالغ");
+    const kid = await env.login("01099000051", "قاصر");
+    await api().patch("/me").set(big.auth).send({ birthDate: "1990-05-20" }).expect(200);
+    await api().patch("/me").set(kid.auth).send({ birthDate: `${new Date().getUTCFullYear() - 12}-01-01` }).expect(200);
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "سلوك", placements: ["banner", "modal"], start: T, end: d(1), approve: true })).expect(201)).body;
+
+    // ١) مفيش استهداف: نفس الكتالوج بالحرف للبالغ والقاصر (ومن غير تاريخ ميلاد كمان)
+    const none = await env.login("01099000052", "بدون تاريخ");
+    const cat = async (a: { auth: Record<string, string> }) => JSON.stringify((await api().get("/ads/catalog").set(a.auth).expect(200)).body);
+    expect(await cat(kid)).toBe(await cat(big));
+    expect(await cat(none)).toBe(await cat(big));
+
+    // ٢) نقر وإغلاق القاصر: الإحصاء المجمّع بيتعدّ، ومفيش سجل باسمه
+    const ev = (a: { auth: Record<string, string> }, body: Record<string, unknown>) => api().post("/ads/events").set(a.auth).send({ day: T, adId: c.id, ...body }).expect(204);
+    await ev(kid, { kind: "clicked", placement: "banner" });
+    await ev(kid, { kind: "closed", placement: "banner" });
+    expect(await env.ctx.db.adEvent.count({ where: { userId: kid.user.id } })).toBe(0);
+    // اللي اتخزن مُعرَّف مستعار ليوم واحد (لمنع العدّ المكرر)، مش هوية المستخدم
+    const anon = await env.ctx.db.adEvent.findMany({ where: { userId: { startsWith: "anon:" }, adKey: { contains: c.id } }, select: { userId: true, kind: true } });
+    expect(anon.map((x) => x.kind).sort()).toEqual(["clicked", "closed"]);
+    expect(anon.every((x) => !x.userId.includes(kid.user.id))).toBe(true);
+    // تكرار النقر ما بيعدّش تاني (أرقام المعلن تفضل صح)
+    await ev(kid, { kind: "clicked", placement: "banner" });
+    expect(await env.ctx.db.adEvent.count({ where: { userId: { startsWith: "anon:" }, adKey: { contains: c.id }, kind: "clicked" } })).toBe(1);
+    const st1 = (await api().get(`/admin/ads/campaigns/${c.id}/stats`).set(owner.auth).expect(200)).body as { placement: string; clicked: number; closed: number }[];
+    expect(st1.find((s) => s.placement === "banner")).toMatchObject({ clicked: 1, closed: 1 });
+
+    // ٣) الظهور بيتخزن للقاصر (تحديد التكرار شغّال وموحّد بين أجهزته)
+    await ev(kid, { kind: "shown", slot: 4, placement: "modal" });
+    expect((await api().get(`/ads/today?day=${T}`).set(kid.auth).expect(200)).body.shown).toEqual([4]);
+    expect(await env.ctx.db.adEvent.count({ where: { userId: kid.user.id, kind: "shown" } })).toBe(1);
+
+    // ٤) سجل قديم للقاصر بيتمسح مع أول حدث جديد (مابيتراكمش)
+    await env.ctx.db.adEvent.create({ data: { userId: kid.user.id, adKey: "old|slot:1", kind: "shown", createdAt: new Date(Date.now() - 5 * 86400_000) } });
+    await ev(kid, { kind: "shown", slot: 5, placement: "modal" });
+    const keys = (await env.ctx.db.adEvent.findMany({ where: { userId: kid.user.id }, select: { adKey: true } })).map((x) => x.adKey);
+    expect(keys).not.toContain("old|slot:1");
+    expect(keys).toHaveLength(2); // slot:4 و slot:5 بس
+
+    // ٥) البالغ زي ما هو: النقر بيتسجّل باسمه
+    await ev(big, { kind: "clicked", placement: "banner" });
+    expect(await env.ctx.db.adEvent.count({ where: { userId: big.user.id, kind: "clicked" } })).toBe(1);
+  });
+
   it("أكواد الهدية: توليد بمدة، خصم بحد المدة، استخدام مرة واحدة، رجوعها عند الرفض، وإلغاء غير المستخدم", async () => {
     const gs = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1, count: 2, recipient: "كافيه النيل" }).expect(201)).body as { id: string; code: string; days: number; status: string }[];
     expect(gs).toHaveLength(2); expect(gs[0].days).toBe(30); expect(gs[0].code).toMatch(/^RA-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
