@@ -12,27 +12,32 @@ if [ -n "$(git status --porcelain --untracked-files=no | grep -v 'package-lock.j
 fi
 git checkout -- '*package-lock.json' 2>/dev/null || true
 
-OLD=$(git rev-parse HEAD)
+# المقارنة بآخر نسخة **اتنشرت فعلًا**، مش بالـ HEAD قبل الـ pull — عشان لو عملتي git pull
+# بإيدك قبل السكربت، يفضل يعرف إن فيه جديد لسه ما اتبناش.
+STATE=.deploy-state
+if [ -s "$STATE" ]; then OLD=$(cat "$STATE"); KNOWN=1; else OLD=""; KNOWN=0; fi
 git pull --ff-only
 NEW=$(git rev-parse HEAD)
-echo "النسخة: ${OLD:0:7} → ${NEW:0:7}"
+if [ "$KNOWN" = 1 ]; then echo "آخر نسخة منشورة: ${OLD:0:7} → النسخة الحالية: ${NEW:0:7}";
+else echo "النسخة الحالية: ${NEW:0:7} (مش معروف إيه اللي اتنشر قبل كده — هيتبني كل حاجة)"; fi
 
-CHANGED=$(git diff --name-only "$OLD" "$NEW" || true)
-if [ "$OLD" = "$NEW" ] && [ "${FORCE:-0}" != "1" ]; then echo "✅ مفيش جديد (استخدمي FORCE=1 لإعادة البناء)"; exit 0; fi
+if [ "$KNOWN" = 1 ] && [ "$OLD" = "$NEW" ] && [ "${FORCE:-0}" != "1" ]; then echo "✅ مفيش جديد (استخدمي FORCE=1 لإعادة البناء)"; exit 0; fi
+CHANGED=""
+[ "$KNOWN" = 1 ] && CHANGED=$(git diff --name-only "$OLD" "$NEW" || true)
 
 # نسخة احتياطية قبل أي migration جديد
-if echo "$CHANGED" | grep -q '^server/prisma/migrations/' && [ "${BACKUP:-1}" = "1" ]; then
+if { [ "$KNOWN" = 0 ] || echo "$CHANGED" | grep -q '^server/prisma/migrations/'; } && [ "${BACKUP:-1}" = "1" ] && $DC ps --services --filter status=running | grep -q '^backup$'; then
   echo "↪ فيه migration جديد: نسخة احتياطية للقاعدة أولًا"
   $DC exec -T backup sh -c 'pg_dump -h db -U rachat -Fc rachat > /backups/pre-deploy-$(date +%F-%H%M).dump'
 fi
 
 # بناء اللازم بس: server/ → api ، باقي المشروع (src/public/admin/…) → caddy (الواجهة)
 SVC=""
-if [ "${FORCE:-0}" = "1" ]; then SVC="api caddy"; else
+if [ "${FORCE:-0}" = "1" ] || [ "$KNOWN" = 0 ]; then SVC="api caddy"; else
   echo "$CHANGED" | grep -q '^server/' && SVC="$SVC api"
   echo "$CHANGED" | grep -qvE '^(server/|docs/|.*\.md$)' && SVC="$SVC caddy"
 fi
-[ -z "$SVC" ] && { echo "✅ تغييرات وثائق بس — مفيش حاجة تتبني"; exit 0; }
+[ -z "$SVC" ] && { echo "✅ تغييرات وثائق بس — مفيش حاجة تتبني"; echo "$NEW" > "$STATE"; exit 0; }
 echo "↪ بناء وتشغيل:$SVC"
 $DC up -d --build $SVC
 # باقي الخدمات (db / backup) لازم تفضل شغّالة: بدون بناء
@@ -42,5 +47,5 @@ $DC up -d
 sleep 6
 $DC ps
 DOMAIN=$(grep -E '^DOMAIN=' .env.production | cut -d= -f2)
-if curl -fsS -H "Host: api.${DOMAIN}" http://127.0.0.1:8085/health >/dev/null; then echo "✅ الـ API شغّال (127.0.0.1:8085) — النسخة ${NEW:0:7}"; else
+if curl -fsS -H "Host: api.${DOMAIN}" http://127.0.0.1:8085/health >/dev/null; then echo "$NEW" > "$STATE"; echo "✅ الـ API شغّال (127.0.0.1:8085) — النسخة ${NEW:0:7}"; else
   echo "❌ الـ API مش بيرد. آخر لوج:"; $DC logs --tail 50 api; exit 1; fi

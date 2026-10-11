@@ -10,3 +10,4 @@ dist-single/
 server/src/generated/
 .DS_Store
 legal.config.json
+.deploy-state
