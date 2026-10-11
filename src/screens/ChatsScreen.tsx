@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ThreadAvatar } from "../components/ThreadAvatar";
-import { Search, Settings, Plus, Users, Phone, Star, Mic } from "lucide-react";
+import { Settings, Plus, Users, Phone, Star, Mic } from "lucide-react";
 import { phaKind } from "../components/PharaohEmoji";
 import { occKind } from "../components/OccasionSticker";
 import { toggleFavorite, useFavorites } from "../store/favorites";
@@ -34,7 +34,6 @@ export default function ChatsScreen() {
         right={
           <>
             <button aria-label={tx("المكالمات", "Calls")} onClick={() => navigate("/calls")}><Phone size={20} /></button>
-            <button aria-label={tx("بحث", "Search")} onClick={() => navigate("/search")}><Search size={20} /></button>
             <button aria-label={tx("الإعدادات", "Settings")} onClick={() => navigate("/account")}><Settings size={20} /></button>
           </>
         }

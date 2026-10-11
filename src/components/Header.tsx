@@ -1,7 +1,8 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Moon, Search, Sun } from "lucide-react";
 import { tr, useDir } from "../i18n";
 import { useLocation, useNavigate } from "react-router-dom";
+import { setTheme, useTheme } from "../theme/useTheme";
 import logo from "../assets/logo.png";
 
 interface HeaderProps {
@@ -9,6 +10,8 @@ interface HeaderProps {
   /** undefined = تلقائي (سهم في كل صفحة غير الرئيسية)؛ false = إخفاء */
   showBack?: boolean;
   right?: ReactNode;
+  /** false = إخفاء زراري البحث والوضع الليلي (شاشة فيها أزرار كتير مثلًا) */
+  globalActions?: boolean;
 }
 
 /**
@@ -20,11 +23,13 @@ interface HeaderProps {
 const NoBackContext = createContext(false);
 export const SideList = ({ children }: { children: ReactNode }) => <NoBackContext.Provider value={true}>{children}</NoBackContext.Provider>;
 
-export function Header({ title, showBack, right }: HeaderProps) {
+export function Header({ title, showBack, right, globalActions = true }: HeaderProps) {
   const inSideList = useContext(NoBackContext);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const dir = useDir();
+  const theme = useTheme();
+  const dark = theme === "dark";
   // سهم الرجوع في أي صفحة غير الرئيسية (موبايل وشاشة عريضة)
   const back = showBack ?? (!inSideList && pathname !== "/");
   const Back = dir === "rtl" ? ArrowRight : ArrowLeft;
@@ -35,8 +40,8 @@ export function Header({ title, showBack, right }: HeaderProps) {
     else navigate("/");
   };
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-rachat-black">
-      <div className="flex items-center gap-2.5">
+    <div className="flex items-center justify-between gap-2 px-4 py-3 bg-rachat-black">
+      <div className="flex min-w-0 items-center gap-2.5">
         {back ? (
           <button onClick={goBack} aria-label={tr("رجوع", "Back")} title={tr("رجوع", "Back")} className="-m-1 p-1 text-rachat-papyrus">
             <Back size={22} />
@@ -44,9 +49,27 @@ export function Header({ title, showBack, right }: HeaderProps) {
         ) : (
           <HorusMark />
         )}
-        <span className="font-extrabold text-lg">{title}</span>
+        <span className="truncate font-extrabold text-lg">{title}</span>
       </div>
-      <div className="flex items-center gap-4 text-rachat-red">{right}</div>
+      <div className="flex shrink-0 items-center gap-3 text-rachat-red">
+        {right}
+        {globalActions && pathname !== "/search" && (
+          <button onClick={() => navigate("/search")} aria-label={tr("بحث", "Search")} title={tr("بحث", "Search")} className="-m-1 p-1">
+            <Search size={19} />
+          </button>
+        )}
+        {globalActions && (
+          <button
+            onClick={() => setTheme(dark ? "light" : "dark")}
+            aria-label={dark ? tr("الوضع الفاتح", "Light mode") : tr("الوضع الليلي", "Dark mode")}
+            title={dark ? tr("الوضع الفاتح", "Light mode") : tr("الوضع الليلي", "Dark mode")}
+            aria-pressed={!dark}
+            className="-m-1 p-1"
+          >
+            {dark ? <Sun size={19} /> : <Moon size={19} />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

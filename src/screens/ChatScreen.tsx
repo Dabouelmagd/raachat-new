@@ -144,6 +144,7 @@ export default function ChatScreen() {
         <Header
           title={thread?.name ?? t("محادثة", "Chat")}
           showBack
+          globalActions={false}
           right={
             <>
               <button aria-label={t("الترجمة الفورية", "Live translation")} aria-pressed={tset.on} className={tset.on ? "text-rachat-gold" : ""} onClick={(e) => { e.stopPropagation(); setShowTr(true); }}><Languages size={19} /></button>

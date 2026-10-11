@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Plus, Eye, EyeOff, Lock, Mic, MicOff, Hand, LogOut, X } from "lucide-react";
+import { Plus, Eye, EyeOff, Lock, Mic, MicOff, Hand, LogOut, X } from "lucide-react";
 import { Header } from "../components/Header";
 import { useAppState, useAppActions } from "../store/AppContext";
 import { RoomParticipant } from "../types";
@@ -156,7 +156,6 @@ export default function RoomsScreen() {
         right={
           <>
             <button onClick={() => setShowCreate(true)}><Plus size={19} /></button>
-            <Search size={19} />
           </>
         }
       />
