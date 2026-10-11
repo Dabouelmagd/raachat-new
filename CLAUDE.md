@@ -52,7 +52,7 @@ Hetzner `ubuntu-4gb-fsn1-1`، نجنكس على 80/443 لكل المواقع. ر
 أول سطر النتيجة (✅ / ⚠️ / ❌)، سؤال واحد بس في الرسالة، كل أمر في code block لوحده وفوقه مكان التشغيل ("على السيرفر:")، ومفيش placeholder جوه أمر.
 
 ## سكربتات السيرفر
-`scripts/setup-env.sh` (يجهّز `.env.production` ويولّد الأسرار) · `scripts/set-otp-keys.sh` (مفاتيح Resend/Twilio بدون إظهارها) · `scripts/add-nginx-site.sh` (مواقع نجنكس + certbot) · `scripts/deploy-rachat.sh` (النشر) · `scripts/fill-legal.mjs` (الصفحات القانونية).
+`scripts/setup-env.sh` (يجهّز `.env.production` ويولّد الأسرار) · `scripts/set-otp-keys.sh` (مفاتيح Resend/Twilio بدون إظهارها) · `scripts/set-vapid.sh` (مفاتيح إشعارات Push) · `scripts/add-nginx-site.sh` (مواقع نجنكس + certbot) · `scripts/deploy-rachat.sh` (النشر) · `scripts/fill-legal.mjs` (الصفحات القانونية).
 
 ## نقاط معروفة
 - الصفحات القانونية فيها placeholders لحد ما تتملي `legal.config.json` ويتشغّل `node scripts/fill-legal.mjs`.
