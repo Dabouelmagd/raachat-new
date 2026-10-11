@@ -1,4 +1,5 @@
 import { Megaphone } from "lucide-react";
+import { Header } from "../components/Header";
 import { useCatalog } from "../ads/ads";
 import { useT } from "../i18n";
 
@@ -8,10 +9,7 @@ export default function AdsScreen() {
   const { list, err } = useCatalog();
   return (
     <div className="flex h-full flex-col bg-rachat-black">
-      <header className="flex items-center gap-2 px-4 pb-3 pt-5">
-        <Megaphone size={22} className="text-rachat-red" />
-        <h1 className="text-xl font-extrabold">{t("الإعلانات", "Ads")}</h1>
-      </header>
+      <Header title={t("الإعلانات", "Ads")} right={<Megaphone size={20} />} />
       <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-6">
         {list === null && <p className="py-10 text-center text-sm text-neutral-500">{t("جاري التحميل…", "Loading…")}</p>}
         {err && <p role="alert" className="py-10 text-center text-sm text-rachat-red">{t("تعذّر تحميل الإعلانات", "Couldn't load ads")}</p>}

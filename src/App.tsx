@@ -15,6 +15,7 @@ import { AdHost } from "./ads/AdHost";
 import GroupsScreen from "./screens/GroupsScreen";
 import PayScreen from "./screens/PayScreen";
 import AuthScreen from "./screens/AuthScreen";
+import { SideList } from "./components/Header";
 import { ContactsPrompt } from "./components/ContactsPrompt";
 import FriendsScreen from "./screens/FriendsScreen";
 import CallsScreen from "./screens/CallsScreen";
@@ -84,7 +85,7 @@ function WideShell() {
           </button>
         )}
       </nav>
-      <section className="relative w-[390px] shrink-0 overflow-hidden border-e border-rachat-maroon/40">{listFor}</section>
+      <section className="relative w-[390px] shrink-0 overflow-hidden border-e border-rachat-maroon/40"><SideList>{listFor}</SideList></section>
       <section className="relative min-w-0 flex-1 overflow-hidden bg-gradient-to-b from-rachat-card/50 to-rachat-black">
         <Routes>
           <Route path="/chat/:id" element={<ChatScreen />} />
