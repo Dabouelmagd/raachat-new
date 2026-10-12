@@ -51,6 +51,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: تنزيل التبعيات
         run: npm ci
+      - name: فحص قاموس الترجمة (تكرار = ترجمة غلط في سكوت)
+        run: node scripts/check-phrases.mjs
       - name: فحص الأنواع
         run: npx tsc -b
       - name: بناء نسخة الملف الواحد

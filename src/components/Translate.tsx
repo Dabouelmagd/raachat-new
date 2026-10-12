@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Languages, X, Volume2 } from "lucide-react";
-import { useT } from "../i18n";
+import { num, useT } from "../i18n";
 import { setTranslate, useTranslate } from "../store/translate";
 import { TLANG_NAMES, translate, type TLang } from "../translate/engine";
 import { EXAMPLES, PHRASES, TLANGS } from "../translate/phrases";
@@ -57,7 +57,7 @@ export function TranslateSheet({ onClose, call = false }: { onClose: () => void;
         <div className="rounded-xl border border-dashed border-rachat-gold/50 p-3">
           <p className="mb-1 text-xs font-bold text-rachat-gold">{t("نسخة تجريبية", "Demo version")}</p>
           <p className="mb-2 text-[11px] leading-5 text-neutral-400">
-            {t("الديمو بيترجم حوالي ٤٣ عبارة شائعة بين العربية والإنجليزية والصينية والفرنسية. الباك إند هيربط محرك ترجمة حقيقي لأي جملة وأي لغة. جرّبي كتابة:", "The demo translates about 43 common phrases between Arabic, English, Chinese and French. The backend will connect a real translation engine for any sentence and any language. Try typing:")}
+            {t(`الديمو بيترجم حوالي ${num(PHRASES.length)} عبارة شائعة بين العربية والإنجليزية والصينية والفرنسية. الباك إند هيربط محرك ترجمة حقيقي لأي جملة وأي لغة. جرّبي كتابة:`, `The demo translates about ${PHRASES.length} common phrases between Arabic, English, Chinese and French. The backend will connect a real translation engine for any sentence and any language. Try typing:`)}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {EXAMPLES.map((i) => (
