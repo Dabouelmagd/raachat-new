@@ -3,6 +3,9 @@ import ReactDOM from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import App from "./App";
 import "./index.css";
+import { startUpdateWatch } from "./update";
+
+startUpdateWatch();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

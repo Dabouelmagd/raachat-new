@@ -1,4 +1,5 @@
 import { API_ON } from "../api/client";
+import { setUpdateBlocked } from "../update";
 import { Languages, Palette } from "lucide-react";
 import { dayLabel, sameDay } from "../timefmt";
 import { PharaohEmoji, PHARAOH_KINDS, phaToken } from "../components/PharaohEmoji";
@@ -39,6 +40,11 @@ export default function ChatScreen() {
   const threadMessages = messages.filter((m) => m.threadId === id);
 
   const [draft, setDraft] = useState("");
+  // التحديث التلقائي مابيعملش reload والمسوّدة لسه مكتوبة — مانضيّعش كلام المستخدم
+  useEffect(() => {
+    setUpdateBlocked(!!draft.trim());
+    return () => setUpdateBlocked(false);
+  }, [draft]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [panel, setPanel] = useState<"none" | "emoji" | "attach">("none");
