@@ -14,6 +14,12 @@ const Env = z.object({
   ACCESS_TTL_MIN: z.coerce.number().default(15),
   REFRESH_TTL_DAYS: z.coerce.number().default(30),
   RATE_LIMIT: z.enum(["on", "off"]).default("on"),
+  /**
+   * الحذف التلقائي اللي بينفّذ مدد الاحتفاظ المنشورة في سياسة الخصوصية.
+   * `dry` (الافتراضي) = يعدّ ويقول هيمسح إيه **بدون حذف** · `on` = يمسح فعلًا ·
+   * `off` = موقوف. الافتراضي متحفظ عن قصد: الحذف مابيرجعش، فالأرقام تتراجع أول.
+   */
+  RETENTION: z.enum(["on", "dry", "off"]).default("dry"),
   TWILIO_SID: z.string().optional(),
   TWILIO_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),

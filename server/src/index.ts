@@ -5,6 +5,7 @@ import { createDb } from "./db.js";
 import { createWebPush } from "./lib/push.js";
 import { consoleSender, providerSender } from "./lib/senders.js";
 import { attachRealtime } from "./realtime.js";
+import { startRetention } from "./lib/retention.js";
 import type { Ctx } from "./context.js";
 
 const config = loadConfig();
@@ -26,6 +27,7 @@ if (config.NODE_ENV === "production") {
 const server = http.createServer(createApp(ctx));
 attachRealtime(ctx, server);
 server.listen(config.PORT, () => console.log(`رع شات API على :${config.PORT} (${config.NODE_ENV})`));
+startRetention(ctx);
 
 const stop = async () => { server.close(); await ctx.db.$disconnect(); process.exit(0); };
 process.on("SIGTERM", stop);
