@@ -21,7 +21,8 @@ MAX_DISK_PCT=${MAX_DISK_PCT:-85}
 MIN_CERT_DAYS=${MIN_CERT_DAYS:-20}
 
 [ -f .env.production ] || { echo "❌ مفيش .env.production"; exit 1; }
-cfg() { grep -E "^$1=" .env.production | head -1 | cut -d= -f2- | tr -d '"' | tr -d "\r"; }
+# القيمة من .env.production: أول سطر بالمفتاح، وبنشيل علامات التنصيص و\r لو موجودين
+cfg() { grep -E "^$1=" .env.production | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d "\r"; }
 DOMAIN=$(cfg DOMAIN); RESEND_KEY=$(cfg RESEND_KEY); EMAIL_FROM=$(cfg EMAIL_FROM)
 ALERT_TO=$(cfg ALERT_EMAIL); [ -n "$ALERT_TO" ] || ALERT_TO=$(cfg LETSENCRYPT_EMAIL)
 [ -n "$DOMAIN" ] || { echo "❌ DOMAIN مش متحدد في .env.production"; exit 1; }
@@ -32,8 +33,8 @@ send_mail() {
   if [ -z "$RESEND_KEY" ] || [ -z "$ALERT_TO" ]; then
     echo "⚠️ مفيش RESEND_KEY أو إيميل تنبيه — التنبيه ما اتبعتش"; return 1
   fi
-  local code
-  code=$(python3 - "$subject" "$body" <<'PY'
+  local out code
+  out=$(python3 - "$subject" "$body" <<'PY'
 import json, os, sys, urllib.request
 key = os.environ["RESEND_KEY"]; to = os.environ["ALERT_TO"]
 frm = os.environ.get("EMAIL_FROM") or f"Raa Chat <no-reply@{os.environ['DOMAIN']}>"
@@ -45,15 +46,31 @@ data = json.dumps({"from": frm, "to": to, "subject": sub,
 req = urllib.request.Request("https://api.resend.com/emails", data=data,
       headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
 try:
-    with urllib.request.urlopen(req, timeout=20) as r: print(r.status)
+    with urllib.request.urlopen(req, timeout=20) as r:
+        print(r.status)
 except Exception as e:
     print(getattr(e, "code", 0))
+    # رسالة Resend هي اللي بتقول السبب بالظبط — بنطبعها (مفيش فيها أي سر)
+    try:
+        print(e.read().decode()[:400].replace("\n", " "))
+    except Exception:
+        print(str(e)[:200])
 PY
-  ) || code=0
-  [ "$code" = "200" ] && echo "📧 التنبيه اتبعت لـ $ALERT_TO" || { echo "⚠️ إرسال التنبيه فشل (HTTP $code)"; return 1; }
+  ) || out=0
+  code=$(printf '%s' "$out" | sed -n 1p)
+  if [ "$code" = "200" ]; then
+    echo "📧 التنبيه اتبعت لـ $ALERT_TO"
+  else
+    echo "⚠️ إرسال التنبيه فشل (HTTP $code)"
+    printf '%s' "$out" | sed -n '2,3p' | sed 's/^/   رد Resend: /'
+    echo "   المرسِل: ${EMAIL_FROM:-(من DOMAIN)} · المستلم: $ALERT_TO · طول المفتاح: ${#RESEND_KEY}"
+    return 1
+  fi
 }
 export RESEND_KEY ALERT_TO EMAIL_FROM DOMAIN
 
+# --to someone@example.com : يغيّر المستلم لهذه المرة بس (للتجربة)
+if [ "${1:-}" = "--to" ] && [ -n "${2:-}" ]; then ALERT_TO=$2; export ALERT_TO; shift 2; fi
 if [ "${1:-}" = "--test" ]; then
   send_mail "رع شات — تجربة تنبيه" "ده إيميل تجربة من scripts/monitor.sh على $DOMAIN.
 لو وصلك، يبقى التنبيهات شغالة."
