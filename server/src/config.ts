@@ -20,6 +20,15 @@ const Env = z.object({
    * `off` = موقوف. الافتراضي متحفظ عن قصد: الحذف مابيرجعش، فالأرقام تتراجع أول.
    */
   RETENTION: z.enum(["on", "dry", "off"]).default("dry"),
+  /**
+   * سقوف الترجمة بالحرف في اليوم (بتوقيت القاهرة) — **حماية للفاتورة**.
+   * جوجل بتدي ٥٠٠ ألف حرف شهريًا مجانًا (رصيد ١٠ دولار متجدد)، وبعدها ٢٠ دولار
+   * للمليون. الافتراضي ١٥ ألف/يوم ≈ ٤٦٥ ألف/شهر = **جوّا الحد المجاني**.
+   * والسقف لكل مستخدم عشان واحد مايشربش الميزانية كلها (لزق كتاب في الشات).
+   * صفر = بلا سقف (مش موصى به مع مفتاح مدفوع).
+   */
+  TRANSLATE_DAILY_CHARS: z.coerce.number().int().min(0).default(15_000),
+  TRANSLATE_USER_DAILY_CHARS: z.coerce.number().int().min(0).default(3_000),
   TWILIO_SID: z.string().optional(),
   TWILIO_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),

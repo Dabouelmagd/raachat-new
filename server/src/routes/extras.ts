@@ -3,11 +3,21 @@ import { blockedByMe } from "../lib/blocks.js";
 import { assertClean } from "../lib/contentFilter.js";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
+import { todayCairo } from "../lib/cairo.js";
 import type { Ctx } from "../context.js";
 import { HttpError, notFound, wrap } from "../lib/errors.js";
 import { assertMember } from "./threads.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+/**
+ * عدّاد حروف الترجمة في اليوم (بتوقيت القاهرة): الكل ولكل مستخدم.
+ * في الذاكرة عن قصد — مفيش migration ومفيش حمل على القاعدة، والـ api كونتينر
+ * واحد فالعدّاد عملـيًا عام. إعادة التشغيل بتصفّره، وده مقبول لأن السقف يومي
+ * والمستخدم مش بيقدر يجبر إعادة تشغيل.
+ * **الكاش مابيستهلكش من السقف** — النص المتكرر مش بيروح للمزوّد أصلًا.
+ */
+const chars = { day: "", total: 0, per: new Map<string, number>() };
 
 /** كاش الترجمة: سقف للفاتورة مش تحسين سرعة (المزوّد بيحاسب بالحرف) */
 const TR_MAX = 2000;
@@ -89,6 +99,21 @@ export function extraRoutes(ctx: Ctx) {
       res.json({ text: hit.text, from: hit.from, cached: true });
       return;
     }
+    // السقوف: بتتحسب على النص اللي **هيروح للمزوّد فعلًا** (بعد الكاش)
+    const today = todayCairo();
+    if (chars.day !== today) { chars.day = today; chars.total = 0; chars.per.clear(); }
+    const me = (req as AuthedRequest).userId;
+    const n = b.text.length;
+    const cap = ctx.config.TRANSLATE_DAILY_CHARS;
+    const ucap = ctx.config.TRANSLATE_USER_DAILY_CHARS;
+    const mine = chars.per.get(me) ?? 0;
+    if (ucap > 0 && mine + n > ucap) {
+      throw new HttpError(429, "translate_quota_user", "خلص حدّك اليومي من الترجمة — جرّبي بكرة");
+    }
+    if (cap > 0 && chars.total + n > cap) {
+      console.warn(`⚠️ سقف الترجمة اليومي خلص (${cap} حرف) — الترجمة متوقفة لباقي اليوم`);
+      throw new HttpError(429, "translate_quota", "سقف الترجمة اليومي خلص — الترجمة هترجع بكرة");
+    }
     const r2 = await ctx.fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(key)}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ q: b.text, target: b.to, source: b.from, format: "text" }),
@@ -97,6 +122,7 @@ export function extraRoutes(ctx: Ctx) {
     const j = (await r2.json()) as { data?: { translations?: { translatedText: string; detectedSourceLanguage?: string }[] } };
     const t = j.data?.translations?.[0];
     if (!t) throw new HttpError(502, "translate_failed", "رد غير متوقع");
+    chars.total += n; chars.per.set(me, mine + n);
     const out = { text: t.translatedText, from: b.from ?? t.detectedSourceLanguage ?? "" };
     trCache.set(ck, { ...out, at: Date.now() });
     // Map بيحفظ ترتيب الإدخال، فأول مفتاح = الأقدم استخدامًا

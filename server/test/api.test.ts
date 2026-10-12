@@ -218,6 +218,26 @@ describe("stories / calls / translate / users", () => {
     expect(env.fetched.filter((u) => u.includes("translation.googleapis.com")).length - after).toBe(1);
   });
 
+  /**
+   * حماية الفاتورة: جوجل بتحاسب بالحرف (٢٠ دولار للمليون بعد ٥٠٠ ألف مجانية شهريًا).
+   * بدون سقف، مستخدم واحد بيلزق كتاب = فلوس. السقف بيتحسب على اللي **هيروح
+   * للمزوّد فعلًا** — الكاش مابيستهلكش منه.
+   */
+  it("ترجمة: سقف يومي لكل مستخدم، والكاش مابيستهلكش منه", async () => {
+    const a = await env.login("01062000003", "ج");
+    const tr = (text: string) => request(env.app).post("/translate").set(a.auth).send({ text, to: "fr" });
+    const long = "ا".repeat(1200); // السقف الافتراضي لكل مستخدم ٣٠٠٠ حرف
+
+    await tr(long + "1").expect(200);
+    await tr(long + "2").expect(200);           // ٢٤٠٠ حرف
+    const over = await tr(long + "3").expect(429); // ٣٦٠٠ > ٣٠٠٠
+    expect(over.body.code).toBe("translate_quota_user");
+
+    // نص اتترجم قبل كده بيرجع من الكاش **رغم** إن السقف خلص
+    const cached = await tr(long + "1").expect(200);
+    expect(cached.body.cached).toBe(true);
+  });
+
   it("بحث المستخدمين وتعديل الملف الشخصي", async () => {
     const a = await env.login("01063000001", "نورا السيد");
     const b = await env.login("01063000002", "آخر");

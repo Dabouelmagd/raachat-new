@@ -43,8 +43,10 @@ export interface TranslateResult {
 
 /** كاش محلي: نفس النص لنفس اللغة مابيتنادى عليه مرتين في نفس الجلسة (والمزوّد بيحاسب بالحرف) */
 const net = new Map<string, string | null>();
-/** السيرفر قال «محرك الترجمة غير مُفعّل» → مانزعجوش بعد كده */
+/** السيرفر قال «محرك الترجمة غير مُفعّل» (501) → حالة دايمة، مانزعجوش بعد كده */
 let engineOff = false;
+/** سقف الترجمة اليومي خلص (429) → حالة مؤقتة، نهدى عشر دقايق بدل ما نطرق الباب */
+let pausedUntil = 0;
 
 /**
  * الترجمة على ٣ مستويات، والترتيب مقصود عشان الفاتورة:
@@ -62,7 +64,7 @@ export async function translate(text: string, to: TLang, from?: TLang): Promise<
   const src = from ?? hit?.lang ?? detect(text);
   if (src === to) return { text, from: src };
   if (hit) return { text: phraseText(hit.p, to), from: src };
-  if (!API_ON || engineOff) return { text: null, from: src };
+  if (!API_ON || engineOff || Date.now() < pausedUntil) return { text: null, from: src };
 
   const ck = `${to}|${text}`;
   if (net.has(ck)) return { text: net.get(ck) ?? null, from: src };
@@ -75,6 +77,7 @@ export async function translate(text: string, to: TLang, from?: TLang): Promise<
   } catch (e) {
     // ٥٠١ = المحرك مش متضبط على السيرفر: حالة دايمة، فمنكررهاش كل رسالة.
     if (e instanceof ApiError && e.status === 501) engineOff = true;
+    else if (e instanceof ApiError && e.status === 429) pausedUntil = Date.now() + 600_000;
     else net.set(ck, null); // فشل على النص ده: منعيدوش في نفس الجلسة
     return { text: null, from: src };
   }
