@@ -17,14 +17,15 @@ test("المحادثة اللي فيها رسايل ما اتقرتش: بولد 
   await openApp(page);
   await clearOverlays(page);
   const mariam = row(page, /مريم عبد الله|Mariam/);
-  const title = mariam.locator("span").filter({ hasText: /مريم عبد الله|Mariam Abdallah/ }).first();
+  // اسم المحادثة نفسه (جوه غلاف فيه علامة التثبيت)
+  const title = mariam.locator("span.truncate.text-sm").first();
   await expect(title).toHaveClass(/font-extrabold/);
   await expect(mariam.getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveText(/٢|2/);
 
   await mariam.click();
   await page.getByRole("button", { name: /رجوع|Back/ }).first().click();
   await clearOverlays(page);
-  await expect(row(page, /مريم عبد الله|Mariam/).locator("span").filter({ hasText: /مريم عبد الله|Mariam Abdallah/ }).first()).not.toHaveClass(/font-extrabold/);
+  await expect(row(page, /مريم عبد الله|Mariam/).locator("span.truncate.text-sm").first()).not.toHaveClass(/font-extrabold/);
   await expect(page.getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveCount(0);
   expectNoPageErrors(page);
 });

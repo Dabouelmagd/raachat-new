@@ -133,6 +133,8 @@ model Membership {
   /// آخر وقت وصلت فيه الرسايل لجهاز العضو (اتصال سوكت أو فتح المحادثة).
   /// بيفرّق بين «اتبعتت» (✓) و«وصلت» (✓✓) — القراءة بـ lastReadAt.
   lastDeliveredAt DateTime?
+  /// تثبيت المحادثة فوق القايمة — **خاص بصاحبه**، الطرف التاني مايعرفش.
+  pinnedAt DateTime?
   thread    Thread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 

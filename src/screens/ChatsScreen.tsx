@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ThreadAvatar } from "../components/ThreadAvatar";
-import { Settings, Plus, Users, Phone, Star, Mic } from "lucide-react";
+import { Settings, Plus, Users, Phone, Star, Mic, Pin, PinOff } from "lucide-react";
 import { phaKind } from "../components/PharaohEmoji";
 import { occKind } from "../components/OccasionSticker";
 import { toggleFavorite, useFavorites } from "../store/favorites";
@@ -10,20 +10,38 @@ import { ContactsBanner } from "../components/ContactsBanner";
 import { StoriesBar } from "../components/StoriesBar";
 import { NewChatSheet } from "../components/NewChatSheet";
 import { SponsoredCard } from "../ads/SponsoredCard";
-import { useAppState } from "../store/AppContext";
+import { useAppActions, useAppState } from "../store/AppContext";
 import { useT, num as n } from "../i18n";
 
 export default function ChatsScreen() {
   const navigate = useNavigate();
   const tx = useT();
   const { threads, messages, rooms } = useAppState();
+  const { setPinned } = useAppActions();
+  const [pinNote, setPinNote] = useState("");
   const favs = useFavorites();
   const [filter, setFilter] = useState<"all" | "unread" | "dm" | "group" | "room" | "fav">("all");
   const FILTERS: ["all" | "unread" | "dm" | "group" | "room" | "fav", string, string][] = [["all", "الكل", "All"], ["unread", "غير المقروء", "Unread"], ["dm", "الخاصة", "Direct"], ["group", "الجروبات", "Groups"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
-  const shown = threads.filter((x) => filter === "all" || (filter === "unread" && (x.unread ?? 0) > 0) || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "fav" && favs.includes(x.id)));
+  const ordered = [...threads.filter((t) => t.pinned), ...threads.filter((t) => !t.pinned)];
+  const shown = ordered.filter((x) => filter === "all" || (filter === "unread" && (x.unread ?? 0) > 0) || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "fav" && favs.includes(x.id)));
   const [showNewChat, setShowNewChat] = useState(false);
 
   const unreadOf = (t: { unread?: number }) => t.unread ?? 0;
+
+  /** الحد ٣ زي واتساب — والسيرفر هو الحارس الحقيقي (`too_many_pinned`) */
+  const MAX_PINNED = 3;
+  const togglePin = async (t: { id: string; pinned?: boolean }) => {
+    if (!t.pinned && threads.filter((x) => x.pinned).length >= MAX_PINNED) {
+      setPinNote(tx(`أقصى ${n(MAX_PINNED)} محادثات مثبّتة`, `You can pin up to ${MAX_PINNED} chats`));
+      return;
+    }
+    setPinNote("");
+    try {
+      await setPinned(t.id, !t.pinned);
+    } catch {
+      setPinNote(tx("التثبيت ما نجحش — حاول تاني", "Pinning failed — try again"));
+    }
+  };
 
   const lastMessageFor = (threadId: string) => {
     const msgs = messages.filter((m) => m.threadId === threadId);
@@ -49,6 +67,7 @@ export default function ChatsScreen() {
             <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold ${filter === k ? "bg-rachat-red text-white" : "bg-rachat-card text-neutral-400"}`}>{tx(ar, en)}</button>
           ))}
         </div>
+        {pinNote && <p role="status" className="mb-2 rounded-xl bg-rachat-card px-3 py-2 text-xs text-rachat-gold">{pinNote}</p>}
         {filter === "all" && <SponsoredCard index={1} />}
         {filter === "room" && rooms.map((r) => (
           <button key={r.id} onClick={() => navigate("/rooms")} className="mb-2.5 flex w-full items-center gap-3 rounded-2xl bg-rachat-card p-3 text-start shadow-lg shadow-black/20">
@@ -78,8 +97,12 @@ export default function ChatsScreen() {
               <div className="min-w-0 flex-1">
                 <div className="flex justify-between">
                   {/* الاسم بولد طول ما فيه رسايل ما اتقرتش، وبيرجع عادي أول ما تفتحي المحادثة */}
-                  <span className={`truncate text-sm ${unreadOf(t) ? "font-extrabold text-white" : "font-bold text-rachat-papyrus"}`} dir="auto">{t.name}</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    {t.pinned && <Pin size={12} aria-label={tx("مثبّتة", "Pinned")} className="shrink-0 text-rachat-gold" />}
+                    <span className={`truncate text-sm ${unreadOf(t) ? "font-extrabold text-white" : "font-bold text-rachat-papyrus"}`} dir="auto">{t.name}</span>
+                  </span>
                   <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                    <span role="button" tabIndex={0} aria-label={t.pinned ? tx("فك التثبيت", "Unpin") : tx("تثبيت", "Pin")} aria-pressed={!!t.pinned} onClick={(e) => { e.stopPropagation(); void togglePin(t); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void togglePin(t); } }} className={t.pinned ? "text-rachat-gold" : "text-neutral-600"}>{t.pinned ? <PinOff size={14} /> : <Pin size={14} />}</span>
                     <span role="button" tabIndex={0} aria-label={tx("مفضلة", "Favorite")} aria-pressed={favs.includes(t.id)} onClick={(e) => { e.stopPropagation(); toggleFavorite(t.id); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); toggleFavorite(t.id); } }} className={favs.includes(t.id) ? "text-rachat-gold" : "text-neutral-600"}><Star size={14} fill={favs.includes(t.id) ? "currentColor" : "none"} /></span>
                     {last?.time ?? ""}
                   </span>

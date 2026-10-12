@@ -1,6 +1,6 @@
 import { notify } from "../sound/notify";
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from "react";
-import { API_ON, api, ensureUploaded, uploadBlob, useSession } from "../api/client";
+import { API_ON, api, ensureUploaded, setPinned as setPinnedApi, uploadBlob, useSession } from "../api/client";
 import { mapContact, mapMessage, mapStory, mapThread, type ApiMessage, type ApiStory, type ApiThread, type ApiUser } from "../api/mappers";
 import { connectSocket } from "../api/socket";
 import { setProfileFromServer } from "./profile";
@@ -37,6 +37,7 @@ type Action =
   | { type: "HYDRATE"; contacts: Contact[]; threads: Thread[]; messages: Message[]; stories: Story[] }
   | { type: "UPSERT_THREAD"; thread: Thread }
   | { type: "MARK_READ"; threadId: string }
+  | { type: "SET_PINNED"; threadId: string; pinned: boolean }
   | { type: "UPSERT_MESSAGE"; message: Message }
   | { type: "UPSERT_STORY"; story: Story }
   | { type: "SET_ROOMS"; rooms: VoiceRoom[] }
@@ -73,6 +74,10 @@ function reducer(state: AppState, action: Action): AppState {
     case "MARK_READ":
       // فتح المحادثة = الاسم يرجع خط عادي والعدّاد يختفي
       return { ...state, threads: state.threads.map((t) => (t.id === action.threadId && t.unread ? { ...t, unread: 0 } : t)) };
+    case "SET_PINNED":
+      // **العلم بس** — الترتيب بيتعمل وقت العرض (ChatsScreen) عشان فك التثبيت
+      // يرجّع المحادثة لمكانها الأصلي بدل ما تفضل فوق
+      return { ...state, threads: state.threads.map((t) => (t.id === action.threadId ? { ...t, pinned: action.pinned } : t)) };
     case "UPSERT_THREAD": {
       const has = state.threads.some((t) => t.id === action.thread.id);
       return { ...state, threads: has ? state.threads.map((t) => (t.id === action.thread.id ? action.thread : t)) : [action.thread, ...state.threads] };
@@ -337,6 +342,7 @@ function mockActions(dispatch: D) {
       dispatch({ type: "CREATE_GROUP", name, memberIds, look }),
     leaveThread: (threadId: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId }),
     markRead: (threadId: string): void | Promise<void> => dispatch({ type: "MARK_READ", threadId }),
+    setPinned: (threadId: string, pinned: boolean): void | Promise<void> => dispatch({ type: "SET_PINNED", threadId, pinned }),
     listPublicGroups: (): Promise<{ id: string; name: string; desc: string; members: number; initial: string; colorClass: string; joined: boolean; color?: string; icon?: string }[] | null> => Promise.resolve(null),
     joinPublicGroup: (_id: string): Promise<void> => Promise.resolve(),
     createRoom: (name: string): string | Promise<string> => {
@@ -395,6 +401,16 @@ function apiActions(dispatch: D) {
       dispatch({ type: "LEAVE_THREAD", threadId });
     },
     markRead: async (threadId: string) => { dispatch({ type: "MARK_READ", threadId }); await api(`/threads/${threadId}/read`, { method: "POST" }); },
+    /** الحد بيتفحص على السيرفر — لو رفض نرجّع الحالة زي ما كانت ونرمي الخطأ للشاشة */
+    setPinned: async (threadId: string, pinned: boolean) => {
+      dispatch({ type: "SET_PINNED", threadId, pinned });
+      try {
+        await setPinnedApi(threadId, pinned);
+      } catch (e) {
+        dispatch({ type: "SET_PINNED", threadId, pinned: !pinned });
+        throw e;
+      }
+    },
     listPublicGroups: async () => {
       const l = await api<(ApiThread & { joined: boolean })[]>("/threads/public");
       return l.map((t) => ({ id: t.id, name: t.name, desc: "", members: t.memberCount ?? 0, initial: mapThread(t).initial, colorClass: mapThread(t).colorClass, joined: t.joined, color: t.color, icon: t.icon }));

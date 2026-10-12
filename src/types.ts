@@ -23,6 +23,8 @@ export interface Thread {
   photo?: string; // صورة الجروب (data URL / رابط)
   /** رسايل لسه ما اتقرتش — الاسم بيبقى **بولد** وجنبه الرقم */
   unread?: number;
+  /** مثبّتة فوق القايمة — **خاص بيّا**، الطرف التاني مايعرفش */
+  pinned?: boolean;
 }
 
 export interface Attachment {

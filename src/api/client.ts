@@ -134,6 +134,11 @@ export async function setMyPassword(password: string, current?: string) {
   await api("/me/password", { body: { password, current } });
 }
 
+/** تثبيت/فك تثبيت محادثة */
+export async function setPinned(threadId: string, pinned: boolean) {
+  await api(`/threads/${threadId}/pin`, { method: pinned ? "PUT" : "DELETE" });
+}
+
 export async function logoutApi() {
   try { await api("/auth/logout", { method: "POST" }); } catch { /* تجاهل */ }
   setSession(null);

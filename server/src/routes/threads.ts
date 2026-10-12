@@ -9,6 +9,7 @@ import { emitToUsers } from "../realtime.js";
 import { loadThreadFor, threadView } from "../serialize.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const MAX_PINNED = 3;
 
 /**
  * الجروب المتقيّد من الإدارة لازم يبقى **متجمّد بالكامل**.
@@ -38,7 +39,16 @@ export function threadRoutes(ctx: Ctx) {
       where: { members: { some: { userId: me } } },
       include: { members: { include: { user: true } }, messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } },
     });
-    rows.sort((a, b) => (b.messages[0]?.createdAt ?? b.createdAt).getTime() - (a.messages[0]?.createdAt ?? a.createdAt).getTime());
+    const pinnedAt = (t: (typeof rows)[number]) => t.members.find((m) => m.userId === me)?.pinnedAt ?? null;
+    const activity = (t: (typeof rows)[number]) => (t.messages[0]?.createdAt ?? t.createdAt).getTime();
+    // المثبّتة فوق (الأحدث تثبيتًا الأول)، والباقي بترتيب آخر نشاط
+    rows.sort((a, b) => {
+      const pa = pinnedAt(a), pb = pinnedAt(b);
+      if (pa && !pb) return -1;
+      if (pb && !pa) return 1;
+      if (pa && pb) return pb.getTime() - pa.getTime();
+      return activity(b) - activity(a);
+    });
     // عدد الرسايل اللي لسه ما اتقرتش في كل محادثة — **استعلام واحد** لكل القايمة
     // مش واحد لكل محادثة. رسايلي أنا ورسايل اللي حاظرهم مش محسوبين.
     const hidden = await blockedByMe(ctx, me);
@@ -60,6 +70,7 @@ export function threadRoutes(ctx: Ctx) {
       ...threadView(t, me),
       lastActivity: (t.messages[0]?.createdAt ?? t.createdAt).toISOString(),
       unread: unread.get(t.id) ?? 0,
+      pinned: !!pinnedAt(t),
     })));
   }));
 
@@ -201,6 +212,25 @@ export function threadRoutes(ctx: Ctx) {
     const t = await loadThreadFor(ctx.db, id);
     // الباقيين كانوا بيفضلوا شايفين اللي خرج في عدد الأعضاء لحد ما يقفلوا التطبيق
     if (t) for (const mm of t.members) emitToUsers(ctx, [mm.userId], "thread:updated", threadView(t, mm.userId));
+    res.status(204).end();
+  }));
+
+  /**
+   * تثبيت المحادثة فوق القايمة. **خاص بصاحبه** — الطرف التاني مايعرفش.
+   * الحد ٣ زي واتساب: فوق كده القايمة بتبقى كلها «مثبّتة» ويروح معناها.
+   */
+  r.put("/threads/:id/pin", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const id = String(req.params.id);
+    await assertMember(ctx, id, me);
+    const already = await ctx.db.membership.count({ where: { userId: me, pinnedAt: { not: null }, threadId: { not: id } } });
+    if (already >= MAX_PINNED) throw bad("too_many_pinned", `تقدر تثبّت ${MAX_PINNED} محادثات بس — شيل واحدة الأول`);
+    await ctx.db.membership.update({ where: { threadId_userId: { threadId: id, userId: me } }, data: { pinnedAt: new Date() } });
+    res.status(204).end();
+  }));
+  r.delete("/threads/:id/pin", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    await ctx.db.membership.updateMany({ where: { threadId: String(req.params.id), userId: me }, data: { pinnedAt: null } });
     res.status(204).end();
   }));
 
