@@ -18,7 +18,7 @@ Claude يعدّل ويختبر ويعمل commit + push على `main` ← دال
 
 ## النشر
 على السيرفر: `cd /opt/rachat && bash scripts/deploy-rachat.sh`
-(Docker Compose: `db` / `api` / `caddy` (الواجهة، داخلي بلا HTTPS) / `backup`، و`turn` اختياري). السكربت بيعمل `git pull --ff-only`، نسخة احتياطية لو فيه migration، وبيبني اللازم بس، وبيفحص الـ API على `127.0.0.1:8085`.
+(Docker Compose: `db` / `api` / `caddy` (الواجهة، داخلي بلا HTTPS) / `backup`، و`turn` اختياري). السكربت بيعمل `git pull --ff-only`، نسخة احتياطية لو فيه migration، وبيبني اللازم بس، وبيفحص الـ API على `127.0.0.1:8085`. ولو السكربت نفسه اتغيّر في الـ pull بيعيد تشغيل نفسه من النسخة الجديدة (`RACHAT_REEXEC`) — لأن bash بيقرا الملف على دفعات والباقي كان بيتنفّذ من النسخة القديمة.
 `FORCE=1` لإعادة البناء، `BACKUP=0` لتخطّي النسخة، `PRUNE=0` لتخطّي تنضيف الصور.
 بعد فحص الصحة بينضّف **صور رع شات المعلّقة بس** (`--filter label=project=rachat`، والوسم في `server/Dockerfile` و`Dockerfile.web`) — مابيلمسش صور المشاريع التانية ولا كونتينرات ولا volumes، وبيطبع المساحة المتبقية.
 

@@ -25,6 +25,14 @@ if [ "$KNOWN" = 1 ] && [ "$OLD" = "$NEW" ] && [ "${FORCE:-0}" != "1" ]; then ech
 CHANGED=""
 [ "$KNOWN" = 1 ] && CHANGED=$(git diff --name-only "$OLD" "$NEW" || true)
 
+# السكربت ده بيحدّث نفسه بالـ pull وهو شغّال، وbash بيقرا الملف على دفعات —
+# فالباقي بيتنفّذ من النسخة القديمة (أو أسوأ: من موضع مقطوع في الجديدة).
+# فلو السكربت نفسه اتغيّر، نعيد تشغيل نفسه من النسخة الجديدة مرة واحدة بس.
+if [ "${RACHAT_REEXEC:-0}" != "1" ] && echo "$CHANGED" | grep -q '^scripts/deploy-rachat\.sh$'; then
+  echo "↻ سكربت النشر نفسه اتحدّث — إعادة تشغيله من النسخة الجديدة"
+  RACHAT_REEXEC=1 exec bash "$0" "$@"
+fi
+
 # نسخة احتياطية قبل أي migration جديد
 if { [ "$KNOWN" = 0 ] || echo "$CHANGED" | grep -q '^server/prisma/migrations/'; } && [ "${BACKUP:-1}" = "1" ] && $DC ps --services --filter status=running | grep -q '^backup$'; then
   echo "↪ فيه migration جديد: نسخة احتياطية للقاعدة أولًا"
