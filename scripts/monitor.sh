@@ -115,7 +115,17 @@ fi
 
 # ٦) مساحة القرص
 pct=$(df -P / | awk 'NR==2{print $5}' | tr -d '%')
-[ "${pct:-100}" -lt "$MAX_DISK_PCT" ] && ok "disk" "${pct}% مستخدم" || fail "disk" "القرص ${pct}% مستخدم (الحد $MAX_DISK_PCT%) — الداتابيز واللوجات بيكتبوا على نفس القرص"
+if [ "${pct:-100}" -lt "$MAX_DISK_PCT" ]; then
+  ok "disk" "${pct}% مستخدم"
+else
+  # مع التنبيه بنبعت تفصيل Docker عشان القرار يبقى على أساس أرقام، مش تخمين.
+  # **عمدًا** مابنمسحش حاجة تلقائيًا: السيرفر مشترك مع مشاريع تانية ومش قرارنا.
+  dfd=$(docker system df 2>/dev/null | sed 's/^/     /')
+  fail "disk" "القرص ${pct}% مستخدم (الحد $MAX_DISK_PCT%) — الداتابيز واللوجات بيكتبوا على نفس القرص
+$dfd
+     آمن: docker builder prune -f  (كاش البناء) · docker image prune -f  (صور بلا وسم)
+     خطر على السيرفر المشترك: image prune -a · volume prune · container prune"
+fi
 
 # ٧) النسخة الاحتياطية: موجودة وحديثة وحجمها معقول
 bk=$($DC exec -T backup sh -c '
