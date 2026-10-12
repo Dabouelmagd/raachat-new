@@ -1,0 +1,77 @@
+import { expect, test } from "@playwright/test";
+import { clearOverlays, expectNoPageErrors, openApp } from "../helpers";
+
+/**
+ * (بطلب داليا ١٢ أكتوبر)
+ * - **ملكات مصريات**: كليوباترا ونفرتيتي في الملصقات الفرعونية.
+ * - **حجم الخط** بيكبر ويصغّر، والإيموجي معاه (لأنها نص).
+ *
+ * حجم الخط شغّال بتغيير `font-size` بتاع `<html>`، وكل مقاسات Tailwind بالـ rem
+ * — فالاختبار بيقيس الحجم الفعلي لنص حقيقي، مش الكلاس.
+ */
+const openStickers = async (page: import("@playwright/test").Page) => {
+  await openApp(page);
+  await clearOverlays(page);
+  await page.getByText(/مريم عبد الله|Mariam/).first().click();
+  await clearOverlays(page);
+  await page.getByRole("button", { name: /^إيموجي$|^Emoji$/ }).click();
+  await page.getByRole("tab", { name: /فرعوني/ }).click();
+};
+
+test("كليوباترا ونفرتيتي موجودين في الملصقات الفرعونية", async ({ page }) => {
+  await openStickers(page);
+  await expect(page.getByRole("button", { name: "كليوباترا" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "نفرتيتي" })).toBeVisible();
+  expectNoPageErrors(page);
+});
+
+test("إرسال ملصق الملكة بيظهر في المحادثة", async ({ page }) => {
+  await openStickers(page);
+  await page.getByRole("button", { name: "نفرتيتي" }).click();
+  await expect(page.locator('img[alt="pharaoh emoji"]').last()).toBeVisible();
+  expectNoPageErrors(page);
+});
+
+test("حجم الخط بيكبر ويصغّر فعلًا", async ({ page }) => {
+  await openApp(page);
+  await clearOverlays(page);
+  await page.getByRole("link", { name: /الحساب|Account/ }).click();
+  await page.getByRole("button", { name: /خلفية الشات|Chat wallpaper/ }).click();
+  const sheet = page.getByRole("dialog", { name: /شكل الشات|Chat appearance/ });
+  const sample = sheet.getByText(/كده هيبقى شكل الكلام|This is how your text/);
+  const sizeOf = async () => parseFloat(await sample.evaluate((e) => getComputedStyle(e).fontSize));
+
+  const normal = await sizeOf();
+  await sheet.getByRole("button", { name: /^أكبر$|^Larger$/ }).click();
+  const bigger = await sizeOf();
+  expect(bigger).toBeGreaterThan(normal);
+
+  await sheet.getByRole("button", { name: /^صغير$|^Small$/ }).click();
+  expect(await sizeOf()).toBeLessThan(normal);
+
+  // وبيرجع عادي
+  await sheet.getByRole("button", { name: /^عادي$|^Normal$/ }).click();
+  expect(await sizeOf()).toBeCloseTo(normal, 1);
+  expectNoPageErrors(page);
+});
+
+test.describe("أكبر حجم خط على أصغر شاشة", () => {
+  test.use({ isMobile: true, hasTouch: true, viewport: { width: 320, height: 568 } });
+
+  test("مفيش محتوى بيخرج برّه الشاشة، وخانة الكتابة لسه ١٦px فما فوق", async ({ page }) => {
+    await openApp(page);
+    await clearOverlays(page);
+    await page.evaluate(() => { localStorage.setItem("rachat-text-scale", "1.25"); });
+    await page.reload();
+    await page.getByRole("button", { name: /ادخل بالحساب التجريبي/ }).click();
+    await clearOverlays(page);
+    await page.getByText(/مريم عبد الله|Mariam/).first().click();
+    await clearOverlays(page);
+
+    const w = await page.evaluate(() => ({ s: document.documentElement.scrollWidth, c: document.documentElement.clientWidth }));
+    expect(w.s).toBeLessThanOrEqual(w.c);
+    const px = await page.getByPlaceholder(/اكتب رسالة|Type a message/).evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+    expect(px).toBeGreaterThanOrEqual(16);
+    expectNoPageErrors(page);
+  });
+});

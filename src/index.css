@@ -46,7 +46,8 @@ body,
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   textarea,
   select {
-    font-size: 16px;
+    /* بتكبر مع حجم الخط، وعمرها ما تنزل تحت ١٦px (وإلا سفاري بيكبّر الصفحة) */
+    font-size: max(16px, 1rem);
   }
 }
 

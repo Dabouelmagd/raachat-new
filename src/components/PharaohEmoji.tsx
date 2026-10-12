@@ -11,14 +11,18 @@ import kiss from "../assets/pha/kiss.png";
 import sleep from "../assets/pha/sleep.png";
 import think from "../assets/pha/think.png";
 import thumbs from "../assets/pha/thumbs.png";
+import cleo from "../assets/pha/cleo.png";
+import nefer from "../assets/pha/nefer.png";
 
 export const PHARAOH_KINDS: [string, string, string][] = [
   ["smile", "مبتسم", "Smile"], ["laugh", "بيضحك", "Laugh"], ["love", "بيحب", "Love"], ["wink", "غمزة", "Wink"],
   ["cool", "كول", "Cool"], ["cry", "بيعيّط", "Cry"], ["angry", "غضبان", "Angry"], ["wow", "مندهش", "Wow"],
   ["kiss", "بوسة", "Kiss"], ["sleep", "نايم", "Sleep"], ["think", "بيفكر", "Thinking"], ["thumbs", "تمام", "Thumbs up"],
+  // ملكات مصريات (بطلب داليا ١٢ أكتوبر) — اتصمّموا في Canva بنفس أسلوب الباقي
+  ["cleo", "كليوباترا", "Cleopatra"], ["nefer", "نفرتيتي", "Nefertiti"],
 ];
 
-const IMG: Record<string, string> = { smile, laugh, love, wink, cool, cry, angry, wow, kiss, sleep, think, thumbs };
+const IMG: Record<string, string> = { smile, laugh, love, wink, cool, cry, angry, wow, kiss, sleep, think, thumbs, cleo, nefer };
 
 const TOKEN = /^\[\[pha:([a-z]+)\]\]$/;
 export const phaKind = (text: string): string | null => {

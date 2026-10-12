@@ -2,12 +2,14 @@ import { Check, X } from "lucide-react";
 import { useT, useDir } from "../i18n";
 import { WALLPAPERS, setWallpaper, useWallpaper, wallpaperStyle } from "../theme/wallpapers";
 import { BUBBLES, setBubble, useBubble } from "../theme/bubbles";
+import { TEXT_SCALES, setTextScale, useTextScale } from "../theme/textScale";
 
 export function WallpaperSheet({ onClose }: { onClose: () => void }) {
   const t = useT();
   const dir = useDir();
   const cur = useWallpaper();
   const bub = useBubble();
+  const scale = useTextScale();
   return (
     <div role="dialog" aria-modal="true" aria-label={t("شكل الشات", "Chat appearance")} dir={dir} className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={onClose}>
       <div className="max-h-[85%] w-full overflow-y-auto rounded-t-3xl bg-rachat-black p-4" onClick={(e) => e.stopPropagation()}>
@@ -15,6 +17,19 @@ export function WallpaperSheet({ onClose }: { onClose: () => void }) {
           <h2 className="font-display text-base font-bold text-rachat-papyrus">{t("شكل الشات", "Chat appearance")}</h2>
           <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="p-1 text-neutral-400"><X size={18} /></button>
         </div>
+        {/* حجم الخط: بيكبر التطبيق كله والإيموجي معاه */}
+        <h3 className="mb-2 text-xs font-bold text-neutral-400">{t("حجم الخط", "Text size")}</h3>
+        <div role="group" aria-label={t("حجم الخط", "Text size")} className="mb-4 flex gap-1.5">
+          {TEXT_SCALES.map(([v, ar, en]) => (
+            <button key={v} onClick={() => setTextScale(v)} aria-pressed={scale === v}
+              className={`flex-1 rounded-xl py-2 font-bold ${scale === v ? "bg-rachat-red text-white" : "bg-rachat-card text-neutral-300"}`}
+              style={{ fontSize: `${0.75 * v}rem` }}>
+              {t(ar, en)}
+            </button>
+          ))}
+        </div>
+        <p className="mb-4 rounded-xl bg-rachat-card px-3 py-2 text-sm text-rachat-papyrus">{t("كده هيبقى شكل الكلام 🙂", "This is how your text will look 🙂")}</p>
+
         {/* لون فقاعة الكلام — غير خلفية الشاشة */}
         <h3 className="mb-2 text-xs font-bold text-neutral-400">{t("لون فقاعة الكلام", "Bubble colour")}</h3>
         <div className="mb-4 grid grid-cols-3 gap-2.5">
