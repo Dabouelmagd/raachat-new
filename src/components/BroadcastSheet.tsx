@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Send, Users, X } from "lucide-react";
 import { useT } from "../i18n";
 import { useCloseOnEscape } from "./useCloseOnEscape";
+import { ApiError } from "../api/client";
 import { useAppState, useAppActions } from "../store/AppContext";
 
 /** رسالة واحدة لأكتر من شخص/جروب: كل واحد بياخد رسالة منفصلة في محادثته. */
@@ -13,16 +14,25 @@ export function BroadcastSheet({ onClose }: { onClose: () => void }) {
   const [sel, setSel] = useState<string[]>([]); // "c:<contactId>" أو "t:<threadId>"
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ ok: number; fail: number } | null>(null);
+  const [done, setDone] = useState<{ ok: number; fail: number; why: string[] } | null>(null);
 
   const groups = threads.filter((x) => x.type === "group");
   const toggle = (k: string) => setSel((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
   const all = [...contacts.map((c) => `c:${c.id}`), ...groups.map((g) => `t:${g.id}`)];
+  /** اسم المستلم من المفتاح — عشان رسالة الفشل تقول فشل مع مين */
+  const nameOf = (k: string) =>
+    k.startsWith("t:")
+      ? groups.find((g) => g.id === k.slice(2))?.name ?? k.slice(2)
+      : contacts.find((c) => c.id === k.slice(2))?.name ?? k.slice(2);
 
   const send = async () => {
     if (!text.trim() || !sel.length || busy) return;
     setBusy(true);
     let ok = 0, fail = 0;
+    // **أسباب الفشل لازم تتعرض.** كانت `catch { fail++ }` بس، فالمستخدم يشوف
+    // «فشل الإرسال لـ ٢» ومحدش — لا هو ولا إحنا — يعرف فشل ليه (كلمة ممنوعة؟
+    // حساب محذوف؟ حظر؟ جروب متقيّد؟ النت؟). كل دول ردود مختلفة من السيرفر.
+    const why: string[] = [];
     for (const k of sel) {
       try {
         let tid: string;
@@ -33,10 +43,15 @@ export function BroadcastSheet({ onClose }: { onClose: () => void }) {
         }
         await sendMessage(tid, text.trim());
         ok++;
-      } catch { fail++; }
+      } catch (e) {
+        fail++;
+        const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
+        const label = sel.length > 1 ? `${nameOf(k)}: ${msg}` : msg;
+        if (!why.includes(label)) why.push(label);
+      }
     }
     setBusy(false);
-    setDone({ ok, fail });
+    setDone({ ok, fail, why });
   };
 
   return (
@@ -50,7 +65,14 @@ export function BroadcastSheet({ onClose }: { onClose: () => void }) {
         {done ? (
           <div className="py-8 text-center">
             <p className="text-sm font-bold text-emerald-400">{t(`اتبعتت لـ ${done.ok} محادثة`, `Sent to ${done.ok} chats`)}</p>
-            {done.fail > 0 && <p className="mt-1 text-xs text-rachat-coral">{t(`فشل الإرسال لـ ${done.fail}`, `${done.fail} failed`)}</p>}
+            {done.fail > 0 && (
+              <>
+                <p className="mt-1 text-xs text-rachat-coral">{t(`فشل الإرسال لـ ${done.fail}`, `${done.fail} failed`)}</p>
+                <ul className="mx-auto mt-2 max-w-[300px] space-y-1 text-start text-[11px] leading-4 text-neutral-400">
+                  {done.why.map((w) => <li key={w}>• {w}</li>)}
+                </ul>
+              </>
+            )}
             <button onClick={onClose} className="mt-5 rounded-full bg-rachat-gold px-6 py-2 text-sm font-extrabold text-rachat-ink">{t("تم", "Done")}</button>
           </div>
         ) : (
