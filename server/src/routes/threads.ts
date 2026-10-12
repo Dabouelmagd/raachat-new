@@ -10,6 +10,18 @@ import { loadThreadFor, threadView } from "../serialize.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
+/**
+ * الجروب المتقيّد من الإدارة لازم يبقى **متجمّد بالكامل**.
+ * كان التقييد متفحوص في مسار إرسال الرسالة الجديد بس — فالعضو يقدر يعدّل رسالة
+ * قديمة لمحتوى جديد، أو يتفاعل (والتفاعل بيعيد بث الرسالة كلها للكل)، أو يمسح،
+ * والمالك يقدر يغيّر الاسم ويضيف أعضاء. يعني «متقيّد» كانت معناها «ممنوع نص
+ * جديد» بس.
+ */
+export async function assertNotRestricted(ctx: Ctx, threadId: string) {
+  const t = await ctx.db.thread.findUnique({ where: { id: threadId }, select: { restrictedAt: true } });
+  if (t?.restrictedAt) throw forbidden("الجروب ده متقيّد من إدارة التطبيق");
+}
+
 export async function assertMember(ctx: Ctx, threadId: string, userId: string) {
   const m = await ctx.db.membership.findUnique({ where: { threadId_userId: { threadId, userId } } });
   if (!m) throw forbidden("مش عضو في المحادثة دي");
@@ -107,6 +119,8 @@ export function threadRoutes(ctx: Ctx) {
       icon: z.string().max(30).nullable().optional(),
       photoUrl: z.string().max(500).nullable().optional(),
     }).parse(req.body);
+    assertClean(ctx, b.name); // كان على الإنشاء بس — فالتغيير كان بيعدّي
+    await assertNotRestricted(ctx, id);
     await ctx.db.thread.update({ where: { id }, data: b });
     const t = (await loadThreadFor(ctx.db, id))!;
     for (const mm of t.members) emitToUsers(ctx, [mm.userId], "thread:updated", threadView(t, mm.userId));
@@ -123,7 +137,11 @@ export function threadRoutes(ctx: Ctx) {
     if (m.role === "member") throw forbidden("للمشرفين فقط");
     const b = z.object({ memberIds: z.array(z.string()).min(1) }).parse(req.body);
     const ids = [...new Set(b.memberIds)];
-    const found = await ctx.db.user.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    await assertNotRestricted(ctx, id);
+    // الحساب المحذوف كان ممكن يترجّع للجروب (الصف باقي بـ modStatus=deleted)،
+    // والمعرّف المجهول كان بيتبلع في سكوت والرد 200 كإن كله تمام — زي مسار الإنشاء بالظبط.
+    const found = await ctx.db.user.findMany({ where: { id: { in: ids }, modStatus: { not: "deleted" } }, select: { id: true } });
+    if (found.length !== ids.length) throw bad("unknown_member", "فيه حساب مش موجود أو محذوف");
     await ctx.db.membership.createMany({ data: found.map((u) => ({ threadId: id, userId: u.id })), skipDuplicates: true });
     const t = (await loadThreadFor(ctx.db, id))!;
     for (const mm of t.members) emitToUsers(ctx, [mm.userId], "thread:updated", threadView(t, mm.userId));
@@ -135,16 +153,33 @@ export function threadRoutes(ctx: Ctx) {
     const id = String(req.params.id);
     const t0 = await ctx.db.thread.findUnique({ where: { id } });
     if (!t0 || t0.type !== "group" || !t0.isPublic) throw notFound("جروب عام غير موجود");
-    await ctx.db.membership.upsert({ where: { threadId_userId: { threadId: id, userId: me } }, update: {}, create: { threadId: id, userId: me } });
+    // الدور بيتحدد من منشئ الجروب: المالك اللي خرج ورجع كان بيرجع **عضو عادي**
+    // للأبد (الـ create بيحط الافتراضي)، فيتقفل عليه تغيير الاسم وإضافة الأعضاء
+    // بينما الواجهة لسه بتعامله كمالك.
+    const role = t0.createdById === me ? "owner" : "member";
+    await ctx.db.membership.upsert({ where: { threadId_userId: { threadId: id, userId: me } }, update: {}, create: { threadId: id, userId: me, role } });
     const t = (await loadThreadFor(ctx.db, id))!;
+    for (const mm of t.members) emitToUsers(ctx, [mm.userId], "thread:updated", threadView(t, mm.userId));
     res.json(threadView(t, me));
   }));
 
   r.delete("/threads/:id/members/me", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
     const id = String(req.params.id);
-    await assertMember(ctx, id, me);
+    const m = await assertMember(ctx, id, me);
+    const t0 = await ctx.db.thread.findUnique({ where: { id }, select: { type: true } });
+    // الخروج من محادثة فردية كان بيعدّي، والطرف التاني يشوف بعدها «الحساب ده
+    // اتحذف ومينفعش تبعتله» — رسالة غلط تمامًا عن حساب شغّال.
+    if (t0?.type !== "group") throw bad("not_group", "المحادثة الفردية مالهاش خروج");
+    if (m.role !== "member") {
+      const owners = await ctx.db.membership.count({ where: { threadId: id, role: { not: "member" } } });
+      // آخر مالك لو خرج، الجروب يفضل بلا مالك للأبد: مفيش مسار لترقية حد تاني.
+      if (owners <= 1) throw bad("last_owner", "إنت آخر مشرف في الجروب — رقّي حد تاني قبل ما تخرج أو اقفل الجروب");
+    }
     await ctx.db.membership.delete({ where: { threadId_userId: { threadId: id, userId: me } } });
+    const t = await loadThreadFor(ctx.db, id);
+    // الباقيين كانوا بيفضلوا شايفين اللي خرج في عدد الأعضاء لحد ما يقفلوا التطبيق
+    if (t) for (const mm of t.members) emitToUsers(ctx, [mm.userId], "thread:updated", threadView(t, mm.userId));
     res.status(204).end();
   }));
 

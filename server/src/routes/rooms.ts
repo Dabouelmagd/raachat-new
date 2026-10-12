@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { assertClean } from "../lib/contentFilter.js";
 import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { forbidden, notFound, wrap } from "../lib/errors.js";
@@ -54,6 +55,9 @@ export function roomRoutes(ctx: Ctx) {
   r.post("/rooms", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
     const b = z.object({ name: z.string().trim().min(1).max(60) }).parse(req.body);
+    // اسم الغرفة بيتبث لكل المستخدمين في قايمة الغرف — وكان المكان الوحيد اللي
+    // بيتخطّى فلتر الكلمات (الرسايل وأسماء الجروبات والستوري والبروفايل كلهم متفلترين).
+    assertClean(ctx, b.name);
     const room = await db.room.create({ data: { name: b.name, ownerId: me }, include });
     changed(room.id);
     res.status(201).json(view(room, me));

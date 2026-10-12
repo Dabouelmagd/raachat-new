@@ -8,7 +8,7 @@ import { assertNotBlocked, blockedByMe, blockersOf } from "../lib/blocks.js";
 import { emitToUsers } from "../realtime.js";
 import { notifyPush, offlineOf } from "../lib/push.js";
 import { messageInclude, messageView } from "../serialize.js";
-import { assertMember } from "./threads.js";
+import { assertMember, assertNotRestricted } from "./threads.js";
 
 const AttachmentIn = z.object({
   name: z.string().min(1).max(255),
@@ -41,6 +41,16 @@ async function pushNewMessage(ctx: Ctx, threadId: string, authorId: string, memb
 }
 
 export function messageRoutes(ctx: Ctx) {
+  /**
+   * مين يستقبل تحديثات رسالة: أعضاء المحادثة **ناقص اللي حاظرين صاحبها**.
+   * مسار الإرسال كان بيفلتر الحاظرين، إنما التعديل والحذف والتفاعل كانوا بيبعتوا
+   * للكل — والواجهة بتُدخل أي رسالة جاية حتى لو ما شفتهاش قبل كده. يعني اللي
+   * حظر حد كان لسه ممكن تظهر له رسالة منه كاملة بمجرد ما يعدّلها أو يتفاعل عليها.
+   */
+  const audience = async (threadId: string, author: string) => {
+    const blockers = new Set(await blockersOf(ctx, author));
+    return (await memberIds(ctx, threadId)).map((x) => x.userId).filter((u) => u === author || !blockers.has(u));
+  };
   const r = Router();
   r.use(requireAuth(ctx));
 
@@ -117,9 +127,12 @@ export function messageRoutes(ctx: Ctx) {
     if (m.authorId !== me) throw forbidden("تقدر تعدّل رسائلك بس");
     if (m.deleted) throw bad("deleted", "الرسالة محذوفة");
     const b = z.object({ text: z.string().trim().min(1).max(5000) }).parse(req.body);
+    // الفلتر كان على الإرسال بس: تبعت كلمة عادية وتعدّلها لكلمة ممنوعة = تعدّي.
+    assertClean(ctx, b.text);
+    await assertNotRestricted(ctx, m.threadId);
     const u = await ctx.db.message.update({ where: { id: m.id }, data: { text: b.text, edited: true }, include: messageInclude });
     const view = messageView(u);
-    emitToUsers(ctx, (await memberIds(ctx, m.threadId)).map((x) => x.userId), "message:updated", view);
+    emitToUsers(ctx, await audience(m.threadId, me), "message:updated", view);
     res.json(view);
   }));
 
@@ -127,9 +140,10 @@ export function messageRoutes(ctx: Ctx) {
     const me = (req as AuthedRequest).userId;
     const m = await ownMessage(String(req.params.id), me);
     if (m.authorId !== me) throw forbidden("تقدر تحذف رسائلك بس");
+    await assertNotRestricted(ctx, m.threadId);
     const u = await ctx.db.message.update({ where: { id: m.id }, data: { deleted: true, text: "" }, include: messageInclude });
     await ctx.db.attachment.deleteMany({ where: { messageId: m.id } });
-    emitToUsers(ctx, (await memberIds(ctx, m.threadId)).map((x) => x.userId), "message:deleted", messageView({ ...u, attachment: null }));
+    emitToUsers(ctx, await audience(m.threadId, me), "message:deleted", messageView({ ...u, attachment: null }));
     res.status(204).end();
   }));
 
@@ -139,13 +153,16 @@ export function messageRoutes(ctx: Ctx) {
     const m = await ownMessage(String(req.params.id), me);
     const emoji = decodeURIComponent(String(req.params.emoji));
     if (!emoji || emoji.length > 16) throw bad("bad_emoji");
+    // الفحص **قبل** الكتابة: لو جه بعدها، التفاعل بيتسجّل فعلًا والرد ٤٠٣ — يعني
+    // الرد بيقول «ممنوع» والصف موجود في القاعدة.
+    await assertNotRestricted(ctx, m.threadId);
     const key = { messageId_userId_emoji: { messageId: m.id, userId: me, emoji } };
     const ex = await ctx.db.reaction.findUnique({ where: key });
     if (ex) await ctx.db.reaction.delete({ where: key });
     else await ctx.db.reaction.create({ data: { messageId: m.id, userId: me, emoji } });
     const u = await ctx.db.message.findUniqueOrThrow({ where: { id: m.id }, include: messageInclude });
     const view = messageView(u);
-    emitToUsers(ctx, (await memberIds(ctx, m.threadId)).map((x) => x.userId), "message:updated", view);
+    emitToUsers(ctx, await audience(m.threadId, me), "message:updated", view);
     res.json(view);
   }));
 
