@@ -36,11 +36,19 @@ export function threadView(t: NonNullable<ThreadRow>, me: string) {
   };
 }
 
-export const messageInclude = { author: true, attachment: true, reactions: true } as const;
+export const messageInclude = {
+  author: true, attachment: true, reactions: true,
+  // الاستطلاع واختياراته وأصواته في نفس الاستعلام
+  poll: { include: { options: { include: { votes: true }, orderBy: { idx: "asc" } } } },
+} as const;
 type MsgRow = Awaited<ReturnType<Db["message"]["findFirstOrThrow"]>> & {
   author: { name: string };
   attachment: { name: string; size: number; mime: string; url: string; text: string | null; voiceDuration: number | null; voiceWave: unknown } | null;
   reactions: { userId: string; emoji: string }[];
+  poll?: {
+    question: string; multi: boolean; closed: boolean;
+    options: { id: string; text: string; idx: number; votes: { userId: string }[] }[];
+  } | null;
 };
 
 export function messageView(m: MsgRow, read = false, delivered = false) {
@@ -50,6 +58,13 @@ export function messageView(m: MsgRow, read = false, delivered = false) {
     id: m.id, threadId: m.threadId, authorId: m.authorId, authorName: m.author.name,
     text: m.deleted ? "" : m.text, time: m.createdAt.toISOString(), read, delivered: delivered || read, replyToId: m.replyToId ?? undefined,
     reactions, edited: m.edited, deleted: m.deleted,
+    // الاستطلاع: الأصوات بالمعرّفات عشان الواجهة تعرف صوتي أنا ومين صوّت
+    poll: m.poll && !m.deleted
+      ? {
+          question: m.poll.question, multi: m.poll.multi, closed: m.poll.closed,
+          options: m.poll.options.map((o) => ({ id: o.id, text: o.text, voterIds: o.votes.map((v) => v.userId) })),
+        }
+      : undefined,
     attachment: m.attachment && !m.deleted
       ? {
           name: m.attachment.name, size: m.attachment.size, mime: m.attachment.mime, url: m.attachment.url,

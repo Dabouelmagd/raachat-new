@@ -8,6 +8,7 @@ import { Check, CheckCheck, Pencil, Star } from "lucide-react";
 import { bubbleStyle, useBubble } from "../theme/bubbles";
 
 import { FileViewer, InlinePreview } from "./FilePreview";
+import { PollCard } from "./PollCard";
 import { EMOJIS } from "./emojis";
 import { Message } from "../types";
 import { MessageActions } from "./MessageActions";
@@ -51,7 +52,7 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
         // `break-words` مش رفاهية: رابط طويل أو كلمة بلا مسافات مابتتكسرش، فالنص
         // بيخرج برّه الفقاعة **ويتقص** (مش بيعمل سكرول عشان فيه أب بيقص) — فالمستخدم
         // يشوف نص الرسالة ناقص من الأول أو الآخر. اتبلّغ من الإنتاج ١٢ أكتوبر.
-        className={`group relative min-w-0 max-w-[78%] overflow-hidden break-words rounded-2xl px-3.5 py-2 text-sm ${isMe ? "rounded-bl-md" : "rounded-br-md"}`}
+        className={`group relative min-w-0 overflow-hidden break-words rounded-2xl px-3.5 py-2 text-sm ${message.poll ? "w-[82%] max-w-[82%]" : "max-w-[78%]"} ${isMe ? "rounded-bl-md" : "rounded-br-md"}`}
         style={bubbleStyle(bubble, isMe)}
         onClick={() => setShowActions((v) => !v)}
       >
@@ -84,6 +85,13 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
           </div>
         ) : (
           <>
+            {/* الضغط جوه الاستطلاع = تصويت. من غير stopPropagation الضغط بيوصل
+                للفقاعة وبيفتح «خيارات الرسالة» فوق الاستطلاع. */}
+            {message.poll && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <PollCard message={message} isMe={isMe} />
+              </div>
+            )}
             {message.attachment && <InlinePreview a={message.attachment} isMe={isMe} onOpen={() => setViewing(true)} />}
             {message.text && occKind(message.text) ? <OccasionSticker kind={occKind(message.text)!} size={150} /> : message.text && phaKind(message.text) ? <PharaohEmoji kind={phaKind(message.text)!} size={96} /> : message.text && <div dir="auto" className={message.attachment ? "mt-1.5" : ""}>{message.text}</div>}
             {tset.on && message.text && !phaKind(message.text) && !occKind(message.text) && <TranslatedLine text={message.text} to={isMe ? tset.peer : tset.mine} mine={isMe} />}
@@ -92,7 +100,7 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
 
         {!message.deleted && !editing && (
           <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">
-            {isMe && !message.attachment?.voice && !phaKind(message.text) && !occKind(message.text) && <button onClick={(e) => { e.stopPropagation(); setEditing(true); setDraft(message.text); }} className="me-1 flex items-center gap-0.5 underline-offset-2 hover:underline"><Pencil size={10} />{t("تعديل", "Edit")}</button>}
+            {isMe && !message.poll && !message.attachment?.voice && !phaKind(message.text) && !occKind(message.text) && <button onClick={(e) => { e.stopPropagation(); setEditing(true); setDraft(message.text); }} className="me-1 flex items-center gap-0.5 underline-offset-2 hover:underline"><Pencil size={10} />{t("تعديل", "Edit")}</button>}
             {starred && <Star size={11} className="fill-rachat-gold text-rachat-gold" aria-label={t("مميّزة بنجمة", "Starred")} />}
             {message.edited && <span>{t("(معدّلة)", "(edited)")}</span>}
             <time dateTime={message.at ? new Date(message.at).toISOString() : undefined} title={message.at ? fullStamp(message.at) : undefined}>{message.time}</time>

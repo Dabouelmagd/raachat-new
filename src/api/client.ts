@@ -139,6 +139,13 @@ export async function setPinned(threadId: string, pinned: boolean) {
   await api(`/threads/${threadId}/pin`, { method: pinned ? "PUT" : "DELETE" });
 }
 
+/** استطلاع جديد — السيرفر بيرجّع الرسالة كاملة بالاستطلاع جوّاها */
+export const createPollApi = (threadId: string, question: string, options: string[], multi: boolean) =>
+  api(`/threads/${threadId}/polls`, { body: { question, options, multi } });
+export const votePollApi = (messageId: string, optionIds: string[]) =>
+  api(`/messages/${messageId}/poll/vote`, { body: { optionIds } });
+export const closePollApi = (messageId: string) => api(`/messages/${messageId}/poll/close`, { method: "POST" });
+
 export async function logoutApi() {
   try { await api("/auth/logout", { method: "POST" }); } catch { /* تجاهل */ }
   setSession(null);

@@ -54,6 +54,24 @@ export interface Message {
   /** مميّزة بنجمة **عندي أنا بس** — مفيش حد تاني بيشوفها */
   starred?: boolean;
   attachment?: Attachment;
+  /** استطلاع — الرسالة نفسها نصّها فاضي والمحتوى كله هنا */
+  poll?: Poll;
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  /** مين صوّت للاختيار ده — ظاهر لأعضاء المحادثة (زي واتساب) */
+  voterIds: string[];
+}
+
+export interface Poll {
+  question: string;
+  /** يسمح بأكتر من إجابة */
+  multi: boolean;
+  /** اتقفل من صاحبه — مفيش تصويت جديد */
+  closed: boolean;
+  options: PollOption[];
 }
 
 export interface RoomParticipant {

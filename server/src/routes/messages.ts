@@ -191,6 +191,85 @@ export function messageRoutes(ctx: Ctx) {
     );
   }));
 
+  /**
+   * **استطلاع**: رسالة عادية جوّاها `Poll` — فبيورث كل حوارس الرسايل (العضوية ·
+   * الجروب المتقيّد · الحظر · فلتر الكلمات) ومابيحتاجش مسار بث جديد.
+   * السؤال والاختيارات **كلهم** بيمرّوا على الفلتر، مش السؤال بس — نفس درس
+   * «الحارس لازم يبقى على كل المسارات».
+   */
+  r.post("/threads/:id/polls", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const threadId = String(req.params.id);
+    await assertMember(ctx, threadId, me);
+    const th = await ctx.db.thread.findUnique({ where: { id: threadId }, select: { restrictedAt: true, type: true, _count: { select: { members: true } } } });
+    if (th?.type === "dm" && th._count.members < 2) throw forbidden("الحساب ده اتحذف ومينفعش تبعتله");
+    if (th?.restrictedAt) throw forbidden("الجروب ده متقيّد من إدارة التطبيق ومينفعش تبعت فيه");
+    const b = z.object({
+      question: z.string().trim().min(1).max(300),
+      options: z.array(z.string().trim().min(1).max(100)).min(2).max(12),
+      multi: z.boolean().default(false),
+    }).parse(req.body);
+    const opts = b.options.map((o) => o.trim());
+    if (new Set(opts).size !== opts.length) throw bad("duplicate_options", "فيه اختيارين بنفس الكلام");
+    assertClean(ctx, b.question, ...opts);
+    if (th?.type === "dm") {
+      const other = (await memberIds(ctx, threadId)).find((m) => m.userId !== me);
+      if (other) await assertNotBlocked(ctx, me, other.userId);
+    }
+    const created = await ctx.db.message.create({
+      data: {
+        threadId, authorId: me, text: "",
+        poll: { create: { question: b.question, multi: b.multi, options: { create: opts.map((text, idx) => ({ text, idx })) } } },
+      },
+      include: messageInclude,
+    });
+    const view = messageView(created);
+    const blockers = new Set(await blockersOf(ctx, me));
+    const members = (await memberIds(ctx, threadId)).map((m) => m.userId).filter((id) => id === me || !blockers.has(id));
+    emitToUsers(ctx, members, "message:new", view);
+    res.status(201).json(view);
+    if (ctx.push) void pushNewMessage(ctx, threadId, me, members, "📊 " + b.question, "");
+  }));
+
+  /** تصويت: الاختيار الواحد بيستبدل صوتي القديم، والمتعدد بيحدّد القايمة كلها. */
+  r.post("/messages/:id/poll/vote", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const m = await ownMessage(String(req.params.id), me);
+    const poll = await ctx.db.poll.findUnique({ where: { messageId: m.id }, include: { options: true } });
+    if (!poll) throw notFound();
+    if (poll.closed) throw bad("poll_closed", "الاستطلاع اتقفل");
+    if (m.deleted) throw bad("deleted", "الرسالة محذوفة");
+    // الفحص **قبل** أي كتابة (درس التفاعل: الرد ٤٠٣ والصف متسجّل)
+    await assertNotRestricted(ctx, m.threadId);
+    const b = z.object({ optionIds: z.array(z.string()).max(12) }).parse(req.body);
+    const ids = [...new Set(b.optionIds)];
+    const known = new Set(poll.options.map((o) => o.id));
+    if (ids.some((id) => !known.has(id))) throw bad("bad_option", "اختيار مش من الاستطلاع ده");
+    if (!poll.multi && ids.length > 1) throw bad("single_choice", "الاستطلاع ده اختيار واحد بس");
+    await ctx.db.$transaction([
+      ctx.db.pollVote.deleteMany({ where: { userId: me, optionId: { in: poll.options.map((o) => o.id) } } }),
+      ...ids.map((optionId) => ctx.db.pollVote.create({ data: { optionId, userId: me } })),
+    ]);
+    const u = await ctx.db.message.findUniqueOrThrow({ where: { id: m.id }, include: messageInclude });
+    const view = messageView(u);
+    emitToUsers(ctx, await audience(m.threadId, m.authorId), "message:updated", view);
+    res.json(view);
+  }));
+
+  /** القفل لصاحب الاستطلاع بس — بعده مفيش تصويت ولا سحب صوت. */
+  r.post("/messages/:id/poll/close", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const m = await ownMessage(String(req.params.id), me);
+    if (m.authorId !== me) throw forbidden("صاحب الاستطلاع بس اللي يقفله");
+    const poll = await ctx.db.poll.findUnique({ where: { messageId: m.id } });
+    if (!poll) throw notFound();
+    await ctx.db.poll.update({ where: { id: poll.id }, data: { closed: true } });
+    const u = await ctx.db.message.findUniqueOrThrow({ where: { id: m.id }, include: messageInclude });
+    const view = messageView(u);
+    emitToUsers(ctx, await audience(m.threadId, me), "message:updated", view);
+    res.json(view);
+  }));
+
   // تبديل تفاعل
   r.put("/messages/:id/reactions/:emoji", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;

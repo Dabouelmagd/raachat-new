@@ -31,6 +31,7 @@ export interface ApiMessage {
   attachment?: { name: string; size: number; mime: string; url: string; text?: string; voice?: { duration: number; waveform: number[] } };
   starred?: boolean;
   delivered?: boolean;
+  poll?: { question: string; multi: boolean; closed: boolean; options: { id: string; text: string; voterIds: string[] }[] };
 }
 export function mapMessage(m: ApiMessage): Message {
   const reactions: Record<string, string[]> = {};
@@ -40,6 +41,8 @@ export function mapMessage(m: ApiMessage): Message {
   return {
     id: m.id, threadId: m.threadId, authorId: asMe(m.authorId), authorName: m.authorName, text: m.text, time: fmtTime(m.time), at: new Date(m.time).getTime(),
     read: m.read, delivered: m.delivered, replyToId: m.replyToId, reactions, edited: m.edited, deleted: m.deleted, starred: m.starred, attachment,
+    // معرّفات المصوّتين بتتحوّل لـ "me" زي باقي المعرّفات عشان المقارنة تبقى واحدة
+    poll: m.poll ? { ...m.poll, options: m.poll.options.map((o) => ({ ...o, voterIds: o.voterIds.map(asMe) })) } : undefined,
   };
 }
 

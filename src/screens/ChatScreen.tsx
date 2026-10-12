@@ -9,12 +9,13 @@ import { WallpaperSheet } from "../components/WallpaperSheet";
 import { useWallpaper, wallpaperStyle } from "../theme/wallpapers";
 import { useEffect, useRef, useState } from "react";
 import { TranslateSheet } from "../components/Translate";
+import { PollSheet } from "../components/PollSheet";
 import { useTranslate } from "../store/translate";
 import { PHRASES } from "../translate/phrases";
 import { phraseText } from "../translate/engine";
 import { ThreadAvatar } from "../components/ThreadAvatar";
 import { useParams, useNavigate } from "react-router-dom";
-import { Video, Phone, Paperclip, Smile, Mic, Send, X, Users, LogOut, Image as ImageIcon, FileText, Camera, Trash2 } from "lucide-react";
+import { Video, Phone, Paperclip, Smile, Mic, Send, X, Users, LogOut, Image as ImageIcon, FileText, Camera, Trash2, BarChart3 } from "lucide-react";
 import { Header } from "../components/Header";
 import { MessageBubble } from "../components/MessageBubble";
 import { useAppState, useAppActions } from "../store/AppContext";
@@ -57,6 +58,7 @@ export default function ChatScreen() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [panel, setPanel] = useState<"none" | "emoji" | "attach">("none");
+  const [showPoll, setShowPoll] = useState(false);
   const [pending, setPending] = useState<Attachment | null>(null);
   const [fileErr, setFileErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +193,7 @@ export default function ChatScreen() {
       {showCam && <CameraSheet onClose={() => setShowCam(false)} onDone={(f) => { setShowCam(false); void pickFile(f); }} />}
       {showWp && <WallpaperSheet onClose={() => setShowWp(false)} />}
       {showTr && <TranslateSheet onClose={() => setShowTr(false)} />}
+      {showPoll && thread && <PollSheet threadId={thread.id} onClose={() => setShowPoll(false)} />}
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-2" style={wallpaperStyle(wp)}>
         {threadMessages.map((m, i) => {
           const prev = threadMessages[i - 1];
@@ -273,6 +276,7 @@ export default function ChatScreen() {
             { k: "doc", icon: FileText, label: t("ملف", "File"), color: "bg-rachat-gold text-rachat-ink", run: () => docRef.current?.click() },
             { k: "fx", icon: Video, label: t("فيديو وفلاتر", "Video & filters"), color: "bg-rachat-maroon", run: () => { setPanel("none"); setShowCam(true); } },
             { k: "cam", icon: Camera, label: t("كاميرا", "Camera"), color: "bg-rachat-coral", run: () => camRef.current?.click() },
+            { k: "poll", icon: BarChart3, label: t("استطلاع", "Poll"), color: "bg-rachat-gold text-rachat-ink", run: () => { setPanel("none"); setShowPoll(true); } },
           ].map((o) => (
             <button key={o.k} onClick={o.run} className="flex flex-col items-center gap-1.5 rounded-xl bg-rachat-black py-3 text-[11px] font-bold text-rachat-papyrus">
               <span className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${o.color}`}><o.icon size={19} /></span>

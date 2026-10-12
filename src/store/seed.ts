@@ -30,6 +30,32 @@ export const INITIAL_MESSAGES: Message[] = [
   { id: "m4", threadId: "t1", authorId: "me", get authorName() { return tr("أنت", "You"); }, get text() { return tr("ماشي الحال، هبعته وياه", "Sounds good, I'll send it along with it"); }, time: "10:40", read: true, delivered: true, reactions: {} },
   { id: "m5", threadId: "t2", authorId: "u4", get authorName() { return tr("أحمد فتحي", "Ahmed Fathy"); }, get text() { return tr("رفعت الملف على المجموعة", "I uploaded the file to the group"); }, time: "9:15", reactions: {} },
   { id: "m6", threadId: "t2", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, get text() { return tr("تمام، هراجعه بعد شوية", "Okay, I'll review it in a bit"); }, time: "9:20", reactions: {} },
+  // **استطلاع في بيانات الديمو عن قصد** — من غير أصوات موجودة، النِّسب والأشرطة
+  // و«مين صوّت» مابيظهروش في بناء الديمو ولا بيتجرّبوا. واحد من حساب تاني
+  // (فيه أصوات) وواحد مني (عشان زرار «اقفل الاستطلاع» يبان).
+  {
+    id: "m10", threadId: "t2", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "", time: "9:25", reactions: {},
+    poll: {
+      get question() { return tr("نعمل اجتماع الفريق إمتى؟", "When should we hold the team meeting?"); },
+      multi: false, closed: false,
+      options: [
+        { id: "po1", get text() { return tr("الأحد الصبح", "Sunday morning"); }, voterIds: ["u4"] },
+        { id: "po2", get text() { return tr("الأحد بعد الضهر", "Sunday afternoon"); }, voterIds: [] },
+        { id: "po3", get text() { return tr("الاتنين الصبح", "Monday morning"); }, voterIds: ["u1", "u2"] },
+      ],
+    },
+  },
+  {
+    id: "m11", threadId: "t2", authorId: "me", get authorName() { return tr("أنت", "You"); }, text: "", time: "9:30", reactions: {},
+    poll: {
+      get question() { return tr("إيه الأكل اللي نجيبه؟", "What food should we order?"); },
+      multi: true, closed: false,
+      options: [
+        { id: "po4", get text() { return tr("كشري", "Koshari"); }, voterIds: ["u1"] },
+        { id: "po5", get text() { return tr("فراخ مشوية", "Grilled chicken"); }, voterIds: [] },
+      ],
+    },
+  },
   // رسايل الحالات الصعبة (t5) — رابط طويل وكلمة بلا مسافات: لو الفقاعة مش
   // بتكسر الكلمة، النص بيوسّع الصفحة كلها والرسايل تتقص على الموبايل.
   { id: "m7", threadId: "t5", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "https://app.kenoz.org/legal/privacy.html?utm_source=raachat&utm_campaign=very-long-link-for-layout-testing-1234567890", time: "7:07", reactions: {} },

@@ -1,6 +1,6 @@
 import { notify } from "../sound/notify";
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from "react";
-import { API_ON, api, ensureUploaded, setPinned as setPinnedApi, uploadBlob, useSession } from "../api/client";
+import { API_ON, api, closePollApi, createPollApi, ensureUploaded, setPinned as setPinnedApi, uploadBlob, useSession, votePollApi } from "../api/client";
 import { mapContact, mapMessage, mapStory, mapThread, type ApiMessage, type ApiStory, type ApiThread, type ApiUser } from "../api/mappers";
 import { connectSocket } from "../api/socket";
 import { setProfileFromServer } from "./profile";
@@ -46,6 +46,9 @@ type Action =
   | { type: "EDIT_MESSAGE"; messageId: string; text: string }
   | { type: "DELETE_MESSAGE"; messageId: string }
   | { type: "TOGGLE_REACTION"; messageId: string; emoji: string }
+  | { type: "CREATE_POLL"; threadId: string; question: string; options: string[]; multi: boolean }
+  | { type: "VOTE_POLL"; messageId: string; optionIds: string[] }
+  | { type: "CLOSE_POLL"; messageId: string }
   | { type: "CREATE_DM"; contactId: string; id: string }
   | { type: "CREATE_GROUP"; name: string; memberIds: string[]; look?: GroupLook }
   | { type: "LEAVE_THREAD"; threadId: string }
@@ -110,6 +113,37 @@ function reducer(state: AppState, action: Action): AppState {
       };
       return { ...state, messages: [...state.messages, msg] };
     }
+    case "CREATE_POLL": {
+      const msg: Message = {
+        id: uid("m"), threadId: action.threadId, authorId: "me", authorName: tr("أنت", "You"),
+        text: "", time: nowLabel(), at: Date.now(), reactions: {},
+        poll: {
+          question: action.question, multi: action.multi, closed: false,
+          options: action.options.map((text, i) => ({ id: `o${i}_${uid("p")}`, text, voterIds: [] })),
+        },
+      };
+      return { ...state, messages: [...state.messages, msg] };
+    }
+    case "VOTE_POLL":
+      return {
+        ...state,
+        messages: state.messages.map((m) => {
+          if (m.id !== action.messageId || !m.poll || m.poll.closed) return m;
+          const options = m.poll.options.map((o) => ({
+            ...o,
+            // صوتي القديم بيتشال من كل الاختيارات الأول — الاختيار الواحد استبدال مش إضافة
+            voterIds: action.optionIds.includes(o.id)
+              ? [...o.voterIds.filter((v) => v !== "me"), "me"]
+              : o.voterIds.filter((v) => v !== "me"),
+          }));
+          return { ...m, poll: { ...m.poll, options } };
+        }),
+      };
+    case "CLOSE_POLL":
+      return {
+        ...state,
+        messages: state.messages.map((m) => (m.id === action.messageId && m.poll ? { ...m, poll: { ...m.poll, closed: true } } : m)),
+      };
     case "RECEIVE_MESSAGE": {
       const msg: Message = {
         id: uid("m"),
@@ -343,6 +377,10 @@ function mockActions(dispatch: D) {
     leaveThread: (threadId: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId }),
     markRead: (threadId: string): void | Promise<void> => dispatch({ type: "MARK_READ", threadId }),
     setPinned: (threadId: string, pinned: boolean): void | Promise<void> => dispatch({ type: "SET_PINNED", threadId, pinned }),
+    createPoll: (threadId: string, question: string, options: string[], multi: boolean): void | Promise<void> =>
+      dispatch({ type: "CREATE_POLL", threadId, question, options, multi }),
+    votePoll: (messageId: string, optionIds: string[]): void | Promise<void> => dispatch({ type: "VOTE_POLL", messageId, optionIds }),
+    closePoll: (messageId: string): void | Promise<void> => dispatch({ type: "CLOSE_POLL", messageId }),
     listPublicGroups: (): Promise<{ id: string; name: string; desc: string; members: number; initial: string; colorClass: string; joined: boolean; color?: string; icon?: string }[] | null> => Promise.resolve(null),
     joinPublicGroup: (_id: string): Promise<void> => Promise.resolve(),
     createRoom: (name: string): string | Promise<string> => {
@@ -401,6 +439,15 @@ function apiActions(dispatch: D) {
       dispatch({ type: "LEAVE_THREAD", threadId });
     },
     markRead: async (threadId: string) => { dispatch({ type: "MARK_READ", threadId }); await api(`/threads/${threadId}/read`, { method: "POST" }); },
+    createPoll: async (threadId: string, question: string, options: string[], multi: boolean) => {
+      dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await createPollApi(threadId, question, options, multi) as ApiMessage) });
+    },
+    votePoll: async (messageId: string, optionIds: string[]) => {
+      dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await votePollApi(messageId, optionIds) as ApiMessage) });
+    },
+    closePoll: async (messageId: string) => {
+      dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await closePollApi(messageId) as ApiMessage) });
+    },
     /** الحد بيتفحص على السيرفر — لو رفض نرجّع الحالة زي ما كانت ونرمي الخطأ للشاشة */
     setPinned: async (threadId: string, pinned: boolean) => {
       dispatch({ type: "SET_PINNED", threadId, pinned });

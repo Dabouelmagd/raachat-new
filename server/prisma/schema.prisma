@@ -73,6 +73,7 @@ model User {
   roomParticipants RoomParticipant[]
   pushSubs    PushSub[]
   stars       Star[]
+  pollVotes   PollVote[]
   modStatus   String    @default("active") // active | suspended | banned (من لوحة الإدارة)
   staff       Staff?
 }
@@ -159,8 +160,49 @@ model Message {
   attachment Attachment?
   reactions Reaction[]
   stars     Star[]
+  poll      Poll?
 
   @@index([threadId, createdAt])
+}
+
+/// استطلاع جوه رسالة: السؤال في `question`، والاختيارات صفوف مرتّبة بـ `idx`،
+/// والأصوات صف لكل (اختيار + مستخدم). **الأصوات مش مجهولة** — أعضاء المحادثة
+/// يشوفوا مين صوّت (زي واتساب)، فمفيش تخزين زيادة لو حبينا نخفيها بعدين.
+model Poll {
+  id        String   @id @default(cuid())
+  messageId String   @unique
+  question  String
+  /// يسمح باختيار أكتر من إجابة
+  multi     Boolean  @default(false)
+  /// اتقفل من صاحبه — مفيش تصويت جديد
+  closed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  options   PollOption[]
+}
+
+model PollOption {
+  id      String @id @default(cuid())
+  pollId  String
+  text    String
+  idx     Int
+
+  poll    Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes   PollVote[]
+
+  @@index([pollId, idx])
+}
+
+model PollVote {
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([optionId, userId])
 }
 
 /// رسالة مميّزة بنجمة لمستخدم. التمييز **خاص بصاحبه** — مفيش حد تاني بيشوفه.
