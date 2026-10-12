@@ -6,7 +6,7 @@ import { WallpaperSheet } from "../components/WallpaperSheet";
 import { BlockedUsersSheet } from "../components/BlockedUsersSheet";
 import { PasswordSheet } from "../components/PasswordSheet";
 import { LEGAL } from "../legal";
-import { ShieldCheck, ChevronLeft, ChevronRight, Bell, LogOut, Trash2, Download, KeyRound } from "lucide-react";
+import { ShieldCheck, ChevronLeft, ChevronRight, Bell, LogOut, Trash2, Download, KeyRound, Star } from "lucide-react";
 import { API_ON, api } from "../api/client";
 import { LangSwitch } from "../components/LangSwitch";
 import { useDir, useT } from "../i18n";
@@ -119,6 +119,10 @@ export default function AccountScreen() {
         <p className="mb-2 mt-4 text-[11px] font-bold text-neutral-500">{t("الأمان", "Security")}</p>
         <button onClick={() => nav("/friends")} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">
           {t("الأصدقاء ودعوة أصدقاء", "Friends & invite")}
+          <Chev size={15} className="text-neutral-500" />
+        </button>
+        <button onClick={() => nav("/starred")} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">
+          <span className="flex items-center gap-2"><Star size={15} className="text-rachat-gold" /> {t("الرسائل المميّزة", "Starred messages")}</span>
           <Chev size={15} className="text-neutral-500" />
         </button>
         <button onClick={() => setPwOpen(true)} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">

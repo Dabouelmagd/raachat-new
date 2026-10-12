@@ -7,7 +7,7 @@ import { assertClean } from "../lib/contentFilter.js";
 import { assertNotBlocked, blockedByMe, blockersOf } from "../lib/blocks.js";
 import { emitToUsers } from "../realtime.js";
 import { notifyPush, offlineOf } from "../lib/push.js";
-import { messageInclude, messageView } from "../serialize.js";
+import { messageInclude, messageView, threadView } from "../serialize.js";
 import { assertMember, assertNotRestricted } from "./threads.js";
 
 const AttachmentIn = z.object({
@@ -72,7 +72,11 @@ export function messageRoutes(ctx: Ctx) {
     });
     const members = (await memberIds(ctx, threadId)).filter((m) => m.userId !== me);
     const readBy = (at: Date) => members.length > 0 && members.every((m) => m.lastReadAt && m.lastReadAt >= at);
-    res.json(rows.reverse().map((m) => messageView(m, m.authorId === me && readBy(m.createdAt))));
+    // النجوم بتاعتي على الرسايل دي (استعلام واحد، مش واحد لكل رسالة)
+    const starred = new Set(
+      (await ctx.db.star.findMany({ where: { userId: me, messageId: { in: rows.map((m) => m.id) } }, select: { messageId: true } })).map((s) => s.messageId),
+    );
+    res.json(rows.reverse().map((m) => ({ ...messageView(m, m.authorId === me && readBy(m.createdAt)), starred: starred.has(m.id) })));
   }));
 
   r.post("/threads/:id/messages", wrap(async (req, res) => {
@@ -145,6 +149,41 @@ export function messageRoutes(ctx: Ctx) {
     await ctx.db.attachment.deleteMany({ where: { messageId: m.id } });
     emitToUsers(ctx, await audience(m.threadId, me), "message:deleted", messageView({ ...u, attachment: null }));
     res.status(204).end();
+  }));
+
+  /**
+   * تمييز رسالة بنجمة — **خاص بصاحبه**: مفيش بث ولا إشعار، وصاحب الرسالة
+   * مايعرفش. لازم تكون عضو في المحادثة (`ownMessage` بيتحقق من العضوية).
+   */
+  r.put("/messages/:id/star", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const m = await ownMessage(String(req.params.id), me);
+    await ctx.db.star.upsert({ where: { userId_messageId: { userId: me, messageId: m.id } }, create: { userId: me, messageId: m.id }, update: {} });
+    res.status(204).end();
+  }));
+  r.delete("/messages/:id/star", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    await ctx.db.star.deleteMany({ where: { userId: me, messageId: String(req.params.id) } });
+    res.status(204).end();
+  }));
+
+  /** الرسائل المميّزة بتاعتي، الأحدث الأول — مع اسم المحادثة عشان تعرف جاية منين. */
+  r.get("/me/starred", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const rows = await ctx.db.star.findMany({
+      where: { userId: me },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { message: { include: { ...messageInclude, thread: { include: { members: { include: { user: true } } } } } } },
+    });
+    // الرسالة اللي اتمسحت أو اللي خرجت من محادثتها مابتظهرش
+    const mine = new Set((await ctx.db.membership.findMany({ where: { userId: me }, select: { threadId: true } })).map((x) => x.threadId));
+    const hidden = new Set(await blockedByMe(ctx, me));
+    res.json(
+      rows
+        .filter((s) => !s.message.deleted && mine.has(s.message.threadId) && !hidden.has(s.message.authorId))
+        .map((s) => ({ ...messageView(s.message), starred: true, threadName: threadView(s.message.thread, me).name, starredAt: s.createdAt.toISOString() })),
+    );
   }));
 
   // تبديل تفاعل

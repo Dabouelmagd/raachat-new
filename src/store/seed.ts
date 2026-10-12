@@ -16,6 +16,11 @@ export const INITIAL_THREADS: Thread[] = [
   { id: "t2", type: "group", get name() { return tr("مجموعة الشغل 💼", "Work Group 💼"); }, colorClass: "bg-rachat-gold", get initial() { return tr("ش", "W"); }, memberIds: ["u1", "u2", "u4"] },
   { id: "t3", type: "dm", get name() { return tr("يوسف كامل", "Youssef Kamel"); }, colorClass: "bg-rachat-coral", get initial() { return tr("ي", "Y"); }, memberIds: ["u2"] },
   { id: "t4", type: "group", get name() { return tr("فريق التصميم", "Design Team"); }, colorClass: "bg-[#7a4a2a]", get initial() { return tr("ف", "D"); }, memberIds: ["u3", "u5", "u6"] },
+  // محادثة «الحالات الصعبة» — **عن قصد**: اسم طويل جدًا في العنوان، ورسايل فيها
+  // رابط طويل وكلمة إنجليزية بلا مسافات. المحتوى ده هو اللي بيكسّر العرض على
+  // الموبايل (الصفحة تبقى أعرض من الشاشة فالرسايل تتقص من الناحية التانية)،
+  // ومن غيره الاختبار مابيشوفش العطل. اتبلّغ من الإنتاج في ١٢ أكتوبر.
+  { id: "t5", type: "group", get name() { return tr("nsw-bity& : ḥmt nswt 👑 : مجموعة باسم طويل جدًا للاختبار", "nsw-bity& : ḥmt nswt 👑 : a very long group name for testing"); }, colorClass: "bg-rachat-maroon", get initial() { return tr("ن", "N"); }, memberIds: ["u1", "u2", "u3"] },
 ];
 
 export const INITIAL_MESSAGES: Message[] = [
@@ -25,6 +30,11 @@ export const INITIAL_MESSAGES: Message[] = [
   { id: "m4", threadId: "t1", authorId: "me", get authorName() { return tr("أنت", "You"); }, get text() { return tr("ماشي الحال، هبعته وياه", "Sounds good, I'll send it along with it"); }, time: "10:40", read: true, reactions: {} },
   { id: "m5", threadId: "t2", authorId: "u4", get authorName() { return tr("أحمد فتحي", "Ahmed Fathy"); }, get text() { return tr("رفعت الملف على المجموعة", "I uploaded the file to the group"); }, time: "9:15", reactions: {} },
   { id: "m6", threadId: "t2", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, get text() { return tr("تمام، هراجعه بعد شوية", "Okay, I'll review it in a bit"); }, time: "9:20", reactions: {} },
+  // رسايل الحالات الصعبة (t5) — رابط طويل وكلمة بلا مسافات: لو الفقاعة مش
+  // بتكسر الكلمة، النص بيوسّع الصفحة كلها والرسايل تتقص على الموبايل.
+  { id: "m7", threadId: "t5", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "https://app.kenoz.org/legal/privacy.html?utm_source=raachat&utm_campaign=very-long-link-for-layout-testing-1234567890", time: "7:07", reactions: {} },
+  { id: "m8", threadId: "t5", authorId: "me", get authorName() { return tr("أنت", "You"); }, text: "Supercalifragilisticexpialidocious_pneumonoultramicroscopicsilicovolcanoconiosis", time: "7:08", reactions: {} },
+  { id: "m9", threadId: "t5", authorId: "u2", get authorName() { return tr("يوسف كامل", "Youssef Kamel"); }, get text() { return tr("هي دي الحاجه الوحيده اللي محدش ليه أكسس عليها علشان تملكين الدومين", "This is the only thing nobody else has access to, so you own the domain"); }, time: "7:08", reactions: {} },
 ];
 
 export const INITIAL_ROOMS: VoiceRoom[] = [

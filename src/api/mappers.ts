@@ -30,6 +30,7 @@ export interface ApiMessage {
   id: string; threadId: string; authorId: string; authorName: string; text: string; time: string; read?: boolean;
   replyToId?: string; reactions: Record<string, string[]>; edited?: boolean; deleted?: boolean;
   attachment?: { name: string; size: number; mime: string; url: string; text?: string; voice?: { duration: number; waveform: number[] } };
+  starred?: boolean;
 }
 export function mapMessage(m: ApiMessage): Message {
   const reactions: Record<string, string[]> = {};
@@ -38,7 +39,7 @@ export function mapMessage(m: ApiMessage): Message {
   const attachment: Attachment | undefined = a ? { ...a, url: toAbs(a.url) } : undefined;
   return {
     id: m.id, threadId: m.threadId, authorId: asMe(m.authorId), authorName: m.authorName, text: m.text, time: fmtTime(m.time), at: new Date(m.time).getTime(),
-    read: m.read, replyToId: m.replyToId, reactions, edited: m.edited, deleted: m.deleted, attachment,
+    read: m.read, replyToId: m.replyToId, reactions, edited: m.edited, deleted: m.deleted, starred: m.starred, attachment,
   };
 }
 

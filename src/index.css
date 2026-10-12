@@ -24,6 +24,16 @@ body,
   height: 100%;
 }
 
+/*
+ * ارتفاع الشاشة الظاهر فعلًا. على سفاري في الآيفون `height: 100%` بيحسب الشاشة
+ * **من غير** شريط المتصفح، فآخر حاجة في الصفحة (صندوق كتابة الرسالة) بتقع تحت
+ * الشريط ومايبانش. `dvh` بيتغيّر مع ظهور الشريط واختفاؤه. السطر اللي فوق فاضل
+ * كبديل للمتصفحات القديمة اللي ماتعرفش dvh.
+ */
+#root {
+  height: 100dvh;
+}
+
 body {
   font-family: "Cairo", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 }

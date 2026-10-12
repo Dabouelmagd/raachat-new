@@ -72,6 +72,7 @@ model User {
   blockedBy   Block[]      @relation("Blocked")
   roomParticipants RoomParticipant[]
   pushSubs    PushSub[]
+  stars       Star[]
   modStatus   String    @default("active") // active | suspended | banned (من لوحة الإدارة)
   staff       Staff?
 }
@@ -152,8 +153,22 @@ model Message {
   replies   Message[] @relation("Replies")
   attachment Attachment?
   reactions Reaction[]
+  stars     Star[]
 
   @@index([threadId, createdAt])
+}
+
+/// رسالة مميّزة بنجمة لمستخدم. التمييز **خاص بصاحبه** — مفيش حد تاني بيشوفه.
+model Star {
+  userId    String
+  messageId String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([userId, messageId])
+  @@index([userId, createdAt])
 }
 
 model Attachment {

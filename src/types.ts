@@ -45,6 +45,8 @@ export interface Message {
   reactions: Record<string, string[]>; // emoji -> [authorIds]
   edited?: boolean;
   deleted?: boolean;
+  /** مميّزة بنجمة **عندي أنا بس** — مفيش حد تاني بيشوفها */
+  starred?: boolean;
   attachment?: Attachment;
 }
 

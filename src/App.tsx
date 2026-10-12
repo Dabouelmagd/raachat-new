@@ -24,6 +24,7 @@ import { useTheme } from "./theme/useTheme";
 import ProfileScreen from "./screens/ProfileScreen";
 import NotificationsScreen from "./screens/NotificationsScreen";
 import SessionsScreen from "./screens/SessionsScreen";
+import StarredScreen from "./screens/StarredScreen";
 import AdsScreen from "./screens/AdsScreen";
 import { Megaphone, ShieldCheck } from "lucide-react";
 import { openAdmin, useIsStaff } from "./admin/adminLink";
@@ -95,6 +96,7 @@ function WideShell() {
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/notifications" element={<NotificationsScreen />} />
           <Route path="/sessions" element={<SessionsScreen />} />
+          <Route path="/starred" element={<StarredScreen />} />
           <Route path="/search" element={<SearchScreen />} />
           <Route path="/calls" element={<CallsScreen />} />
           <Route path="/friends" element={<FriendsScreen />} />
@@ -135,6 +137,7 @@ function MobileShell() {
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/notifications" element={<NotificationsScreen />} />
           <Route path="/sessions" element={<SessionsScreen />} />
+          <Route path="/starred" element={<StarredScreen />} />
           <Route path="/search" element={<SearchScreen />} />
           <Route path="/calls" element={<CallsScreen />} />
           <Route path="/friends" element={<FriendsScreen />} />
