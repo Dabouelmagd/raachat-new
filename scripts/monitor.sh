@@ -33,36 +33,34 @@ send_mail() {
   if [ -z "$RESEND_KEY" ] || [ -z "$ALERT_TO" ]; then
     echo "⚠️ مفيش RESEND_KEY أو إيميل تنبيه — التنبيه ما اتبعتش"; return 1
   fi
-  local out code
-  out=$(python3 - "$subject" "$body" <<'PY'
-import json, os, sys, urllib.request
-key = os.environ["RESEND_KEY"]; to = os.environ["ALERT_TO"]
+  # بايثون بتبني الـ JSON بس (نص عربي وأسطر وعلامات تنصيص = تهريب مظبوط)،
+  # والإرسال بـ curl. **مهم:** مكتبة urllib بتاعة بايثون بترجع 403 من Cloudflare
+  # (error code: 1010 — حجب على أساس بصمة العميل) لأن Resend قاعد وراه.
+  local tmpd json cfgfile out code
+  tmpd=$(mktemp -d); json=$tmpd/mail.json; cfgfile=$tmpd/curl.cfg
+  trap 'rm -rf "$tmpd"' RETURN
+  python3 - "$subject" "$body" "$json" <<'PY'
+import json, os, sys
+to = os.environ["ALERT_TO"]
 frm = os.environ.get("EMAIL_FROM") or f"Raa Chat <no-reply@{os.environ['DOMAIN']}>"
-sub, body = sys.argv[1], sys.argv[2]
-data = json.dumps({"from": frm, "to": to, "subject": sub,
-                   "text": body,
-                   "html": "<pre style=\"font:14px/1.7 -apple-system,Segoe UI,Tahoma,sans-serif;white-space:pre-wrap\">"
-                           + body.replace("&","&amp;").replace("<","&lt;") + "</pre>"}).encode()
-req = urllib.request.Request("https://api.resend.com/emails", data=data,
-      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-try:
-    with urllib.request.urlopen(req, timeout=20) as r:
-        print(r.status)
-except Exception as e:
-    print(getattr(e, "code", 0))
-    # رسالة Resend هي اللي بتقول السبب بالظبط — بنطبعها (مفيش فيها أي سر)
-    try:
-        print(e.read().decode()[:400].replace("\n", " "))
-    except Exception:
-        print(str(e)[:200])
+sub, body, out = sys.argv[1], sys.argv[2], sys.argv[3]
+html = ('<pre style="font:14px/1.7 -apple-system,Segoe UI,Tahoma,sans-serif;white-space:pre-wrap">'
+        + body.replace("&", "&amp;").replace("<", "&lt;") + "</pre>")
+with open(out, "w", encoding="utf-8") as f:
+    json.dump({"from": frm, "to": to, "subject": sub, "text": body, "html": html}, f, ensure_ascii=False)
 PY
-  ) || out=0
-  code=$(printf '%s' "$out" | sed -n 1p)
+  # المفتاح في ملف إعدادات بصلاحية 600 — مش في سطر الأوامر، عشان مايبانش في ps
+  umask 177; printf 'header = "Authorization: Bearer %s"\n' "$RESEND_KEY" > "$cfgfile"; umask 022
+  out=$(curl -sS -K "$cfgfile" --max-time 25 \
+        -H "Content-Type: application/json" -H "Accept: application/json" \
+        -X POST https://api.resend.com/emails --data-binary "@$json" \
+        -w '\n%{http_code}' 2>&1)
+  code=$(printf '%s' "$out" | tail -n1)
   if [ "$code" = "200" ]; then
     echo "📧 التنبيه اتبعت لـ $ALERT_TO"
   else
     echo "⚠️ إرسال التنبيه فشل (HTTP $code)"
-    printf '%s' "$out" | sed -n '2,3p' | sed 's/^/   رد Resend: /'
+    printf '%s' "$out" | head -c 400 | tr '\n' ' ' | sed 's/^/   رد الخدمة: /'; echo
     echo "   المرسِل: ${EMAIL_FROM:-(من DOMAIN)} · المستلم: $ALERT_TO · طول المفتاح: ${#RESEND_KEY}"
     return 1
   fi
