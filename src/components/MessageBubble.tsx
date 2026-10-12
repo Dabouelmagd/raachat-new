@@ -5,6 +5,7 @@ import { TranslatedLine } from "./Translate";
 import { useTranslate } from "../store/translate";
 import { useState } from "react";
 import { Check, CheckCheck, Pencil, Star } from "lucide-react";
+import { bubbleStyle, useBubble } from "../theme/bubbles";
 
 import { FileViewer, InlinePreview } from "./FilePreview";
 import { EMOJIS } from "./emojis";
@@ -33,6 +34,7 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
   const [forwarding, setForwarding] = useState(false);
   const [starred, setStarred] = useState(!!message.starred);
   const tset = useTranslate();
+  const bubble = useBubble();
   const [draft, setDraft] = useState(message.text);
   const isMe = message.authorId === "me";
 
@@ -49,11 +51,8 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
         // `break-words` مش رفاهية: رابط طويل أو كلمة بلا مسافات مابتتكسرش، فالنص
         // بيخرج برّه الفقاعة **ويتقص** (مش بيعمل سكرول عشان فيه أب بيقص) — فالمستخدم
         // يشوف نص الرسالة ناقص من الأول أو الآخر. اتبلّغ من الإنتاج ١٢ أكتوبر.
-        className={`group relative min-w-0 max-w-[78%] overflow-hidden break-words rounded-2xl px-3.5 py-2 text-sm ${
-          isMe
-            ? "rounded-bl-md bg-gradient-to-br from-rachat-red to-rachat-coral text-white"
-            : "rounded-br-md bg-[#EAE0CF] text-rachat-ink"
-        }`}
+        className={`group relative min-w-0 max-w-[78%] overflow-hidden break-words rounded-2xl px-3.5 py-2 text-sm ${isMe ? "rounded-bl-md" : "rounded-br-md"}`}
+        style={bubbleStyle(bubble, isMe)}
         onClick={() => setShowActions((v) => !v)}
       >
         {replyTo && (
@@ -97,7 +96,13 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
             {starred && <Star size={11} className="fill-rachat-gold text-rachat-gold" aria-label={t("مميّزة بنجمة", "Starred")} />}
             {message.edited && <span>{t("(معدّلة)", "(edited)")}</span>}
             <time dateTime={message.at ? new Date(message.at).toISOString() : undefined} title={message.at ? fullStamp(message.at) : undefined}>{message.time}</time>
-            {isMe && (message.read ? <CheckCheck size={13} className="text-rachat-coral" /> : <Check size={13} />)}
+            {isMe && (
+              message.read
+                ? <CheckCheck size={13} className="text-sky-400" aria-label={t("اتقرت", "Read")} />
+                : message.delivered
+                  ? <CheckCheck size={13} aria-label={t("وصلت", "Delivered")} />
+                  : <Check size={13} aria-label={t("اتبعتت", "Sent")} />
+            )}
           </div>
         )}
       </div>

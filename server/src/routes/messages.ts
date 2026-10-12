@@ -21,7 +21,7 @@ const AttachmentIn = z.object({
 });
 
 async function memberIds(ctx: Ctx, threadId: string) {
-  return (await ctx.db.membership.findMany({ where: { threadId }, select: { userId: true, lastReadAt: true } }));
+  return (await ctx.db.membership.findMany({ where: { threadId }, select: { userId: true, lastReadAt: true, lastDeliveredAt: true } }));
 }
 
 /** إشعار Push للأعضاء الأوفلاين بس. المحتوى مقصوص، ومفيش إشعار لو مفيش اشتراكات. */
@@ -58,6 +58,8 @@ export function messageRoutes(ctx: Ctx) {
     const me = (req as AuthedRequest).userId;
     const threadId = String(req.params.id);
     await assertMember(ctx, threadId, me);
+    // فتح المحادثة = الرسايل وصلت لجهازي فعلًا (علامتين ✓✓ للطرف التاني)
+    await ctx.db.membership.update({ where: { threadId_userId: { threadId, userId: me } }, data: { lastDeliveredAt: new Date() } });
     const q = z.object({ before: z.string().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).parse(req.query);
     let cursor: Date | undefined;
     if (q.before) {
@@ -72,11 +74,14 @@ export function messageRoutes(ctx: Ctx) {
     });
     const members = (await memberIds(ctx, threadId)).filter((m) => m.userId !== me);
     const readBy = (at: Date) => members.length > 0 && members.every((m) => m.lastReadAt && m.lastReadAt >= at);
+    // «وصلت» = كل الباقيين جالهم على أجهزتهم. القراءة أقوى من الوصول، فاللي اتقرت وصلت.
+    const deliveredTo = (at: Date) =>
+      members.length > 0 && members.every((m) => (m.lastDeliveredAt && m.lastDeliveredAt >= at) || (m.lastReadAt && m.lastReadAt >= at));
     // النجوم بتاعتي على الرسايل دي (استعلام واحد، مش واحد لكل رسالة)
     const starred = new Set(
       (await ctx.db.star.findMany({ where: { userId: me, messageId: { in: rows.map((m) => m.id) } }, select: { messageId: true } })).map((s) => s.messageId),
     );
-    res.json(rows.reverse().map((m) => ({ ...messageView(m, m.authorId === me && readBy(m.createdAt)), starred: starred.has(m.id) })));
+    res.json(rows.reverse().map((m) => ({ ...messageView(m, m.authorId === me && readBy(m.createdAt), m.authorId === me && deliveredTo(m.createdAt)), starred: starred.has(m.id) })));
   }));
 
   r.post("/threads/:id/messages", wrap(async (req, res) => {

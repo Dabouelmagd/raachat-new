@@ -130,6 +130,9 @@ model Membership {
   role      MemberRole @default(member)
   joinedAt  DateTime   @default(now())
   lastReadAt DateTime?
+  /// آخر وقت وصلت فيه الرسايل لجهاز العضو (اتصال سوكت أو فتح المحادثة).
+  /// بيفرّق بين «اتبعتت» (✓) و«وصلت» (✓✓) — القراءة بـ lastReadAt.
+  lastDeliveredAt DateTime?
   thread    Thread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 

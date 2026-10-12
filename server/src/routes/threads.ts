@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { assertNotBlocked } from "../lib/blocks.js";
+import { assertNotBlocked, blockedByMe } from "../lib/blocks.js";
 import { assertClean } from "../lib/contentFilter.js";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
@@ -39,7 +39,28 @@ export function threadRoutes(ctx: Ctx) {
       include: { members: { include: { user: true } }, messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } },
     });
     rows.sort((a, b) => (b.messages[0]?.createdAt ?? b.createdAt).getTime() - (a.messages[0]?.createdAt ?? a.createdAt).getTime());
-    res.json(rows.map((t) => ({ ...threadView(t, me), lastActivity: (t.messages[0]?.createdAt ?? t.createdAt).toISOString() })));
+    // عدد الرسايل اللي لسه ما اتقرتش في كل محادثة — **استعلام واحد** لكل القايمة
+    // مش واحد لكل محادثة. رسايلي أنا ورسايل اللي حاظرهم مش محسوبين.
+    const hidden = await blockedByMe(ctx, me);
+    const counts = await ctx.db.message.groupBy({
+      by: ["threadId"],
+      where: {
+        threadId: { in: rows.map((t) => t.id) },
+        authorId: { not: me, ...(hidden.length ? { notIn: hidden } : {}) },
+        deleted: false,
+        OR: rows.map((t) => {
+          const seen = t.members.find((m) => m.userId === me)?.lastReadAt;
+          return { threadId: t.id, ...(seen ? { createdAt: { gt: seen } } : {}) };
+        }),
+      },
+      _count: { _all: true },
+    });
+    const unread = new Map(counts.map((c) => [c.threadId, c._count._all]));
+    res.json(rows.map((t) => ({
+      ...threadView(t, me),
+      lastActivity: (t.messages[0]?.createdAt ?? t.createdAt).toISOString(),
+      unread: unread.get(t.id) ?? 0,
+    })));
   }));
 
   // جروبات عامة للاكتشاف

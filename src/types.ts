@@ -21,6 +21,8 @@ export interface Thread {
   color?: string; // لون الجروب (hex)
   icon?: string; // مفتاح أيقونة من GROUP_ICONS
   photo?: string; // صورة الجروب (data URL / رابط)
+  /** رسايل لسه ما اتقرتش — الاسم بيبقى **بولد** وجنبه الرقم */
+  unread?: number;
 }
 
 export interface Attachment {
@@ -41,6 +43,8 @@ export interface Message {
   time: string;
   at?: number; // وقت الإرسال بالملّي ثانية (لفواصل الأيام والتاريخ الكامل)
   read?: boolean;
+  /** وصلت لجهاز الطرف التاني (✓✓ رمادي). القراءة (✓✓ أزرق) في `read` */
+  delivered?: boolean;
   replyToId?: string;
   reactions: Record<string, string[]>; // emoji -> [authorIds]
   edited?: boolean;

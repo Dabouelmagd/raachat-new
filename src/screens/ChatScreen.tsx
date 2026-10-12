@@ -108,7 +108,8 @@ export default function ChatScreen() {
   useEffect(() => () => recorder.current?.cancel(), []);
   // مع الباك إند: علّم المحادثة مقروءة كل ما توصل رسالة جديدة
   const lastMsgId = threadMessages[threadMessages.length - 1]?.id;
-  useEffect(() => { if (API_ON && id) void markRead(id); }, [id, lastMsgId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // علامة «مقروءة» في الوضعين: مع السيرفر بتروح له، وفي الديمو بتشيل البولد والعدّاد
+  useEffect(() => { if (id) void markRead(id); }, [id, lastMsgId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // آخر رسالة تتبعت/تتستقبل تظهر دايمًا
   const endRef = useRef<HTMLDivElement>(null);

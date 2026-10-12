@@ -11,17 +11,19 @@ import { StoriesBar } from "../components/StoriesBar";
 import { NewChatSheet } from "../components/NewChatSheet";
 import { SponsoredCard } from "../ads/SponsoredCard";
 import { useAppState } from "../store/AppContext";
-import { useT } from "../i18n";
+import { useT, num as n } from "../i18n";
 
 export default function ChatsScreen() {
   const navigate = useNavigate();
   const tx = useT();
   const { threads, messages, rooms } = useAppState();
   const favs = useFavorites();
-  const [filter, setFilter] = useState<"all" | "dm" | "group" | "room" | "fav">("all");
-  const FILTERS: ["all" | "dm" | "group" | "room" | "fav", string, string][] = [["all", "الكل", "All"], ["dm", "الخاصة", "Direct"], ["group", "الجروبات", "Groups"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
-  const shown = threads.filter((x) => filter === "all" || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "fav" && favs.includes(x.id)));
+  const [filter, setFilter] = useState<"all" | "unread" | "dm" | "group" | "room" | "fav">("all");
+  const FILTERS: ["all" | "unread" | "dm" | "group" | "room" | "fav", string, string][] = [["all", "الكل", "All"], ["unread", "غير المقروء", "Unread"], ["dm", "الخاصة", "Direct"], ["group", "الجروبات", "Groups"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
+  const shown = threads.filter((x) => filter === "all" || (filter === "unread" && (x.unread ?? 0) > 0) || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "fav" && favs.includes(x.id)));
   const [showNewChat, setShowNewChat] = useState(false);
+
+  const unreadOf = (t: { unread?: number }) => t.unread ?? 0;
 
   const lastMessageFor = (threadId: string) => {
     const msgs = messages.filter((m) => m.threadId === threadId);
@@ -75,16 +77,22 @@ export default function ChatsScreen() {
               </ThreadAvatar>
               <div className="min-w-0 flex-1">
                 <div className="flex justify-between">
-                  <span className="truncate font-bold text-sm text-rachat-papyrus">{t.name}</span>
+                  {/* الاسم بولد طول ما فيه رسايل ما اتقرتش، وبيرجع عادي أول ما تفتحي المحادثة */}
+                  <span className={`truncate text-sm ${unreadOf(t) ? "font-extrabold text-white" : "font-bold text-rachat-papyrus"}`} dir="auto">{t.name}</span>
                   <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
                     <span role="button" tabIndex={0} aria-label={tx("مفضلة", "Favorite")} aria-pressed={favs.includes(t.id)} onClick={(e) => { e.stopPropagation(); toggleFavorite(t.id); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); toggleFavorite(t.id); } }} className={favs.includes(t.id) ? "text-rachat-gold" : "text-neutral-600"}><Star size={14} fill={favs.includes(t.id) ? "currentColor" : "none"} /></span>
                     {last?.time ?? ""}
                   </span>
                 </div>
-                <div className="mt-0.5 flex justify-between">
-                  <span className="truncate text-xs text-neutral-400">
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                  <span className={`truncate text-xs ${unreadOf(t) ? "font-bold text-rachat-papyrus" : "text-neutral-400"}`} dir="auto">
                     {last ? (last.deleted ? tx("تم حذف الرسالة", "Message deleted") : (last.text && occKind(last.text) ? tx("🎉 ملصق تهنئة", "🎉 Greeting sticker") : last.text && phaKind(last.text) ? tx("🏺 ملصق فرعوني", "🏺 Pharaonic sticker") : last.text) || (last.attachment ? `📎 ${last.attachment.name}` : "")) : tx("لا توجد رسائل بعد", "No messages yet")}
                   </span>
+                  {unreadOf(t) > 0 && (
+                    <span aria-label={tx("رسايل ما اتقرتش", "Unread messages")} className="shrink-0 rounded-full bg-rachat-red px-2 py-0.5 text-[11px] font-extrabold text-white">
+                      {n(unreadOf(t))}
+                    </span>
+                  )}
                 </div>
               </div>
             </button>

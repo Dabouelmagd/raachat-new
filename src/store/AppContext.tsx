@@ -36,6 +36,7 @@ const initialState: AppState = API_ON ? emptyState : {
 type Action =
   | { type: "HYDRATE"; contacts: Contact[]; threads: Thread[]; messages: Message[]; stories: Story[] }
   | { type: "UPSERT_THREAD"; thread: Thread }
+  | { type: "MARK_READ"; threadId: string }
   | { type: "UPSERT_MESSAGE"; message: Message }
   | { type: "UPSERT_STORY"; story: Story }
   | { type: "SET_ROOMS"; rooms: VoiceRoom[] }
@@ -69,6 +70,9 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, contacts: action.contacts, threads: action.threads, messages: action.messages, stories: action.stories };
     case "SET_ROOMS":
       return { ...state, rooms: action.rooms };
+    case "MARK_READ":
+      // فتح المحادثة = الاسم يرجع خط عادي والعدّاد يختفي
+      return { ...state, threads: state.threads.map((t) => (t.id === action.threadId && t.unread ? { ...t, unread: 0 } : t)) };
     case "UPSERT_THREAD": {
       const has = state.threads.some((t) => t.id === action.thread.id);
       return { ...state, threads: has ? state.threads.map((t) => (t.id === action.thread.id ? action.thread : t)) : [action.thread, ...state.threads] };
@@ -332,7 +336,7 @@ function mockActions(dispatch: D) {
     createGroup: (name: string, memberIds: string[], look?: GroupLook): void | Promise<void> =>
       dispatch({ type: "CREATE_GROUP", name, memberIds, look }),
     leaveThread: (threadId: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId }),
-    markRead: (_threadId: string): void | Promise<void> => undefined,
+    markRead: (threadId: string): void | Promise<void> => dispatch({ type: "MARK_READ", threadId }),
     listPublicGroups: (): Promise<{ id: string; name: string; desc: string; members: number; initial: string; colorClass: string; joined: boolean; color?: string; icon?: string }[] | null> => Promise.resolve(null),
     joinPublicGroup: (_id: string): Promise<void> => Promise.resolve(),
     createRoom: (name: string): string | Promise<string> => {
@@ -390,7 +394,7 @@ function apiActions(dispatch: D) {
       await api(`/threads/${threadId}/members/me`, { method: "DELETE" });
       dispatch({ type: "LEAVE_THREAD", threadId });
     },
-    markRead: async (threadId: string) => { await api(`/threads/${threadId}/read`, { method: "POST" }); },
+    markRead: async (threadId: string) => { dispatch({ type: "MARK_READ", threadId }); await api(`/threads/${threadId}/read`, { method: "POST" }); },
     listPublicGroups: async () => {
       const l = await api<(ApiThread & { joined: boolean })[]>("/threads/public");
       return l.map((t) => ({ id: t.id, name: t.name, desc: "", members: t.memberCount ?? 0, initial: mapThread(t).initial, colorClass: mapThread(t).colorClass, joined: t.joined, color: t.color, icon: t.icon }));

@@ -43,12 +43,12 @@ type MsgRow = Awaited<ReturnType<Db["message"]["findFirstOrThrow"]>> & {
   reactions: { userId: string; emoji: string }[];
 };
 
-export function messageView(m: MsgRow, read = false) {
+export function messageView(m: MsgRow, read = false, delivered = false) {
   const reactions: Record<string, string[]> = {};
   for (const r of m.reactions) (reactions[r.emoji] ??= []).push(r.userId);
   return {
     id: m.id, threadId: m.threadId, authorId: m.authorId, authorName: m.author.name,
-    text: m.deleted ? "" : m.text, time: m.createdAt.toISOString(), read, replyToId: m.replyToId ?? undefined,
+    text: m.deleted ? "" : m.text, time: m.createdAt.toISOString(), read, delivered: delivered || read, replyToId: m.replyToId ?? undefined,
     reactions, edited: m.edited, deleted: m.deleted,
     attachment: m.attachment && !m.deleted
       ? {

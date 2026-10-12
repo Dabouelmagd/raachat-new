@@ -17,12 +17,11 @@ export function mapContact(u: ApiUser): Contact {
 
 export interface ApiThread {
   id: string; type: "dm" | "group"; name: string; color?: string; icon?: string; photo?: string;
-  memberIds: string[]; createdByMe?: boolean; isPublic?: boolean; memberCount?: number; joined?: boolean;
-}
+  memberIds: string[]; createdByMe?: boolean; isPublic?: boolean; memberCount?: number; joined?: boolean; unread?: number }
 export function mapThread(t: ApiThread): Thread {
   return {
     id: t.id, type: t.type, name: t.name, initial: initialOf(t.name), colorClass: COLORS[hash(t.id) % COLORS.length],
-    memberIds: t.memberIds, createdByMe: t.createdByMe, color: t.color, icon: t.icon, photo: t.photo ? toAbs(t.photo) : undefined,
+    memberIds: t.memberIds, createdByMe: t.createdByMe, color: t.color, icon: t.icon, photo: t.photo ? toAbs(t.photo) : undefined, unread: t.unread,
   };
 }
 
@@ -31,6 +30,7 @@ export interface ApiMessage {
   replyToId?: string; reactions: Record<string, string[]>; edited?: boolean; deleted?: boolean;
   attachment?: { name: string; size: number; mime: string; url: string; text?: string; voice?: { duration: number; waveform: number[] } };
   starred?: boolean;
+  delivered?: boolean;
 }
 export function mapMessage(m: ApiMessage): Message {
   const reactions: Record<string, string[]> = {};
@@ -39,7 +39,7 @@ export function mapMessage(m: ApiMessage): Message {
   const attachment: Attachment | undefined = a ? { ...a, url: toAbs(a.url) } : undefined;
   return {
     id: m.id, threadId: m.threadId, authorId: asMe(m.authorId), authorName: m.authorName, text: m.text, time: fmtTime(m.time), at: new Date(m.time).getTime(),
-    read: m.read, replyToId: m.replyToId, reactions, edited: m.edited, deleted: m.deleted, starred: m.starred, attachment,
+    read: m.read, delivered: m.delivered, replyToId: m.replyToId, reactions, edited: m.edited, deleted: m.deleted, starred: m.starred, attachment,
   };
 }
 
