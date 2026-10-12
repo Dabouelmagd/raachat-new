@@ -102,7 +102,8 @@ export const ROLES = { owner:"مالك", manager:"مدير", moderator:"مشرف
 export const PERMS = [
   ["المستخدمون", { owner:1, manager:1, moderator:0, support:1, accountant:0 }],
   ["الجروبات والغرف", { owner:1, manager:1, moderator:1, support:0, accountant:0 }],
-  ["البلاغات والمحتوى", { owner:1, manager:1, moderator:1, support:0, accountant:0 }],
+  ["البلاغات", { owner:1, manager:1, moderator:1, support:0, accountant:0 }],
+  ["المحتوى (Stories)", { owner:1, manager:1, moderator:1, support:0, accountant:0 }],
   ["المدفوعات", { owner:1, manager:0, moderator:0, support:0, accountant:1 }],
   ["العروض والإعلانات", { owner:1, manager:1, moderator:0, support:0, accountant:0 }],
   ["الإعدادات والأدوار", { owner:1, manager:0, moderator:0, support:0, accountant:0 }],

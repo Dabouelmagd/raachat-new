@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { LayoutDashboard, Users as UsersI, MessagesSquare, Flag, Wallet, Tag, Megaphone, Bell, ShieldCheck, Settings as SetI, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, Users as UsersI, MessagesSquare, Flag, Images, Wallet, Tag, Megaphone, Bell, ShieldCheck, Settings as SetI, Sun, Moon } from "lucide-react";
 import logo from "./logo.png";
 import { Provider } from "./ui.jsx";
 import { LiveOverview, LiveSpaces, LiveNotifications, LiveSettings } from "./liveAdmin2.jsx";
-import { LiveReports } from "./liveReports.jsx";
-import { Overview, Users, Spaces, Reports } from "./sections1.jsx";
+import { LiveReports, LiveContent } from "./liveReports.jsx";
+import { Overview, Users, Spaces, Reports, Content } from "./sections1.jsx";
 import { Payments, Offers, Notifications, Team } from "./sections2.jsx";
 import { Settings } from "./sections3.jsx";
 import { Ads } from "./ads.jsx";
@@ -15,13 +15,13 @@ import { Login } from "./Login.jsx";
 import { MeProvider, LiveUsers, LivePayments, LiveOffers, LiveTeam } from "./live.jsx";
 
 // الصلاحية المطلوبة لكل قسم (وضع الباك إند). overview مفتوح لأي عضو.
-const NEED = { users: "users.view", spaces: "content.view", reports: "content.view", payments: "finance.view", offers: "finance.view", ads: "ads.view", notifications: "notifications.send", team: "team.view", settings: "settings.manage" };
+const NEED = { users: "users.view", spaces: "content.view", reports: "content.view", content: "content.view", payments: "finance.view", offers: "finance.view", ads: "ads.view", notifications: "notifications.send", team: "team.view", settings: "settings.manage" };
 // أقسام لسه ببيانات تجريبية (هتتوصّل بعدين)
 const DEMO_SECTIONS = new Set([]);
 
 const NAV = [
   ["overview", "نظرة عامة", LayoutDashboard], ["users", "المستخدمون", UsersI], ["spaces", "الجروبات والغرف", MessagesSquare],
-  ["reports", "البلاغات والمحتوى", Flag], ["payments", "المدفوعات والخدمات", Wallet], ["offers", "العروض والخصومات", Tag],
+  ["reports", "البلاغات", Flag], ["content", "المحتوى", Images], ["payments", "المدفوعات والخدمات", Wallet], ["offers", "العروض والخصومات", Tag],
   ["ads", "الإعلانات", Megaphone], ["notifications", "الإشعارات", Bell], ["team", "الفريق والصلاحيات", ShieldCheck], ["settings", "الإعدادات", SetI],
 ];
 const TITLES = Object.fromEntries(NAV.map((x) => [x[0], x[1]]));
@@ -83,6 +83,7 @@ function Dashboard({ demo, me }) {
           {page === "users" && (demo ? <Users /> : <LiveUsers />)}
           {page === "spaces" && (demo ? <Spaces /> : <LiveSpaces />)}
           {page === "reports" && (demo ? <Reports reports={reports} setReports={setReports} /> : <LiveReports />)}
+          {page === "content" && (demo ? <Content /> : <LiveContent />)}
           {page === "payments" && (demo ? <Payments tx={tx} setTx={setTx} /> : <LivePayments />)}
           {page === "offers" && (demo ? <Offers /> : <LiveOffers />)}
           {page === "ads" && (demo ? <Ads campaigns={campaigns} setCampaigns={setCampaigns} /> : <LiveAds />)}

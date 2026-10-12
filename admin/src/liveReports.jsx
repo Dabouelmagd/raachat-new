@@ -13,10 +13,9 @@ export function LiveReports() {
   const run = useDo();
   const [tab, setTab] = useState("open");
   const { data, err, reload } = useLoad(`/admin/reports?status=${tab}`);
-  const stories = useLoad("/admin/stories");
   const sum = useLoad("/admin/reports/summary", [tab]);
   const mod = can("content.moderate");
-  const resolve = (r, action, label) => run(() => api(`/admin/reports/${r.id}/resolve`, { method: "POST", body: { action } }), `${label} — ${r.target}`).then((ok) => { if (ok) { reload(); stories.reload(); } });
+  const resolve = (r, action, label) => run(() => api(`/admin/reports/${r.id}/resolve`, { method: "POST", body: { action } }), `${label} — ${r.target}`).then((ok) => ok && reload());
   const canDeleteKind = (r) => r.kind === "message" || r.kind === "story" || r.kind === "room";
   return (
     <>
@@ -50,18 +49,30 @@ export function LiveReports() {
         ))}
       </div>
       {data && !data.length && <div className="empty">لا توجد بلاغات هنا</div>}
-      <div style={{ marginTop: 14 }}>
-        <Card title="Stories النشطة">
-          <Err msg={stories.err} />
-          <Table head={["المستخدم", "النص", "المشاهدات", "بلاغات", "منذ", ""]}>
-            {(stories.data || []).map((s) => (
-              <tr key={s.id}><td><b>{s.user}</b></td><td>{s.caption || "—"}</td><td>{n(s.views)}</td><td>{s.reports ? <span className="pill p-warn">{n(s.reports)}</span> : "—"}</td><td>{fmt(s.at)}</td>
-                <td>{mod && <Confirm danger onYes={() => run(() => api(`/admin/stories/${s.id}`, { method: "DELETE" }), `حذف Story ${s.user}`).then((ok) => ok && stories.reload())}>حذف</Confirm>}</td></tr>
-            ))}
-          </Table>
-          {stories.data && !stories.data.length && <div className="empty">لا توجد Stories نشطة</div>}
-        </Card>
-      </div>
     </>
+  );
+}
+
+/**
+ * **المحتوى (Stories) صفحة لوحدها** — كانت متحطوطة تحت البلاغات في نفس الصفحة،
+ * وهما شغلان مختلفان: البلاغات شغل رد فعل (حد اشتكى)، والمحتوى تصفّح للمنشور
+ * دلوقتي. (بطلب داليا، ١٢ أكتوبر.)
+ */
+export function LiveContent() {
+  const { can } = useMe();
+  const run = useDo();
+  const stories = useLoad("/admin/stories");
+  const mod = can("content.moderate");
+  return (
+    <Card title="Stories النشطة">
+      <Err msg={stories.err} />
+      <Table head={["المستخدم", "النص", "المشاهدات", "بلاغات", "منذ", ""]}>
+        {(stories.data || []).map((s) => (
+          <tr key={s.id}><td><b>{s.user}</b></td><td>{s.caption || "—"}</td><td>{n(s.views)}</td><td>{s.reports ? <span className="pill p-warn">{n(s.reports)}</span> : "—"}</td><td>{fmt(s.at)}</td>
+            <td>{mod && <Confirm danger onYes={() => run(() => api(`/admin/stories/${s.id}`, { method: "DELETE" }), `حذف Story ${s.user}`).then((ok) => ok && stories.reload())}>حذف</Confirm>}</td></tr>
+        ))}
+      </Table>
+      {stories.data && !stories.data.length && <div className="empty">لا توجد Stories نشطة</div>}
+    </Card>
   );
 }

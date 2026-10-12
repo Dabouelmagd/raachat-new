@@ -57,6 +57,11 @@ jobs:
         run: npx tsc -b
       - name: بناء نسخة الملف الواحد
         run: npx vite build -c vite.single.config.ts
+      # لوحة الإدارة بتتبني هنا كمان عشان اختبارها (test/ui/admin.spec.ts) يلاقي
+      # ناتج البناء — من غيره الاختبار بيتخطّى في سكوت.
+      - name: بناء لوحة الإدارة (لاختبارها)
+        working-directory: admin
+        run: npm ci && npx vite build
       - name: تنزيل تبعيات الاختبارات
         working-directory: test
         run: npm ci

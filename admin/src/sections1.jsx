@@ -128,9 +128,25 @@ export function Spaces() {
   );
 }
 
-export function Reports({ reports, setReports }) {
+/** المحتوى (Stories) — صفحة لوحدها، منفصلة عن البلاغات */
+export function Content() {
   const { act } = useAdmin();
   const [stories, setStories] = useState(STORIES);
+  return (
+    <Card title="Stories النشطة">
+      <Table head={["المستخدم", "النص", "المشاهدات", "بلاغات", "منذ", ""]}>
+        {stories.map((s) => (
+          <tr key={s.id}><td><b>{s.user}</b></td><td>{s.caption}</td><td>{n(s.views)}</td><td>{s.reports ? <span className="pill p-warn">{n(s.reports)}</span> : "—"}</td><td>{s.time}</td>
+            <td><button className="btn sm dng" onClick={() => { setStories(stories.filter((x) => x.id !== s.id)); act(`حذف Story للمستخدم ${s.user}`); }}>حذف</button></td></tr>
+        ))}
+      </Table>
+      {!stories.length && <div className="empty">لا توجد Stories نشطة</div>}
+    </Card>
+  );
+}
+
+export function Reports({ reports, setReports }) {
+  const { act } = useAdmin();
   const [tab, setTab] = useState("open");
   const resolve = (r, what) => { setReports(reports.map((x) => x.id === r.id ? { ...x, status: "resolved" } : x)); act(`${what} (${r.id}) — ${r.target}`); };
   const list = reports.filter((r) => r.status === tab);
@@ -157,17 +173,6 @@ export function Reports({ reports, setReports }) {
         ))}
       </div>
       {!list.length && <div className="empty">لا توجد بلاغات هنا</div>}
-      <div style={{ marginTop: 14 }}>
-        <Card title="Stories النشطة">
-          <Table head={["المستخدم", "النص", "المشاهدات", "بلاغات", "منذ", ""]}>
-            {stories.map((s) => (
-              <tr key={s.id}><td><b>{s.user}</b></td><td>{s.caption}</td><td>{n(s.views)}</td><td>{s.reports ? <span className="pill p-warn">{n(s.reports)}</span> : "—"}</td><td>{s.time}</td>
-                <td><button className="btn sm dng" onClick={() => { setStories(stories.filter((x) => x.id !== s.id)); act(`حذف Story للمستخدم ${s.user}`); }}>حذف</button></td></tr>
-            ))}
-          </Table>
-          {!stories.length && <div className="empty">لا توجد Stories نشطة</div>}
-        </Card>
-      </div>
     </>
   );
 }
