@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useT } from "../i18n";
+import { num, useT } from "../i18n";
 import { useAppState } from "../store/AppContext";
 import { StoryViewer } from "./StoryViewer";
 import { AddStorySheet } from "./AddStorySheet";
@@ -12,10 +12,24 @@ import { AddStorySheet } from "./AddStorySheet";
 export function StoriesBar() {
   const t = useT();
   const { stories } = useAppState();
-  const [openStoryId, setOpenStoryId] = useState<string | null>(null);
+  const [openAuthor, setOpenAuthor] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
-  const openIndex = stories.findIndex((s) => s.id === openStoryId);
+  /**
+   * **دايرة واحدة لكل حساب.** قبل كده كانت دايرة لكل ستوري، فاللي نزّل تلات
+   * ستوريز يظهر تلات مرات والشريط يتملى بحساب واحد.
+   * الحلقة الملوّنة = عنده حاجة لسه ما اتشافتش، والرقم = عدد ستورياته.
+   */
+  const groups = useMemo(() => {
+    const m = new Map<string, { authorId: string; authorName: string; items: typeof stories; unseen: boolean }>();
+    for (const s of stories) {
+      const g = m.get(s.authorId) ?? { authorId: s.authorId, authorName: s.authorName, items: [], unseen: false };
+      g.items = [...g.items, s];
+      if (!s.seen) g.unseen = true;
+      m.set(s.authorId, g);
+    }
+    return [...m.values()];
+  }, [stories]);
 
   return (
     <div className="flex gap-3 overflow-x-auto px-3 pb-3 pt-1">
@@ -26,36 +40,40 @@ export function StoriesBar() {
         <span className="text-[10px] text-neutral-400">{t("قصتك", "Your story")}</span>
       </button>
 
-      {stories.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => setOpenStoryId(s.id)}
-          className="flex flex-shrink-0 flex-col items-center gap-1"
-        >
-          <div
-            className="flex h-14 w-14 items-center justify-center rounded-full p-[2px]"
-            style={{
-              background: s.seen
-                ? "#3a322d"
-                : `linear-gradient(135deg, ${s.colorFrom}, ${s.colorTo})`,
-            }}
+      {groups.map((g) => {
+        // الغلاف: أول ستوري لسه ما اتشافتش عنده، وإلا أول واحدة
+        const cover = g.items.find((s) => !s.seen) ?? g.items[0];
+        return (
+          <button
+            key={g.authorId}
+            onClick={() => setOpenAuthor(g.authorId)}
+            aria-label={`${g.authorName} — ${g.items.length}`}
+            className="flex flex-shrink-0 flex-col items-center gap-1"
           >
             <div
-              className="flex h-full w-full items-center justify-center rounded-full text-sm font-bold text-white"
-              style={{ background: s.image ? `center / cover url(${s.image})` : `linear-gradient(135deg, ${s.colorFrom}, ${s.colorTo})` }}
+              className="relative flex h-14 w-14 items-center justify-center rounded-full p-[2px]"
+              style={{ background: g.unseen ? `linear-gradient(135deg, ${cover.colorFrom}, ${cover.colorTo})` : "#3a322d" }}
             >
-              {!s.image && s.authorName[0]}
+              <div
+                className="flex h-full w-full items-center justify-center rounded-full text-sm font-bold text-white"
+                style={{ background: cover.image ? `center / cover url(${cover.image})` : `linear-gradient(135deg, ${cover.colorFrom}, ${cover.colorTo})` }}
+              >
+                {!cover.image && g.authorName[0]}
+              </div>
+              {g.items.length > 1 && (
+                <span className="absolute -top-0.5 end-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-rachat-black px-1 text-[9px] font-bold text-rachat-gold ring-1 ring-rachat-black">
+                  {num(g.items.length)}
+                </span>
+              )}
             </div>
-          </div>
-          <span className="max-w-[56px] truncate text-[10px] text-neutral-400">
-            {s.authorId === "me" ? t("أنت", "You") : s.authorName.split(" ")[0]}
-          </span>
-        </button>
-      ))}
+            <span className="max-w-[56px] truncate text-[10px] text-neutral-400">
+              {g.authorId === "me" ? t("أنت", "You") : g.authorName.split(" ")[0]}
+            </span>
+          </button>
+        );
+      })}
 
-      {openIndex >= 0 && (
-        <StoryViewer startIndex={openIndex} onClose={() => setOpenStoryId(null)} />
-      )}
+      {openAuthor && <StoryViewer authorId={openAuthor} onClose={() => setOpenAuthor(null)} />}
       {showAdd && <AddStorySheet onClose={() => setShowAdd(false)} />}
     </div>
   );

@@ -48,6 +48,8 @@ export const INITIAL_ROOMS: VoiceRoom[] = [
 
 export const INITIAL_STORIES: Story[] = [
   { id: "s1", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, colorFrom: "#E1523E", colorTo: "#F2795C", get caption() { return tr("صباح الفل من القاهرة ☀️", "Good morning from Cairo ☀️"); }, seen: false, get time() { return tr("قبل ساعتين", "2 hours ago"); } },
+  // ستوري تانية لنفس الحساب (u1) — التجميع لكل حساب مابيبانش من غير كده
+  { id: "s1b", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, colorFrom: "#C9A227", colorTo: "#E1523E", get caption() { return tr("والقهوة كمان ☕", "And coffee too ☕"); }, seen: false, get time() { return tr("قبل ساعة", "An hour ago"); } },
   { id: "s2", authorId: "u2", get authorName() { return tr("يوسف كامل", "Youssef Kamel"); }, colorFrom: "#14100F", colorTo: "#C9A227", get caption() { return tr("سهرة شغل لحد الفجر 💻", "Working late until dawn 💻"); }, seen: false, get time() { return tr("قبل 5 ساعات", "5 hours ago"); } },
   { id: "s3", authorId: "u3", get authorName() { return tr("نور الهدى", "Nour El-Hoda"); }, colorFrom: "#5B2621", colorTo: "#E1523E", get caption() { return tr("الفاتورة اتدفعت أخيرًا 🎉", "The bill is finally paid 🎉"); }, seen: true, get time() { return tr("أمس", "Yesterday"); } },
 ];

@@ -6,15 +6,26 @@ import { useAppState, useAppActions } from "../store/AppContext";
 
 const DURATION_MS = 4000;
 
-export function StoryViewer({ startIndex, onClose }: { startIndex: number; onClose: () => void }) {
+/**
+ * عارض الستوري — **لحساب واحد بس**.
+ * قبل كده كان بيمشي في قايمة الستوريز كلها بالترتيب، فتفتحي ستوري واحد وتلاقي
+ * نفسك في ستوري حد تاني من غير ما تطلبي. دلوقتي الشرايط فوق = عدد ستوريز الحساب
+ * ده، و«التالية» في آخر واحدة بتقفل بدل ما تنطّ لحساب تاني.
+ */
+export function StoryViewer({ authorId, onClose }: { authorId: string; onClose: () => void }) {
   const t = useT();
   const { stories } = useAppState();
   const { markStorySeen } = useAppActions();
-  const [index, setIndex] = useState(startIndex);
+  const mine = stories.filter((s) => s.authorId === authorId);
+  // نبدأ من أول ستوري لسه ما اتشافتش عند الحساب ده
+  const [index, setIndex] = useState(() => {
+    const i = mine.findIndex((s) => !s.seen);
+    return i >= 0 ? i : 0;
+  });
   const [progress, setProgress] = useState(0);
   const [flagged, setFlagged] = useState(false);
 
-  const story = stories[index];
+  const story = mine[index];
 
   const report = async () => {
     setFlagged(true);
@@ -34,7 +45,7 @@ export function StoryViewer({ startIndex, onClose }: { startIndex: number; onClo
       setProgress(pct);
       if (pct >= 100) {
         clearInterval(tick);
-        if (index < stories.length - 1) setIndex((i) => i + 1);
+        if (index < mine.length - 1) setIndex((i) => i + 1);
         else onClose();
       }
     }, 60);
@@ -53,7 +64,7 @@ export function StoryViewer({ startIndex, onClose }: { startIndex: number; onClo
         {story.image && <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-black/40 via-transparent to-black/60" />}
         <div>
           <div className="flex gap-1">
-            {stories.map((s, i) => (
+            {mine.map((s, i) => (
               <div key={s.id} className="h-1 flex-1 overflow-hidden rounded-full bg-white/30">
                 <div
                   className="h-full bg-white"
@@ -92,7 +103,7 @@ export function StoryViewer({ startIndex, onClose }: { startIndex: number; onClo
           </button>
           <button
             className="px-4 py-2 text-xs"
-            onClick={() => (index < stories.length - 1 ? setIndex(index + 1) : onClose())}
+            onClick={() => (index < mine.length - 1 ? setIndex(index + 1) : onClose())}
           >
             {t("التالية", "Next")}
           </button>
