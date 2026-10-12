@@ -49,3 +49,14 @@ $DC ps
 DOMAIN=$(grep -E '^DOMAIN=' .env.production | cut -d= -f2)
 if curl -fsS -H "Host: api.${DOMAIN}" http://127.0.0.1:8085/health >/dev/null; then echo "$NEW" > "$STATE"; echo "✅ الـ API شغّال (127.0.0.1:8085) — النسخة ${NEW:0:7}"; else
   echo "❌ الـ API مش بيرد. آخر لوج:"; $DC logs --tail 50 api; exit 1; fi
+
+# تنضيف صور رع شات المعلّقة (كل بناء بيسيب الصورة القديمة من غير وسم، والمساحة بتزحف
+# لحد ما القرص يمتلي والداتابيز تقف). **محدود على صور رع شات** بالوسم project=rachat —
+# السيرفر مشترك ومش من حقنا نمسح صور مشاريع تانية. ومابيلمسش كونتينرات ولا volumes
+# (يعني النسخ الاحتياطية والداتا في أمان). بعد فحص الصحة عشان لو النشر فشل نقدر نرجع.
+# PRUNE=0 لتخطّيه.
+if [ "${PRUNE:-1}" = "1" ]; then
+  freed=$(docker image prune -f --filter label=project=rachat 2>/dev/null | tail -1)
+  echo "🧹 تنضيف صور رع شات المعلّقة: ${freed:-مفيش}"
+  echo "   مساحة القرص: $(df -Ph / | awk 'NR==2{print $5" مستخدم ("$4" فاضي)"}')"
+fi

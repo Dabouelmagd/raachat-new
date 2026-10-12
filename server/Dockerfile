@@ -10,6 +10,8 @@ COPY src ./src
 RUN npm run build
 
 FROM node:22-alpine
+# الوسم ده بيخلي تنضيف الصور المعلّقة في سكربت النشر محدود على صور رع شات بس
+LABEL project=rachat
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json prisma.config.ts ./

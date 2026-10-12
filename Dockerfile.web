@@ -27,6 +27,7 @@ COPY admin/src ./src
 RUN npx vite build
 
 FROM caddy:2-alpine
+LABEL project=rachat
 COPY --from=build /app/dist /srv
 COPY --from=admin /app/dist /srv-admin
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
