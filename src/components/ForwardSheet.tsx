@@ -5,6 +5,7 @@ import { ThreadAvatar } from "./ThreadAvatar";
 import { useT } from "../i18n";
 import { Message } from "../types";
 import { useCloseOnEscape } from "./useCloseOnEscape";
+import { msgPreview } from "./msgPreview";
 
 /**
  * إعادة توجيه رسالة لمحادثة تانية.
@@ -43,7 +44,7 @@ export function ForwardSheet({ message, onClose }: { message: Message; onClose: 
           <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="text-neutral-400"><X size={18} /></button>
         </div>
         <p className="line-clamp-2 break-words border-b border-rachat-maroon/30 px-4 py-2 text-[11px] text-neutral-500" dir="auto">
-          {message.text || message.attachment?.name || t("مرفق", "Attachment")}
+          {msgPreview(message, t)}
         </p>
         <div className="flex items-center gap-2 px-4 py-2">
           <Search size={15} className="text-neutral-500" />

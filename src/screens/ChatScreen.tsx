@@ -10,6 +10,7 @@ import { useWallpaper, wallpaperStyle } from "../theme/wallpapers";
 import { useEffect, useRef, useState } from "react";
 import { TranslateSheet } from "../components/Translate";
 import { PollSheet } from "../components/PollSheet";
+import { msgPreview } from "../components/msgPreview";
 import { useTranslate } from "../store/translate";
 import { PHRASES } from "../translate/phrases";
 import { phraseText } from "../translate/engine";
@@ -86,6 +87,7 @@ export default function ChatScreen() {
   const [rec, setRec] = useState<{ simulated: boolean; levels: number[]; secs: number } | null>(null);
   const recorder = useRef<Recorder | null>(null);
   const startRec = async () => {
+    if (recorder.current) return; // فيه تسجيل شغّال بالفعل
     setPanel("none");
     setFileErr("");
     const r = await startRecording();
@@ -201,7 +203,7 @@ export default function ChatScreen() {
           return (
             <div key={m.id}>
               {newDay && <div className="my-2 text-center"><span className="rounded-full bg-black/40 px-3 py-0.5 text-[11px] font-bold text-white">{m.at ? dayLabel(m.at) : t("اليوم", "Today")}</span></div>}
-              <MessageBubble message={m} replyTo={messageById(m.replyToId)} onReply={setReplyTo} />
+              <MessageBubble message={m} replyTo={messageById(m.replyToId)} onReply={setReplyTo} onVoiceReply={(x) => { setReplyTo(x); void startRec(); }} />
             </div>
           );
         })}
@@ -249,7 +251,7 @@ export default function ChatScreen() {
         <div className="flex items-center justify-between border-t border-rachat-maroon/40 bg-rachat-card px-3.5 py-2">
           <div className="min-w-0">
             <div className="text-[11px] font-bold text-rachat-coral">{t("الرد على", "Replying to")} {replyTo.authorName}</div>
-            <div className="truncate text-xs text-neutral-400">{replyTo.text}</div>
+            <div className="truncate text-xs text-neutral-400" dir="auto">{msgPreview(replyTo, t)}</div>
           </div>
           <button onClick={() => setReplyTo(null)} aria-label={t("إلغاء الرد", "Cancel reply")} className="text-neutral-500">
             <X size={16} />

@@ -4,29 +4,60 @@ import type { Attachment } from "../types";
 import { fmtDur, fmtSize, kindOf, labelOf } from "../media/files";
 import { useT } from "../i18n";
 
-/** مشغّل الرسالة الصوتية: زرار تشغيل + موجة + المدة */
+/** سرعات التشغيل — زي واتساب: عادي ثم أسرع. */
+const SPEEDS = [1, 1.5, 2] as const;
+
+/**
+ * مشغّل الرسالة الصوتية: تشغيل + موجة + المدة، و**السرعة** و**النقل لأي لحظة**
+ * بالضغط على الموجة (لازمين فعلًا لما الردود بالصوت تبقى طويلة).
+ */
 export function VoicePlayer({ a, isMe }: { a: Attachment; isMe: boolean }) {
   const t = useT();
   const v = a.voice!;
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
+  const [speed, setSpeed] = useState<number>(1);
   const audio = useRef<HTMLAudioElement | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { audio.current?.pause(); if (timer.current) clearInterval(timer.current); }, []);
 
   const stop = () => { setPlaying(false); if (timer.current) clearInterval(timer.current); timer.current = null; };
+
+  /** تغيير السرعة وهو شغّال بيسري فورًا، والتجريبي بيتحسب بنفس المعامل */
+  const bumpSpeed = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = SPEEDS[(SPEEDS.indexOf(speed as 1) + 1) % SPEEDS.length]!;
+    setSpeed(next);
+    if (audio.current) audio.current.playbackRate = next;
+    if (playing && (v.simulated || !a.url)) { stop(); simulate(pos, next); }
+  };
+
+  /** عدّاد الوضع التجريبي (مفيش صوت) — الموجة بس بتتحرك */
+  const simulate = (from: number, rate: number) => {
+    const t0 = Date.now() - (from * 1000) / rate;
+    setPlaying(true);
+    timer.current = setInterval(() => {
+      const sec = ((Date.now() - t0) / 1000) * rate;
+      if (sec >= v.duration) { stop(); setPos(0); } else setPos(sec);
+    }, 100);
+  };
+
+  /** الضغط على الموجة = نقل لنفس النسبة من المدة */
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const box = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    const at = ratio * v.duration;
+    setPos(at);
+    if (audio.current) audio.current.currentTime = at;
+    if (playing && (v.simulated || !a.url)) { stop(); simulate(at, speed); }
+  };
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (playing) { audio.current?.pause(); stop(); return; }
     if (v.simulated || !a.url) {
-      // وضع تجريبي: من غير صوت، الموجة بس بتتحرك
-      const t0 = Date.now() - pos * 1000;
-      setPlaying(true);
-      timer.current = setInterval(() => {
-        const s = (Date.now() - t0) / 1000;
-        if (s >= v.duration) { stop(); setPos(0); } else setPos(s);
-      }, 100);
+      simulate(pos, speed);
       return;
     }
     if (!audio.current) {
@@ -34,12 +65,17 @@ export function VoicePlayer({ a, isMe }: { a: Attachment; isMe: boolean }) {
       audio.current.ontimeupdate = () => setPos(audio.current!.currentTime);
       audio.current.onended = () => { stop(); setPos(0); };
     }
+    audio.current.playbackRate = speed;
+    audio.current.currentTime = pos;
     void audio.current.play().then(() => setPlaying(true)).catch(() => stop());
   };
 
   const done = Math.round((pos / v.duration) * v.waveform.length);
   return (
-    <div className="flex min-w-[200px] items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+    // ملحوظة: **مفيش stopPropagation على الصندوق كله** — لو فيه، الضغط على
+    // الرسالة الصوتية مابيفتحش «خيارات الرسالة» (فمفيش رد ولا نجمة ولا إعادة
+    // توجيه على أي رسالة صوتية). الأزرار والموجة بس هما اللي بيبلعوا الضغط.
+    <div className="flex min-w-[200px] items-center gap-2.5">
       <button
         onClick={toggle}
         aria-label={playing ? t("إيقاف مؤقت", "Pause") : t("تشغيل الرسالة الصوتية", "Play voice message")}
@@ -47,12 +83,19 @@ export function VoicePlayer({ a, isMe }: { a: Attachment; isMe: boolean }) {
       >
         {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
       </button>
-      <div className="flex h-8 flex-1 items-center gap-[2px]" dir="ltr" aria-hidden>
+      <div className="flex h-8 flex-1 cursor-pointer items-center gap-[2px]" dir="ltr" onClick={seek} role="slider" aria-label={t("موضع التشغيل", "Playback position")} aria-valuemin={0} aria-valuemax={Math.round(v.duration)} aria-valuenow={Math.round(pos)} tabIndex={-1}>
         {v.waveform.map((h, i) => (
           <span key={i} className={`w-[3px] rounded-full ${i < done ? (isMe ? "bg-white" : "bg-rachat-red") : isMe ? "bg-white/40" : "bg-black/25"}`} style={{ height: `${Math.round(h * 100)}%` }} />
         ))}
       </div>
       <span dir="ltr" className="shrink-0 text-[11px] tabular-nums opacity-80">{fmtDur(playing || pos > 0 ? pos : v.duration)}</span>
+      <button
+        onClick={bumpSpeed}
+        aria-label={t("سرعة التشغيل", "Playback speed")}
+        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums ${isMe ? "bg-white/20 text-white" : "bg-black/15"}`}
+      >
+        {speed}×
+      </button>
     </div>
   );
 }

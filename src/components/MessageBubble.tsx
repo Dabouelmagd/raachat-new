@@ -9,6 +9,7 @@ import { bubbleStyle, useBubble } from "../theme/bubbles";
 
 import { FileViewer, InlinePreview } from "./FilePreview";
 import { PollCard } from "./PollCard";
+import { msgPreview } from "./msgPreview";
 import { EMOJIS } from "./emojis";
 import { Message } from "../types";
 import { MessageActions } from "./MessageActions";
@@ -22,9 +23,11 @@ interface Props {
   message: Message;
   replyTo?: Message;
   onReply: (m: Message) => void;
+  /** رد بالصوت على الرسالة دي */
+  onVoiceReply: (m: Message) => void;
 }
 
-export function MessageBubble({ message, replyTo, onReply }: Props) {
+export function MessageBubble({ message, replyTo, onReply, onVoiceReply }: Props) {
   const t = useT();
   const rtl = useDir() === "rtl";
   const { editMessage, deleteMessage, toggleReaction } = useAppActions();
@@ -63,7 +66,7 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
             }`}
           >
             <div className="font-bold">{replyTo.authorName}</div>
-            <div className="truncate">{replyTo.deleted ? t("تم حذف الرسالة", "Message deleted") : replyTo.text}</div>
+            <div className="truncate" dir="auto">{msgPreview(replyTo, t)}</div>
           </div>
         )}
 
@@ -135,6 +138,7 @@ export function MessageBubble({ message, replyTo, onReply }: Props) {
           isMe={isMe}
           onClose={() => setShowActions(false)}
           onReply={() => onReply(message)}
+          onVoiceReply={() => onVoiceReply(message)}
           onEdit={() => { setDraft(message.text); setEditing(true); }}
           onDelete={() => deleteMessage(message.id)}
           onForward={() => setForwarding(true)}

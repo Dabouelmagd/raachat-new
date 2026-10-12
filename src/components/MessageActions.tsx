@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Copy, CornerUpLeft, CornerUpRight, Flag, Info, Pencil, Share2, Star, Trash2, X,
+  Copy, CornerUpLeft, CornerUpRight, Flag, Info, Mic, Pencil, Share2, Star, Trash2, X,
 } from "lucide-react";
 import { API_ON, api } from "../api/client";
 import { fullStamp } from "../timefmt";
@@ -8,6 +8,7 @@ import { fmtSize } from "../media/files";
 import { useDir, useT, num } from "../i18n";
 import { Message } from "../types";
 import { useCloseOnEscape } from "./useCloseOnEscape";
+import { msgPreview } from "./msgPreview";
 
 const QUICK = ["👍", "😂", "❤️", "😮", "😢", "🙏"];
 
@@ -16,6 +17,8 @@ export interface ActionsProps {
   isMe: boolean;
   onClose: () => void;
   onReply: () => void;
+  /** رد بالصوت: بيضبط الرد ويبدأ التسجيل على طول */
+  onVoiceReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onForward: () => void;
@@ -93,7 +96,7 @@ export function MessageActions(p: ActionsProps) {
         {/* معاينة الرسالة + زرار الإغلاق، ثابتين فوق مهما اتسكرل */}
         <div className="sticky top-0 z-10 mb-1 flex items-start gap-2 bg-rachat-card px-2 pb-2 pt-2">
           <p className="line-clamp-2 flex-1 break-words text-xs text-neutral-400" dir="auto">
-            {m.deleted ? t("رسالة محذوفة", "Deleted message") : m.text || m.attachment?.name || t("مرفق", "Attachment")}
+            {msgPreview(m, t)}
           </p>
           <button onClick={p.onClose} aria-label={t("إغلاق", "Close")} className="shrink-0 text-neutral-400"><X size={18} /></button>
         </div>
@@ -112,6 +115,7 @@ export function MessageActions(p: ActionsProps) {
         {!m.deleted && (
           <>
             <Row icon={rtl ? <CornerUpLeft size={17} /> : <CornerUpRight size={17} />} label={t("رد", "Reply")} onClick={() => { p.onReply(); p.onClose(); }} />
+            <Row icon={<Mic size={17} />} label={t("رد بالصوت", "Reply with voice")} onClick={() => { p.onVoiceReply(); p.onClose(); }} />
             <Row icon={<Share2 size={17} />} label={t("إعادة توجيه", "Forward")} onClick={() => { p.onForward(); p.onClose(); }} />
             <Row icon={<Copy size={17} />} label={t("نسخ", "Copy")} onClick={() => void copy()} />
             <Row icon={<Star size={17} className={starred ? "fill-rachat-gold text-rachat-gold" : ""} />} label={starred ? t("إلغاء التمييز", "Unstar") : t("تمييز بنجمة", "Star")} onClick={() => void toggleStar()} />
