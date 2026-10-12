@@ -53,6 +53,8 @@ model User {
   createdAt   DateTime  @default(now())
   lastSeenAt  DateTime?
   birthDate   DateTime? @db.Date // تاريخ الميلاد — يحدد إتاحة خدمات ١٨+ (NULL = غير محدد)
+  /// كلمة السر (scrypt). NULL = الحساب بيدخل بكود لمرة واحدة بس (الحسابات القديمة ودخول الرقم).
+  passwordHash String?
   deletedAt   DateTime? // حذف الحساب (إخفاء هوية)
 
   memberships Membership[]

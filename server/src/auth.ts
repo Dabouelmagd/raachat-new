@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { Ctx } from "./context.js";
 import { HttpError, unauthorized } from "./lib/errors.js";
 import { getSettings } from "./lib/settings.js";
+import { hashPassword, verifyPassword, wastePasswordTime } from "./lib/password.js";
 import { randomToken, sha256, signAccess, verifyAccess } from "./lib/tokens.js";
 
 export interface AuthedRequest extends Request {
@@ -87,6 +88,91 @@ export async function verifyOtp(ctx: Ctx, channel: "phone" | "email", rawTarget:
     user = await ctx.db.user.create({ data: { ...where, name: fallback, wallet: { create: {} } } });
   }
   if (user.modStatus !== "active") throw new HttpError(403, "account_suspended", "الحساب موقوف");
+  const session = await newSession(ctx, user.id, device);
+  return { ...session, user };
+}
+
+/**
+ * تسجيل حساب جديد بكلمة سر. الإيميل لازم يتأكد بكود **مرة واحدة** عند التسجيل،
+ * وبعدها الدخول بكلمة السر من غير أكواد — ده كان الطلب: «لما أكون مسجّلة حساب،
+ * مش كل مرة أدخل بـ OTP».
+ */
+export async function registerWithPassword(
+  ctx: Ctx,
+  p: { target: string; code: string; name: string; password: string; device: string },
+) {
+  const target = normalizeTarget("email", p.target);
+  if (!validTarget("email", target)) throw new HttpError(400, "invalid_target", "إيميل غير صحيح");
+  const name = p.name.trim();
+  if (name.length < 2) throw new HttpError(400, "invalid_name", "اكتب اسمك");
+  // الهاش قبل استهلاك الكود: لو كلمة السر مرفوضة، الكود يفضل صالح ومايضيعش على المستخدم
+  const passwordHash = await hashPassword(p.password);
+  // الحساب الموجود ما ينفعش يتسجّل تاني — رسالة واضحة بدل خطأ قاعدة بيانات
+  const existing = await ctx.db.user.findUnique({ where: { email: target }, select: { passwordHash: true } });
+  if (existing) {
+    throw new HttpError(409, existing.passwordHash ? "already_registered" : "needs_password_setup",
+      existing.passwordHash
+        ? "الإيميل ده مسجّل بالفعل — سجّل دخولك بكلمة السر"
+        : "الإيميل ده مسجّل بحساب بيدخل بكود — ادخل بالكود وبعدها اعمل كلمة سر من الحساب");
+  }
+  if (!(await getSettings(ctx)).registrationOpen) throw new HttpError(403, "registration_closed", "التسجيل الجديد مقفول مؤقتًا");
+  await consumeOtp(ctx, "email", target, p.code);
+  const user = await ctx.db.user.create({ data: { email: target, name, passwordHash, wallet: { create: {} } } });
+  const session = await newSession(ctx, user.id, p.device);
+  return { ...session, user };
+}
+
+/** دخول بالإيميل وكلمة السر — بدون أي كود. */
+export async function loginWithPassword(ctx: Ctx, rawTarget: string, password: string, device: string) {
+  const target = normalizeTarget("email", rawTarget);
+  const user = await ctx.db.user.findUnique({ where: { email: target } });
+  // نفس الرد ونفس الزمن للحساب المش موجود واللي مالوش كلمة سر واللي كلمة سره غلط
+  if (!user || !user.passwordHash) {
+    await wastePasswordTime(password);
+    throw new HttpError(401, "bad_credentials", "الإيميل أو كلمة السر غلط");
+  }
+  if (!(await verifyPassword(password, user.passwordHash))) throw new HttpError(401, "bad_credentials", "الإيميل أو كلمة السر غلط");
+  if (user.modStatus !== "active") throw new HttpError(403, "account_suspended", "الحساب موقوف");
+  const session = await newSession(ctx, user.id, device);
+  return { ...session, user };
+}
+
+/**
+ * تعيين/تغيير كلمة السر. بياخد إمّا `current` (وهو داخل بالفعل وعنده كلمة سر)
+ * أو كود تحقّق على إيميل الحساب (نسيت كلمة السر). ولمّا الحساب مالوش كلمة سر
+ * أصلًا (الحسابات القديمة) الدخول نفسه كافي.
+ *
+ * وبنلغي **كل الجلسات التانية** بعد التغيير: لو حد كان داخل بجلسة مسروقة،
+ * تغيير كلمة السر لازم يطلّعه.
+ */
+export async function setPassword(
+  ctx: Ctx,
+  userId: string,
+  password: string,
+  opts: { current?: string; keepSessionId?: string },
+) {
+  const user = await ctx.db.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user) throw unauthorized();
+  if (user.passwordHash && !(await verifyPassword(opts.current ?? "", user.passwordHash)))
+    throw new HttpError(401, "bad_current", "كلمة السر الحالية غلط");
+  const passwordHash = await hashPassword(password);
+  await ctx.db.user.update({ where: { id: userId }, data: { passwordHash } });
+  await ctx.db.session.updateMany({
+    where: { userId, revokedAt: null, ...(opts.keepSessionId ? { id: { not: opts.keepSessionId } } : {}) },
+    data: { revokedAt: new Date() },
+  });
+}
+
+/** نسيت كلمة السر: كود على الإيميل → كلمة سر جديدة → جلسة جديدة. */
+export async function resetPassword(ctx: Ctx, rawTarget: string, code: string, password: string, device: string) {
+  const target = normalizeTarget("email", rawTarget);
+  const passwordHash = await hashPassword(password); // قبل استهلاك الكود
+  await consumeOtp(ctx, "email", target, code);
+  const user = await ctx.db.user.findUnique({ where: { email: target } });
+  if (!user) throw new HttpError(404, "no_account", "مفيش حساب بالإيميل ده");
+  if (user.modStatus !== "active") throw new HttpError(403, "account_suspended", "الحساب موقوف");
+  await ctx.db.user.update({ where: { id: user.id }, data: { passwordHash } });
+  await ctx.db.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
   const session = await newSession(ctx, user.id, device);
   return { ...session, user };
 }

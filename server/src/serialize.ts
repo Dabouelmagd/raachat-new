@@ -5,8 +5,10 @@ export const publicUser = (u: { id: string; name: string; status: string; color:
   id: u.id, name: u.name, status: u.status, color: u.color, photo: u.photoUrl ?? undefined,
 });
 
-export const meUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null; phone: string | null; email: string | null; lang: string; isAdmin: boolean; birthDate?: Date | null }) => ({
+export const meUser = (u: { id: string; name: string; status: string; color: string; photoUrl: string | null; phone: string | null; email: string | null; lang: string; isAdmin: boolean; birthDate?: Date | null; passwordHash?: string | null }) => ({
   ...publicUser(u), phone: u.phone ?? undefined, email: u.email ?? undefined, lang: u.lang, role: u.isAdmin ? "admin" : "user",
+  // الواجهة محتاجة تعرف هل الحساب بيدخل بكلمة سر ولا بكود بس (الهاش نفسه مابيخرجش أبدًا)
+  hasPassword: !!u.passwordHash,
   // تاريخ الميلاد بيحدد إتاحة خدمات ١٨+؛ null = لسه ما حددش
   birthDate: u.birthDate ? u.birthDate.toISOString().slice(0, 10) : null,
   isAdult: isAdult(u.birthDate),

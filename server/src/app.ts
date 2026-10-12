@@ -37,6 +37,11 @@ export function createApp(ctx: Ctx) {
     // حماية OTP من التخمين/الإغراق (إضافة لحد 5/ساعة لكل هدف داخل auth.ts)
     app.use("/auth/handoff", rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { code: "too_many", message: "محاولات كثيرة" } }));
     app.use("/auth/otp", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { code: "too_many", message: "محاولات كثيرة" } }));
+    // تخمين كلمة السر: مفيش حد لكل هدف في القاعدة زي الـ OTP، فالحد هنا هو
+    // الحارس الوحيد. والتسجيل كمان عشان ما يتعملش حسابات بالجملة.
+    app.use("/auth/login", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { code: "too_many", message: "محاولات كثيرة، حاول بعد دقيقة" } }));
+    app.use("/auth/register", rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { code: "too_many", message: "محاولات كثيرة، حاول بعد دقيقة" } }));
+    app.use("/auth/password", rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { code: "too_many", message: "محاولات كثيرة، حاول بعد دقيقة" } }));
   }
 
   app.use(authRoutes(ctx));

@@ -111,6 +111,29 @@ export async function verifyOtp(channel: "phone" | "email", target: string, code
   setSession({ access: j.accessToken, refresh: j.refreshToken, meId: j.user.id });
   return j.user;
 }
+type AuthOut = { accessToken: string; refreshToken: string; user: { id: string } };
+const keep = (j: AuthOut) => {
+  setSession({ access: j.accessToken, refresh: j.refreshToken, meId: j.user.id });
+  return j.user;
+};
+
+/** حساب جديد: الكود بيتأكد **مرة واحدة** هنا، وبعدها الدخول بكلمة السر. */
+export async function registerWithPassword(target: string, code: string, name: string, password: string) {
+  return keep(await api<AuthOut>("/auth/register", { body: { target, code, name, password }, auth: false }));
+}
+/** دخول بالإيميل وكلمة السر — من غير أي كود. */
+export async function loginWithPassword(target: string, password: string) {
+  return keep(await api<AuthOut>("/auth/login", { body: { target, password }, auth: false }));
+}
+/** نسيت كلمة السر: الكود بيتطلب من requestOtp على نفس الإيميل. */
+export async function resetPassword(target: string, code: string, password: string) {
+  return keep(await api<AuthOut>("/auth/password/reset", { body: { target, code, password }, auth: false }));
+}
+/** تعيين/تغيير كلمة السر من جوه الحساب. */
+export async function setMyPassword(password: string, current?: string) {
+  await api("/me/password", { body: { password, current } });
+}
+
 export async function logoutApi() {
   try { await api("/auth/logout", { method: "POST" }); } catch { /* تجاهل */ }
   setSession(null);

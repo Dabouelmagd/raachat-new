@@ -4,8 +4,9 @@ import { useIsStaff, openAdmin } from "../admin/adminLink";
 import { DeleteAccountSheet } from "../components/DeleteAccountSheet";
 import { WallpaperSheet } from "../components/WallpaperSheet";
 import { BlockedUsersSheet } from "../components/BlockedUsersSheet";
+import { PasswordSheet } from "../components/PasswordSheet";
 import { LEGAL } from "../legal";
-import { ShieldCheck, ChevronLeft, ChevronRight, Bell, LogOut, Trash2, Download } from "lucide-react";
+import { ShieldCheck, ChevronLeft, ChevronRight, Bell, LogOut, Trash2, Download, KeyRound } from "lucide-react";
 import { API_ON, api } from "../api/client";
 import { LangSwitch } from "../components/LangSwitch";
 import { useDir, useT } from "../i18n";
@@ -47,6 +48,7 @@ export default function AccountScreen() {
   const [adminErr, setAdminErr] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [blockedOpen, setBlockedOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const downloadMyData = async () => {
     setExporting(true);
@@ -119,6 +121,10 @@ export default function AccountScreen() {
           {t("الأصدقاء ودعوة أصدقاء", "Friends & invite")}
           <Chev size={15} className="text-neutral-500" />
         </button>
+        <button onClick={() => setPwOpen(true)} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">
+          <span className="flex items-center gap-2"><KeyRound size={15} className="text-rachat-gold" /> {t("كلمة السر", "Password")}</span>
+          <Chev size={15} className="text-neutral-500" />
+        </button>
         <button onClick={() => nav("/sessions")} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">
           {t("الجلسات النشطة", "Active sessions")}
           <Chev size={15} className="text-neutral-500" />
@@ -156,6 +162,7 @@ export default function AccountScreen() {
         </p>
         {wpOpen && <WallpaperSheet onClose={() => setWpOpen(false)} />}
         {blockedOpen && <BlockedUsersSheet onClose={() => setBlockedOpen(false)} />}
+        {pwOpen && <PasswordSheet onClose={() => setPwOpen(false)} />}
         {deleting && <DeleteAccountSheet onClose={() => setDeleting(false)} />}
       </div>
     </div>
