@@ -23,12 +23,22 @@ else echo "النسخة الحالية: ${NEW:0:7} (مش معروف إيه ال�
 
 if [ "$KNOWN" = 1 ] && [ "$OLD" = "$NEW" ] && [ "${FORCE:-0}" != "1" ]; then echo "✅ مفيش جديد (استخدمي FORCE=1 لإعادة البناء)"; exit 0; fi
 CHANGED=""
-[ "$KNOWN" = 1 ] && CHANGED=$(git diff --name-only "$OLD" "$NEW" || true)
+if [ "$KNOWN" = 1 ]; then
+  # كان `|| true`. ولو المقارنة فشلت (force-push أو git gc أو clone جديد) كانت
+  # CHANGED تطلع **فاضية**، وكل القرارات مبنية عليها: الـ API مايتبنيش، والنسخة
+  # الاحتياطية قبل الـ migration تتخطّى، والسكربت يطبع ✅ باسم النسخة الجديدة وهو
+  # شغّال صورة قديمة. فمفيش تخمين: مش عارفين = نبني كل حاجة ونعمل نسخة.
+  if ! CHANGED=$(git diff --name-only "$OLD" "$NEW" 2>/dev/null); then
+    echo "⚠️ مش قادر أقارن بالنسخة المنشورة (${OLD:0:7}) — هتعامل معاها كنشرة أول مرة:"
+    echo "   بناء كامل + نسخة احتياطية قبل أي migration."
+    KNOWN=0; CHANGED=""
+  fi
+fi
 
 # السكربت ده بيحدّث نفسه بالـ pull وهو شغّال، وbash بيقرا الملف على دفعات —
 # فالباقي بيتنفّذ من النسخة القديمة (أو أسوأ: من موضع مقطوع في الجديدة).
 # فلو السكربت نفسه اتغيّر، نعيد تشغيل نفسه من النسخة الجديدة مرة واحدة بس.
-if [ "${RACHAT_REEXEC:-0}" != "1" ] && echo "$CHANGED" | grep -q '^scripts/deploy-rachat\.sh$'; then
+if [ "${RACHAT_REEXEC:-0}" != "1" ] && { [ "$KNOWN" = 0 ] || echo "$CHANGED" | grep -q '^scripts/deploy-rachat\.sh$'; }; then
   echo "↻ سكربت النشر نفسه اتحدّث — إعادة تشغيله من النسخة الجديدة"
   RACHAT_REEXEC=1 exec bash "$0" "$@"
 fi

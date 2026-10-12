@@ -96,19 +96,27 @@ for h in "app" "admin"; do
 done
 
 # ٣) الـ API من جوه (يفرّق بين «التطبيق واقع» و«نجنكس/الشهادة»)
-c=$(curl -so /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8085/ 2>/dev/null)
-[ "$c" = "200" ] && ok "caddy" "127.0.0.1:8085 → 200" || fail "caddy" "الواجهة الداخلية بترجّع HTTP $c"
+# بـ Host صريح: Caddyfile كله مواقع مربوطة باسم المضيف، وطلب بدون Host مابيطابقش
+# ولا موقع — يعني الفحص كان بيقيس «Caddy سامع» مش «الواجهة بتتقدّم فعلًا».
+c=$(curl -so /dev/null -w '%{http_code}' --max-time 10 -H "Host: app.$DOMAIN" http://127.0.0.1:8085/ 2>/dev/null)
+[ "$c" = "200" ] && ok "caddy" "127.0.0.1:8085 (Host: app.$DOMAIN) → 200" || fail "caddy" "الواجهة الداخلية بترجّع HTTP $c"
 
 # ٤) الكونتينرات: كلها شغالة
-running=$($DC ps --services --filter status=running 2>/dev/null | sort | tr '\n' ' ')
+running=$(timeout 30 $DC ps --services --filter status=running 2>/dev/null | sort | tr '\n' ' ')
 for s in db api caddy backup; do
   echo "$running" | grep -qw "$s" && ok "container:$s" "شغّال" || fail "container:$s" "كونتينر $s مش شغّال (الشغّال: $running)"
 done
 
 # ٥) الداتابيز بترد فعلًا
-if $DC exec -T backup pg_isready -h db -U rachat -q >/dev/null 2>&1; then
-  n=$($DC exec -T backup psql -h db -U rachat -d rachat -At -c 'SELECT count(*) FROM "User"' 2>/dev/null | tr -d '\r')
-  [ -n "$n" ] && ok "db" "بترد — $n مستخدم" || fail "db" "pg_isready تمام بس الاستعلام فشل"
+if timeout 30 $DC exec -T backup pg_isready -h db -U rachat -q >/dev/null 2>&1; then
+  n=$(timeout 30 $DC exec -T backup psql -h db -U rachat -d rachat -At -c 'SELECT count(*) FROM "User"' 2>/dev/null | tr -d '\r')
+  # **لازم مستخدم واحد على الأقل.** الفحص كان `[ -n "$n" ]`، و"0" نص مش فاضي —
+  # يعني قاعدة اتمسحت أو migration غلط كانت بتطلع «✅ db: بترد — 0 مستخدم».
+  case "${n:-}" in
+    ""|*[!0-9]*) fail "db" "pg_isready تمام بس الاستعلام فشل" ;;
+    0) fail "db" "الداتابيز بترد بس **فاضية — صفر مستخدم**. ده مش وضع طبيعي للإنتاج" ;;
+    *) ok "db" "بترد — $n مستخدم" ;;
+  esac
 else
   fail "db" "الداتابيز مش بترد على pg_isready"
 fi
@@ -128,7 +136,7 @@ $dfd
 fi
 
 # ٧) النسخة الاحتياطية: موجودة وحديثة وحجمها معقول
-bk=$($DC exec -T backup sh -c '
+bk=$(timeout 30 $DC exec -T backup sh -c '
   d=$(ls -1t /backups/db-*.dump 2>/dev/null | head -1 || true)
   [ -n "$d" ] || { echo "none 0 0"; exit 0; }
   echo "$(basename "$d") $(wc -c < "$d") $(( ( $(date +%s) - $(date -r "$d" +%s) ) / 3600 ))"' 2>/dev/null | tr -d '\r')
@@ -137,6 +145,19 @@ if [ "$bname" = "none" ]; then fail "backup" "مفيش أي نسخة احتيا�
 elif [ "${bsize:-0}" -lt "$MIN_DUMP" ]; then fail "backup" "أحدث نسخة ($bname) حجمها $bsize بايت — فاشلة"
 elif [ "${bage:-99}" -gt "$MAX_DUMP_AGE_H" ]; then fail "backup" "أحدث نسخة ($bname) عمرها $bage ساعة — النسخ اليومية واقفة"
 else ok "backup" "$bname · $bsize بايت · عمرها $bage ساعة"; fi
+
+# ٧ب) أرشيف المرفوعات: نص النسخة الاحتياطية، ومكانش متفحوص خالص.
+# (حلقة النسخ بتعمل الأرشيف بـ `tar > الاسم النهائي` من غير ملف مؤقت، فأرشيف
+#  فاشل بياخد الاسم النهائي ويزقّ نسخة سليمة برّه الـ١٤.)
+up=$(timeout 30 $DC exec -T backup sh -c '
+  u=$(ls -1t /backups/uploads-*.tgz 2>/dev/null | head -1 || true)
+  [ -n "$u" ] || { echo "none 0 0"; exit 0; }
+  echo "$(basename "$u") $(wc -c < "$u") $(( ( $(date +%s) - $(date -r "$u" +%s) ) / 3600 ))"' 2>/dev/null | tr -d '\r')
+set -- ${up:-none 0 0}; uname=$1; usize=$2; uage=$3
+if [ "$uname" = "none" ]; then fail "backup:uploads" "مفيش أي أرشيف مرفوعات في /backups — نسخ المرفوعات فاشلة"
+elif [ "${usize:-0}" -lt 100 ]; then fail "backup:uploads" "أحدث أرشيف ($uname) حجمه $usize بايت — فاضي/ناقص"
+elif [ "${uage:-99}" -gt "$MAX_DUMP_AGE_H" ]; then fail "backup:uploads" "أحدث أرشيف ($uname) عمره $uage ساعة — نسخ المرفوعات واقفة"
+else ok "backup:uploads" "$uname · $usize بايت · عمره $uage ساعة"; fi
 
 # ٨) الشهادة
 days=$(echo | openssl s_client -servername "api.$DOMAIN" -connect "api.$DOMAIN:443" 2>/dev/null \
