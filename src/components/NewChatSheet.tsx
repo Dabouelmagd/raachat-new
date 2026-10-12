@@ -5,6 +5,7 @@ import { MessageCircle, Phone, Video, Users, X, Send, UserPlus } from "lucide-re
 import { useT } from "../i18n";
 import { API_ON } from "../api/client";
 import { useAppState, useAppActions } from "../store/AppContext";
+import { useCloseOnEscape } from "./useCloseOnEscape";
 
 export function NewChatSheet({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export function NewChatSheet({ onClose }: { onClose: () => void }) {
   const { contacts, threads } = useAppState();
   const { createDm } = useAppActions();
   const [bc, setBc] = useState(false);
+  useCloseOnEscape(onClose);
 
   const startDm = async (contactId: string) => {
     const existing = threads.find((x) => x.type === "dm" && x.memberIds[0] === contactId);
@@ -29,11 +31,17 @@ export function NewChatSheet({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 sm:items-center">
-      <div className="max-h-[80vh] w-full max-w-[380px] overflow-y-auto rounded-t-2xl bg-rachat-card p-5 sm:rounded-2xl">
-        <div className="mb-4 flex items-center justify-between">
+    // اللمس برّه بيقفل. من غيره — ومع زرار إغلاق بيختفي مع السكرول — المستخدم
+    // بيتحبس والطبقة دي بتبلع كل ضغطة في التطبيق (حصل في الإنتاج ١٢ أكتوبر).
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("بدء جديد", "New")}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 sm:items-center">
+      <div onClick={(e) => e.stopPropagation()}
+        className="max-h-[80vh] w-full max-w-[380px] overflow-y-auto rounded-t-2xl bg-rachat-card p-5 sm:rounded-2xl">
+        {/* العنوان **ملزوق فوق**: كان جوه منطقة التمرير، فمع قايمة أسماء طويلة
+            زرار الإغلاق بيطلع برّه الشاشة ومفيش طريقة تقفلي بيها. */}
+        <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-4 flex items-center justify-between bg-rachat-card px-5 pb-3 pt-5">
           <p className="font-extrabold text-rachat-papyrus">{t("بدء جديد", "New")}</p>
-          <button onClick={onClose} className="text-neutral-500">
+          <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="p-1 text-neutral-500">
             <X size={18} />
           </button>
         </div>

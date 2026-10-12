@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Check, Send, Users, X } from "lucide-react";
 import { useT } from "../i18n";
+import { useCloseOnEscape } from "./useCloseOnEscape";
 import { useAppState, useAppActions } from "../store/AppContext";
 
 /** رسالة واحدة لأكتر من شخص/جروب: كل واحد بياخد رسالة منفصلة في محادثته. */
 export function BroadcastSheet({ onClose }: { onClose: () => void }) {
+  useCloseOnEscape(onClose);
   const t = useT();
   const { contacts, threads } = useAppState();
   const { createDm, sendMessage } = useAppActions();
@@ -38,8 +40,8 @@ export function BroadcastSheet({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={t("رسالة لأكتر من شخص", "Message several people")} className="fixed inset-0 z-[55] flex items-end justify-center bg-black/80 sm:items-center">
-      <div className="flex max-h-[88vh] w-full max-w-[380px] flex-col rounded-t-2xl bg-rachat-card p-5 sm:rounded-2xl">
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("رسالة لأكتر من شخص", "Message several people")} className="fixed inset-0 z-[55] flex items-end justify-center bg-black/80 sm:items-center">
+      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-full max-w-[380px] flex-col rounded-t-2xl bg-rachat-card p-5 sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <p className="font-extrabold text-rachat-papyrus">{t("رسالة لأكتر من شخص", "Message several people")}</p>
           <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="text-neutral-500"><X size={18} /></button>
