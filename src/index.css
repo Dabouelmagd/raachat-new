@@ -34,6 +34,29 @@ body,
   height: 100dvh;
 }
 
+/*
+ * **سبب تقطيع الشاشة على الآيفون.** سفاري بيكبّر الصفحة تلقائيًا أول ما تدوسي
+ * على خانة كتابة خطها **أصغر من ١٦px** — وبعد التكبير الصفحة تبقى أعرض من
+ * الشاشة، فالرسايل والأزرار تتقص من ناحية، والهيدر يطلع برّه. (مابينفعش
+ * نقفل التكبير بـ user-scalable=no — سفاري بيتجاهله من iOS 10، وده كمان ضد
+ * إتاحة الاستخدام لأن فيه ناس محتاجة تكبّر.) فالحل إن كل خانة كتابة على أي
+ * جهاز لمس تبقى ١٦px على الأقل.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* التطبيق بيملا الشاشة والتمرير جوّه بس — مفيش تمرير أفقي للصفحة نفسها */
+html,
+body {
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
+
 body {
   font-family: "Cairo", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 }

@@ -113,3 +113,47 @@ export async function cleanupRoomPresence(ctx: Ctx, userId: string) {
   await ctx.db.roomParticipant.deleteMany({ where: { userId } });
   for (const x of rows) ctx.io?.to("rooms").emit("room:changed", { id: x.roomId });
 }
+
+/**
+ * وجود المشارك في غرفة = **اتصال سوكت حيّ**، والاتصالات دي في ذاكرة العملية
+ * نفسها. فلما الـ api يقوم من جديد (كل نشر، أو إعادة تشغيل، أو crash) كل الصفوف
+ * اللي في القاعدة بتبقى **أشباح**: الغرفة تفضل مليانة ناس مش موجودين، و«مكتملة»
+ * تمنع اللي عايز يدخل فعلًا. فأول ما العملية تقوم، الحضور كله يتمسح — محدش ممكن
+ * يكون متصل بعملية لسه بتقوم.
+ *
+ * (لو بقى فيه أكتر من نسخة api شغّالة في نفس الوقت، السطر ده لازم يتغيّر لأنه
+ * هيشيل حضور النسخة التانية كمان. دلوقتي فيه كونتينر api واحد.)
+ */
+export async function clearRoomPresence(ctx: Ctx) {
+  const n = await ctx.db.roomParticipant.deleteMany({});
+  if (n.count > 0) console.log(`🧽 الغرف: اتمسح ${n.count} حضور قديم من قبل إعادة التشغيل`);
+  return n.count;
+}
+
+/**
+ * كنس دوري: صفّ حضور لمستخدم **مالوش ولا سوكت متصل** = شبح. بيحصل لو الـ
+ * `disconnect` ضاع (قطع شبكة مفاجئ، أو العملية ماتت وهي شايلة الصف).
+ * بنعتمد على السوكتات الحيّة نفسها مش على وقت الانضمام، فاللي قاعد ساكت في
+ * غرفة من ساعتين مابيتشلش.
+ */
+export async function sweepRoomPresence(ctx: Ctx) {
+  if (!ctx.io) return 0;
+  const rows = await ctx.db.roomParticipant.findMany({ select: { userId: true, roomId: true } });
+  if (rows.length === 0) return 0;
+  const ghosts: typeof rows = [];
+  for (const row of rows) {
+    const live = await ctx.io.in(`user:${row.userId}`).fetchSockets();
+    if (live.length === 0) ghosts.push(row);
+  }
+  if (ghosts.length === 0) return 0;
+  await ctx.db.roomParticipant.deleteMany({ where: { userId: { in: ghosts.map((g) => g.userId) } } });
+  for (const id of new Set(ghosts.map((g) => g.roomId))) ctx.io.to("rooms").emit("room:changed", { id });
+  return ghosts.length;
+}
+
+/** بيشغّل الكنس كل دقيقة. بيرجّع دالة إيقاف (للاختبارات). */
+export function startRoomSweep(ctx: Ctx, everyMs = 60_000) {
+  const t = setInterval(() => { void sweepRoomPresence(ctx).catch((e) => console.error("room sweep failed", e)); }, everyMs);
+  t.unref?.();
+  return () => clearInterval(t);
+}

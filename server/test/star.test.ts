@@ -7,9 +7,9 @@ let env: Awaited<ReturnType<typeof startTestEnv>>;
 beforeAll(async () => { env = await startTestEnv(); }, 120_000);
 afterAll(async () => { await env?.stop(); }, 60_000);
 
-const dm = async (a: { auth: object }, bId: string) =>
+const dm = async (a: { auth: Record<string, string> }, bId: string) =>
   (await request(env.app).post("/threads").set(a.auth).send({ type: "dm", memberIds: [bId] }).expect(201)).body;
-const say = async (a: { auth: object }, threadId: string, text: string) =>
+const say = async (a: { auth: Record<string, string> }, threadId: string, text: string) =>
   (await request(env.app).post(`/threads/${threadId}/messages`).set(a.auth).send({ text }).expect(201)).body;
 
 describe("النجمة", () => {

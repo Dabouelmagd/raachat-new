@@ -218,7 +218,7 @@ export default function ChatScreen() {
                  "The connection dropped before the server replied — it may have arrived. Check the chat before sending again.")}
             </div>
           )}
-          <div className="mt-1.5 flex gap-2">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <button
               onClick={() => { const f = failed; setFailed(null); void deliver(f.text, f.replyTo, f.att); }}
               className="rounded-lg bg-rachat-coral px-2.5 py-1 text-[11px] font-bold text-white"
