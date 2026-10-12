@@ -197,6 +197,27 @@ describe("stories / calls / translate / users", () => {
     expect(r.body.from).toBe("ar");
   });
 
+  /**
+   * المزوّد بيحاسب **بالحرف**، والشات فيه تكرار كبير (نفس الرسالة في جروب بتتترجم
+   * لكل عضو، والواجهة بتعيد النداء مع إعادة الرسم). فالكاش سقف للفاتورة مش سرعة.
+   */
+  it("ترجمة: نفس النص مابيروحش للمزوّد تاني مرة", async () => {
+    const a = await env.login("01062000002", "ب");
+    const body = { text: "نص مش مكرر في اختبار تاني", to: "fr" };
+    const before = env.fetched.filter((u) => u.includes("translation.googleapis.com")).length;
+    const r1 = await request(env.app).post("/translate").set(a.auth).send(body).expect(200);
+    const mid = env.fetched.filter((u) => u.includes("translation.googleapis.com")).length;
+    const r2 = await request(env.app).post("/translate").set(a.auth).send(body).expect(200);
+    const after = env.fetched.filter((u) => u.includes("translation.googleapis.com")).length;
+    expect(mid - before).toBe(1);   // أول مرة: نداء واحد
+    expect(after - mid).toBe(0);    // تاني مرة: مفيش نداء خالص
+    expect(r2.body.text).toBe(r1.body.text);
+    expect(r2.body.cached).toBe(true);
+    // ومفتاح الكاش بيفرّق بين اللغات
+    await request(env.app).post("/translate").set(a.auth).send({ ...body, to: "en" }).expect(200);
+    expect(env.fetched.filter((u) => u.includes("translation.googleapis.com")).length - after).toBe(1);
+  });
+
   it("بحث المستخدمين وتعديل الملف الشخصي", async () => {
     const a = await env.login("01063000001", "نورا السيد");
     const b = await env.login("01063000002", "آخر");

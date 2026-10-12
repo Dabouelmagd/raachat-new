@@ -9,6 +9,11 @@ import { assertMember } from "./threads.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
+/** كاش الترجمة: سقف للفاتورة مش تحسين سرعة (المزوّد بيحاسب بالحرف) */
+const TR_MAX = 2000;
+const TR_TTL = 7 * 86_400_000;
+const trCache = new Map<string, { text: string; from: string; at: number }>();
+
 export function extraRoutes(ctx: Ctx) {
   const r = Router();
   r.use(requireAuth(ctx));
@@ -65,11 +70,25 @@ export function extraRoutes(ctx: Ctx) {
     res.status(201).json({ id: c.id, threadId: c.threadId, mode: c.mode, dir: c.dir, at: c.at.getTime(), dur: c.dur });
   }));
 
-  // ---- الترجمة (Google Cloud Translation v2). بدون GOOGLE_TRANSLATE_KEY بيرجّع 501.
+  /**
+   * الترجمة (Google Cloud Translation v2). بدون GOOGLE_TRANSLATE_KEY بيرجّع 501.
+   *
+   * **المزوّد بيحاسب بالحرف**، والشات بطبيعته فيه تكرار رهيب («تمام»، «ماشي»،
+   * «شكرًا»، نفس الرسالة بتتترجم لكل واحد في الجروب، والواجهة بتعيد النداء مع كل
+   * إعادة رسم). فالكاش هنا مش تحسين سرعة — هو **سقف للفاتورة**: نفس النص لنفس
+   * اللغة بيتحاسب مرة واحدة كل أسبوع لكل المستخدمين.
+   */
   r.post("/translate", wrap(async (req, res) => {
     const b = z.object({ text: z.string().min(1).max(5000), to: z.string().min(2).max(10), from: z.string().min(2).max(10).optional() }).parse(req.body);
     const key = ctx.config.GOOGLE_TRANSLATE_KEY;
     if (!key) throw new HttpError(501, "translate_not_configured", "محرك الترجمة غير مُفعّل (GOOGLE_TRANSLATE_KEY)");
+    const ck = `${b.to}|${b.from ?? ""}|${b.text}`;
+    const hit = trCache.get(ck);
+    if (hit && hit.at > Date.now() - TR_TTL) {
+      trCache.delete(ck); trCache.set(ck, hit); // آخر استخدام = آخر الطابور
+      res.json({ text: hit.text, from: hit.from, cached: true });
+      return;
+    }
     const r2 = await ctx.fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(key)}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ q: b.text, target: b.to, source: b.from, format: "text" }),
@@ -78,7 +97,11 @@ export function extraRoutes(ctx: Ctx) {
     const j = (await r2.json()) as { data?: { translations?: { translatedText: string; detectedSourceLanguage?: string }[] } };
     const t = j.data?.translations?.[0];
     if (!t) throw new HttpError(502, "translate_failed", "رد غير متوقع");
-    res.json({ text: t.translatedText, from: b.from ?? t.detectedSourceLanguage ?? "" });
+    const out = { text: t.translatedText, from: b.from ?? t.detectedSourceLanguage ?? "" };
+    trCache.set(ck, { ...out, at: Date.now() });
+    // Map بيحفظ ترتيب الإدخال، فأول مفتاح = الأقدم استخدامًا
+    while (trCache.size > TR_MAX) trCache.delete(trCache.keys().next().value as string);
+    res.json(out);
   }));
   return r;
 }

@@ -65,8 +65,11 @@ export async function startTestEnv() {
     NODE_ENV: "test", DATABASE_URL: url, JWT_SECRET: "test-secret-test-secret", RATE_LIMIT: "off", UPLOAD_DIR: uploads,
     GOOGLE_TRANSLATE_KEY: "k", OWNER_CONTACTS: "01099000001, boss@example.com", BANNED_WORDS: "كلمةممنوعة, badword",
   } as NodeJS.ProcessEnv);
+  /** كل نداء شبكة خارج (للتأكد إن الكاش بيمنع نداءات متكررة للمزوّد المدفوع) */
+  const fetched: string[] = [];
   const fakeFetch = (async (input: any, init?: any) => {
     const u = String(input);
+    fetched.push(u);
     if (u.includes("translation.googleapis.com")) {
       const body = JSON.parse(init.body);
       return new Response(JSON.stringify({ data: { translations: [{ translatedText: `[${body.target}] ${body.q}`, detectedSourceLanguage: "ar" }] } }), { status: 200 });
@@ -93,7 +96,7 @@ export async function startTestEnv() {
   }
 
   return {
-    app, ctx, sent, port, login, pushed, dead,
+    app, ctx, sent, port, login, pushed, dead, fetched,
     async stop() {
       server.close();
       ctx.io?.close();
