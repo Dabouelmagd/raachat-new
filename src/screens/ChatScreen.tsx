@@ -1,4 +1,4 @@
-import { API_ON } from "../api/client";
+import { API_ON, ApiError } from "../api/client";
 import { setUpdateBlocked } from "../update";
 import { Languages, Palette } from "lucide-react";
 import { dayLabel, sameDay } from "../timefmt";
@@ -40,11 +40,20 @@ export default function ChatScreen() {
   const threadMessages = messages.filter((m) => m.threadId === id);
 
   const [draft, setDraft] = useState("");
+  /**
+   * رسالة ما اتبعتتش. قبل كده `send()` كان بيفضّي الخانة وينادي `sendMessage`
+   * **من غير await ولا catch**: أي فشل (مفيش نت · كلمة ممنوعة · الجروب متقيّد ·
+   * المرفق كبير) = النص اختفى من الخانة ومن المحادثة ومفيش ولا رسالة خطأ، والوعد
+   * المرفوض يروح في اللاشيء. دلوقتي بنمسك الفشل ونسيب النص في الإيد.
+   * `certain` = السيرفر ردّ ورفض فعلًا (٤xx) فإعادة المحاولة أمان؛ لو الاتصال
+   * نفسه قطع، مش عارفين وصلت ولا لأ وبنقول كده للمستخدم.
+   */
+  const [failed, setFailed] = useState<{ text: string; replyTo: Message | null; att: Attachment | null; why: string; certain: boolean } | null>(null);
   // التحديث التلقائي مابيعملش reload والمسوّدة لسه مكتوبة — مانضيّعش كلام المستخدم
   useEffect(() => {
-    setUpdateBlocked(!!draft.trim());
+    setUpdateBlocked(!!draft.trim() || !!failed);
     return () => setUpdateBlocked(false);
-  }, [draft]);
+  }, [draft, failed]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [panel, setPanel] = useState<"none" | "emoji" | "attach">("none");
@@ -90,7 +99,7 @@ export default function ChatScreen() {
     const out = await r.stop();
     setRec(null);
     playSound("send");
-    sendMessage(id, "", replyTo?.id, {
+    void deliver("", replyTo, {
       name: t("رسالة صوتية", "Voice message"), size: 0, mime: out.mime, url: out.url,
       voice: { duration: out.duration, waveform: out.waveform, simulated: out.simulated },
     });
@@ -115,10 +124,25 @@ export default function ChatScreen() {
     setDraft(draft.slice(0, pos) + e + draft.slice(end));
   };
 
+  /** الإرسال الوحيد في الشاشة: ينجح أو يسيب النص والمرفق والرد في الإيد. */
+  const deliver = async (text: string, rep: Message | null, att: Attachment | null) => {
+    try {
+      await sendMessage(id, text, rep?.id, att ?? undefined);
+      setFailed(null);
+    } catch (e) {
+      const api = e instanceof ApiError ? e : null;
+      setFailed({
+        text, replyTo: rep, att,
+        why: api?.message || t("مفيش اتصال بالسيرفر", "No connection to the server"),
+        certain: !!api,
+      });
+    }
+  };
+
   const send = () => {
     if (!draft.trim() && !pending) return;
     playSound("send");
-    sendMessage(id, draft.trim(), replyTo?.id, pending ?? undefined);
+    void deliver(draft.trim(), replyTo, pending);
     if (thread?.type === "dm" && !API_ON) {
       // رد تجريبي من الطرف التاني عشان تسمعي نغمة الرسالة
       const name = thread.name;
@@ -182,6 +206,40 @@ export default function ChatScreen() {
           <p className="mt-8 text-center text-xs text-neutral-500">{t("لا توجد رسائل بعد — ابدأ المحادثة", "No messages yet — start the conversation")}</p>
         )}
       </div>
+
+      {failed && (
+        <div className="border-t border-rachat-coral/50 bg-rachat-coral/10 px-3.5 py-2" role="alert">
+          <div className="text-[11px] font-bold text-rachat-coral">{t("الرسالة ما اتبعتتش", "Message wasn't sent")}</div>
+          <div className="text-xs text-rachat-papyrus">{failed.why}</div>
+          {failed.text && <div className="mt-1 truncate text-[11px] text-neutral-400">«{failed.text}»</div>}
+          {!failed.certain && (
+            <div className="mt-1 text-[11px] text-neutral-400">
+              {t("الاتصال قطع قبل ما السيرفر يرد — يمكن تكون وصلت. راجع المحادثة قبل ما تبعتها تاني.",
+                 "The connection dropped before the server replied — it may have arrived. Check the chat before sending again.")}
+            </div>
+          )}
+          <div className="mt-1.5 flex gap-2">
+            <button
+              onClick={() => { const f = failed; setFailed(null); void deliver(f.text, f.replyTo, f.att); }}
+              className="rounded-lg bg-rachat-coral px-2.5 py-1 text-[11px] font-bold text-white"
+            >{t("حاول تاني", "Try again")}</button>
+            {failed.text && (
+              <button
+                onClick={() => {
+                  // مانكتبش فوق حاجة المستخدم كتبها في الوقت ده — نزوّد عليها
+                  setDraft((d) => (d.trim() ? `${d.trim()} ${failed.text}` : failed.text));
+                  setReplyTo(failed.replyTo);
+                  setPending(failed.att);
+                  setFailed(null);
+                  inputRef.current?.focus();
+                }}
+                className="rounded-lg border border-rachat-coral/60 px-2.5 py-1 text-[11px] font-bold text-rachat-coral"
+              >{t("رجّع النص للخانة", "Put the text back")}</button>
+            )}
+            <button onClick={() => setFailed(null)} aria-label={t("إخفاء", "Dismiss")} className="ms-auto text-neutral-500"><X size={16} /></button>
+          </div>
+        </div>
+      )}
 
       {replyTo && (
         <div className="flex items-center justify-between border-t border-rachat-maroon/40 bg-rachat-card px-3.5 py-2">
@@ -251,13 +309,13 @@ export default function ChatScreen() {
           ) : emojiTab === "occ" ? (
             <div className="grid max-h-60 grid-cols-3 gap-2 overflow-y-auto px-2.5 py-2" role="group" aria-label={t("ملصقات المناسبات", "Greeting stickers")}>
               {OCCASIONS.map((o) => (
-                <button key={o.k} aria-label={o.ar} onClick={() => { playSound("send"); sendMessage(id, occToken(o.k), replyTo?.id); setReplyTo(null); setPanel("none"); }} className="flex justify-center rounded-xl p-0.5 hover:bg-white/5"><OccasionSticker kind={o.k} size={104} /></button>
+                <button key={o.k} aria-label={o.ar} onClick={() => { playSound("send"); void deliver(occToken(o.k), replyTo, null); setReplyTo(null); setPanel("none"); }} className="flex justify-center rounded-xl p-0.5 hover:bg-white/5"><OccasionSticker kind={o.k} size={104} /></button>
               ))}
             </div>
           ) : (
             <div className="grid max-h-56 grid-cols-4 gap-1 overflow-y-auto px-2.5 py-2" role="group" aria-label={t("ملصقات فرعونية", "Pharaonic stickers")}>
               {PHARAOH_KINDS.map(([k, ar, en]) => (
-                <button key={k} aria-label={t(ar, en)} onClick={() => { playSound("send"); sendMessage(id, phaToken(k), replyTo?.id); setReplyTo(null); setPanel("none"); }} className="flex justify-center rounded-xl p-1 hover:bg-white/5"><PharaohEmoji kind={k} size={60} /></button>
+                <button key={k} aria-label={t(ar, en)} onClick={() => { playSound("send"); void deliver(phaToken(k), replyTo, null); setReplyTo(null); setPanel("none"); }} className="flex justify-center rounded-xl p-1 hover:bg-white/5"><PharaohEmoji kind={k} size={60} /></button>
               ))}
             </div>
           )}

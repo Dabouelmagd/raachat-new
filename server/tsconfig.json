@@ -11,5 +11,8 @@
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": false
   },
-  "include": ["src", "test", "prisma/seed.ts", "prisma.config.ts"]
+  "include": ["src", "test", "prisma/seed.ts", "prisma.config.ts"],
+  // test/manual = أدوات تحقّق يدوية بتستورد playwright من test/ (مش من تبعيات
+  // السيرفر)، فمينفعش تدخل في الـ typecheck. التحقّق بتاعها = تشغيلها.
+  "exclude": ["test/manual"]
 }
