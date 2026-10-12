@@ -25,9 +25,11 @@ interface Props {
   onReply: (m: Message) => void;
   /** رد بالصوت على الرسالة دي */
   onVoiceReply: (m: Message) => void;
+  /** القناة اللي للقراءة بس: مفيش رد ولا رد بالصوت (التفاعل بس) */
+  canReply?: boolean;
 }
 
-export function MessageBubble({ message, replyTo, onReply, onVoiceReply }: Props) {
+export function MessageBubble({ message, replyTo, onReply, onVoiceReply, canReply = true }: Props) {
   const t = useT();
   const rtl = useDir() === "rtl";
   const { editMessage, deleteMessage, toggleReaction } = useAppActions();
@@ -137,6 +139,7 @@ export function MessageBubble({ message, replyTo, onReply, onVoiceReply }: Props
           message={{ ...message, starred }}
           isMe={isMe}
           onClose={() => setShowActions(false)}
+          canReply={canReply}
           onReply={() => onReply(message)}
           onVoiceReply={() => onVoiceReply(message)}
           onEdit={() => { setDraft(message.text); setEditing(true); }}

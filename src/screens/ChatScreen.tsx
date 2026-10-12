@@ -16,7 +16,7 @@ import { PHRASES } from "../translate/phrases";
 import { phraseText } from "../translate/engine";
 import { ThreadAvatar } from "../components/ThreadAvatar";
 import { useParams, useNavigate } from "react-router-dom";
-import { Video, Phone, Paperclip, Smile, Mic, Send, X, Users, LogOut, Image as ImageIcon, FileText, Camera, Trash2, BarChart3 } from "lucide-react";
+import { Video, Phone, Paperclip, Smile, Mic, Send, X, Users, LogOut, Image as ImageIcon, FileText, Camera, Trash2, BarChart3, Megaphone } from "lucide-react";
 import { Header } from "../components/Header";
 import { MessageBubble } from "../components/MessageBubble";
 import { useAppState, useAppActions } from "../store/AppContext";
@@ -36,7 +36,7 @@ export default function ChatScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const { threads, messages, contacts } = useAppState();
-  const { sendMessage, receiveMessage, leaveThread, markRead } = useAppActions();
+  const { sendMessage, receiveMessage, leaveThread, markRead, unsubscribeChannel } = useAppActions();
 
   const thread = threads.find((t) => t.id === id);
   const threadMessages = messages.filter((m) => m.threadId === id);
@@ -60,6 +60,8 @@ export default function ChatScreen() {
   const [showInfo, setShowInfo] = useState(false);
   const [panel, setPanel] = useState<"none" | "emoji" | "attach">("none");
   const [showPoll, setShowPoll] = useState(false);
+  /** قناة ومش من حقي أنشر فيها = قراءة بس (الحارس الحقيقي على السيرفر) */
+  const readOnly = thread?.type === "channel" && thread.canPost === false;
   const [pending, setPending] = useState<Attachment | null>(null);
   const [fileErr, setFileErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -175,7 +177,7 @@ export default function ChatScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <div onClick={() => thread?.type === "group" && setShowInfo(true)}>
+      <div onClick={() => (thread?.type === "group" || thread?.type === "channel") && setShowInfo(true)}>
         <Header
           title={thread?.name ?? t("محادثة", "Chat")}
           showBack
@@ -187,6 +189,7 @@ export default function ChatScreen() {
               <button aria-label={t("مكالمة فيديو", "Video call")} onClick={(e) => { e.stopPropagation(); navigate(`/call/${id}?mode=video`); }}><Video size={19} /></button>
               <button aria-label={t("مكالمة صوتية", "Voice call")} onClick={(e) => { e.stopPropagation(); navigate(`/call/${id}?mode=voice`); }}><Phone size={18} /></button>
               {thread?.type === "group" && <Users size={18} />}
+              {thread?.type === "channel" && <Megaphone size={18} className="text-rachat-gold" />}
             </>
           }
         />
@@ -203,7 +206,7 @@ export default function ChatScreen() {
           return (
             <div key={m.id}>
               {newDay && <div className="my-2 text-center"><span className="rounded-full bg-black/40 px-3 py-0.5 text-[11px] font-bold text-white">{m.at ? dayLabel(m.at) : t("اليوم", "Today")}</span></div>}
-              <MessageBubble message={m} replyTo={messageById(m.replyToId)} onReply={setReplyTo} onVoiceReply={(x) => { setReplyTo(x); void startRec(); }} />
+              <MessageBubble message={m} replyTo={messageById(m.replyToId)} canReply={!readOnly} onReply={setReplyTo} onVoiceReply={(x) => { setReplyTo(x); void startRec(); }} />
             </div>
           );
         })}
@@ -352,6 +355,12 @@ export default function ChatScreen() {
             </button>
           </div>
         </div>
+      ) : readOnly ? (
+        /* القناة اللي مش بنشر فيها: مفيش صندوق كتابة خالص — التفاعل بس */
+        <div className="flex items-center justify-center gap-2 border-t border-rachat-maroon/40 bg-rachat-black px-3.5 py-4 text-center text-[11.5px] leading-5 text-neutral-400" role="status">
+          <Megaphone size={15} className="shrink-0 text-rachat-gold" />
+          {t("القناة دي للقراءة بس — تقدر تتفاعل بالإيموجي", "This channel is read-only — you can still react")}
+        </div>
       ) : (
       <div className="flex items-center gap-2.5 border-t border-rachat-maroon/40 bg-rachat-black px-3.5 py-3">
         <button aria-label={t("إرفاق ملف", "Attach")} aria-expanded={panel === "attach"} onClick={() => setPanel(panel === "attach" ? "none" : "attach")}
@@ -387,9 +396,31 @@ export default function ChatScreen() {
           <div className="w-full max-w-[340px] rounded-2xl bg-rachat-card p-5 text-center">
             <ThreadAvatar thread={thread} className="mx-auto mb-3 h-14 w-14 text-lg" />
             <p className="font-extrabold text-rachat-papyrus">{thread.name}</p>
-            <p className="mt-1 text-xs text-neutral-500">{num(thread.memberIds.length)} {t("أعضاء", "members")}</p>
-            <p className="mt-3 text-xs leading-relaxed text-neutral-400">{memberNames}</p>
+            {thread.type === "channel" ? (
+              <>
+                {/* **مفيش أسماء مشتركين** — العدد بس، والسيرفر مابيبعتهمش أصلًا */}
+                <p className="mt-1 text-xs text-neutral-500">{num(thread.memberCount ?? 0)} {t("مشترك", "subscribers")}</p>
+                {thread.about && <p className="mt-3 text-xs leading-relaxed text-neutral-400" dir="auto">{thread.about}</p>}
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-xs text-neutral-500">{num(thread.memberIds.length)} {t("أعضاء", "members")}</p>
+                <p className="mt-3 text-xs leading-relaxed text-neutral-400">{memberNames}</p>
+              </>
+            )}
             <div className="mt-5 flex flex-col gap-2">
+              {thread.type === "channel" ? (
+                thread.myRole === "owner" ? (
+                  <p className="text-[11px] text-neutral-500">{t("إنت صاحب القناة دي", "You own this channel")}</p>
+                ) : (
+                  <button
+                    onClick={() => { void unsubscribeChannel(thread.id); navigate("/"); }}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-rachat-red/15 py-2.5 text-sm font-bold text-rachat-red"
+                  >
+                    <LogOut size={15} /> {t("إلغاء الاشتراك", "Unsubscribe")}
+                  </button>
+                )
+              ) : (
               <button
                 onClick={() => {
                   leaveThread(thread.id);
@@ -399,6 +430,7 @@ export default function ChatScreen() {
               >
                 <LogOut size={15} /> {t("مغادرة الجروب", "Leave group")}
               </button>
+              )}
               <button onClick={() => setShowInfo(false)} className="text-xs text-neutral-500">
                 {t("إغلاق", "Close")}
               </button>

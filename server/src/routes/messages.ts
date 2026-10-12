@@ -8,7 +8,7 @@ import { assertNotBlocked, blockedByMe, blockersOf } from "../lib/blocks.js";
 import { emitToUsers } from "../realtime.js";
 import { notifyPush, offlineOf } from "../lib/push.js";
 import { messageInclude, messageView, threadView } from "../serialize.js";
-import { assertMember, assertNotRestricted } from "./threads.js";
+import { assertCanPost, assertMember, assertNotRestricted } from "./threads.js";
 
 const AttachmentIn = z.object({
   name: z.string().min(1).max(255),
@@ -97,6 +97,7 @@ export function messageRoutes(ctx: Ctx) {
       attachment: AttachmentIn.optional(),
     }).parse(req.body);
     if (!b.text.trim() && !b.attachment) throw bad("empty", "الرسالة فاضية");
+    await assertCanPost(ctx, threadId, me); // القناة: النشر للمالك والمشرفين بس
     assertClean(ctx, b.text, b.attachment?.name);
     if (th?.type === "dm") {
       const other = (await memberIds(ctx, threadId)).find((m) => m.userId !== me);
@@ -209,6 +210,7 @@ export function messageRoutes(ctx: Ctx) {
       options: z.array(z.string().trim().min(1).max(100)).min(2).max(12),
       multi: z.boolean().default(false),
     }).parse(req.body);
+    await assertCanPost(ctx, threadId, me); // نفس حارس النشر — الاستطلاع رسالة
     const opts = b.options.map((o) => o.trim());
     if (new Set(opts).size !== opts.length) throw bad("duplicate_options", "فيه اختيارين بنفس الكلام");
     assertClean(ctx, b.question, ...opts);

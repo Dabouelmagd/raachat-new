@@ -13,6 +13,7 @@ import ServicesScreen from "./screens/ServicesScreen";
 import AccountScreen from "./screens/AccountScreen";
 import { AdHost } from "./ads/AdHost";
 import GroupsScreen from "./screens/GroupsScreen";
+import ChannelsScreen from "./screens/ChannelsScreen";
 import PayScreen from "./screens/PayScreen";
 import AuthScreen from "./screens/AuthScreen";
 import { SideList } from "./components/Header";
@@ -64,6 +65,7 @@ function WideShell() {
   const [adminErr, setAdminErr] = useState(false);
   const listFor = pathname.startsWith("/pay/") ? <ServicesScreen /> :
     pathname.startsWith("/groups") ? <GroupsScreen /> :
+    pathname.startsWith("/channels") ? <ChannelsScreen /> :
     pathname.startsWith("/rooms") ? <RoomsScreen /> :
     pathname.startsWith("/ads") ? <AdsScreen /> :
     pathname.startsWith("/services") ? <ServicesScreen /> :
@@ -131,6 +133,7 @@ function MobileShell() {
           <Route path="/pay/:key" element={<PayScreen />} />
           <Route path="/new-group" element={<NewGroupScreen />} />
           <Route path="/groups" element={<GroupsScreen />} />
+          <Route path="/channels" element={<ChannelsScreen />} />
           <Route path="/rooms" element={<RoomsScreen />} />
           <Route path="/services" element={<ServicesScreen />} />
           <Route path="/account" element={<AccountScreen />} />

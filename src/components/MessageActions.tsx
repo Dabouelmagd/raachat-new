@@ -19,6 +19,8 @@ export interface ActionsProps {
   onReply: () => void;
   /** رد بالصوت: بيضبط الرد ويبدأ التسجيل على طول */
   onVoiceReply: () => void;
+  /** في القناة اللي للقراءة بس مفيش رد — والتفاعل والنجمة والنسخ فاضلين */
+  canReply?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onForward: () => void;
@@ -114,8 +116,8 @@ export function MessageActions(p: ActionsProps) {
 
         {!m.deleted && (
           <>
-            <Row icon={rtl ? <CornerUpLeft size={17} /> : <CornerUpRight size={17} />} label={t("رد", "Reply")} onClick={() => { p.onReply(); p.onClose(); }} />
-            <Row icon={<Mic size={17} />} label={t("رد بالصوت", "Reply with voice")} onClick={() => { p.onVoiceReply(); p.onClose(); }} />
+            {p.canReply !== false && <Row icon={rtl ? <CornerUpLeft size={17} /> : <CornerUpRight size={17} />} label={t("رد", "Reply")} onClick={() => { p.onReply(); p.onClose(); }} />}
+            {p.canReply !== false && <Row icon={<Mic size={17} />} label={t("رد بالصوت", "Reply with voice")} onClick={() => { p.onVoiceReply(); p.onClose(); }} />}
             <Row icon={<Share2 size={17} />} label={t("إعادة توجيه", "Forward")} onClick={() => { p.onForward(); p.onClose(); }} />
             <Row icon={<Copy size={17} />} label={t("نسخ", "Copy")} onClick={() => void copy()} />
             <Row icon={<Star size={17} className={starred ? "fill-rachat-gold text-rachat-gold" : ""} />} label={starred ? t("إلغاء التمييز", "Unstar") : t("تمييز بنجمة", "Star")} onClick={() => void toggleStar()} />

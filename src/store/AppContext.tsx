@@ -1,13 +1,13 @@
 import { notify } from "../sound/notify";
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from "react";
-import { API_ON, api, closePollApi, createPollApi, ensureUploaded, setPinned as setPinnedApi, uploadBlob, useSession, votePollApi } from "../api/client";
+import { API_ON, api, closePollApi, createChannelApi, createPollApi, ensureUploaded, listChannelsApi, setPinned as setPinnedApi, subscribeChannelApi, unsubscribeChannelApi, uploadBlob, useSession, votePollApi } from "../api/client";
 import { mapContact, mapMessage, mapStory, mapThread, type ApiMessage, type ApiStory, type ApiThread, type ApiUser } from "../api/mappers";
 import { connectSocket } from "../api/socket";
 import { setProfileFromServer } from "./profile";
 import { setCalls } from "./calls";
 import { Attachment, Contact, Thread, Message, VoiceRoom, Story, RoomParticipant } from "../types";
 import { tr, loc } from "../i18n";
-import { CONTACTS, INITIAL_THREADS, INITIAL_MESSAGES, INITIAL_ROOMS, INITIAL_STORIES } from "./seed";
+import { CONTACTS, DEMO_CHANNELS, demoChannelPosts, INITIAL_THREADS, INITIAL_MESSAGES, INITIAL_ROOMS, INITIAL_STORIES } from "./seed";
 
 /**
  * طبقة حالة وهمية (mock) تحاكي شكل استدعاءات API حقيقية.
@@ -49,6 +49,8 @@ type Action =
   | { type: "CREATE_POLL"; threadId: string; question: string; options: string[]; multi: boolean }
   | { type: "VOTE_POLL"; messageId: string; optionIds: string[] }
   | { type: "CLOSE_POLL"; messageId: string }
+  | { type: "CREATE_CHANNEL"; id: string; name: string; about?: string }
+  | { type: "SUBSCRIBE_CHANNEL"; id: string }
   | { type: "CREATE_DM"; contactId: string; id: string }
   | { type: "CREATE_GROUP"; name: string; memberIds: string[]; look?: GroupLook }
   | { type: "LEAVE_THREAD"; threadId: string }
@@ -112,6 +114,24 @@ function reducer(state: AppState, action: Action): AppState {
         attachment: action.attachment,
       };
       return { ...state, messages: [...state.messages, msg] };
+    }
+    case "CREATE_CHANNEL": {
+      const t: Thread = {
+        id: action.id, type: "channel", name: action.name, about: action.about,
+        colorClass: "bg-rachat-gold", initial: [...action.name][0] ?? "ق",
+        memberIds: [], createdByMe: true, memberCount: 1, myRole: "owner", canPost: true,
+      };
+      return { ...state, threads: [t, ...state.threads] };
+    }
+    case "SUBSCRIBE_CHANNEL": {
+      const found = DEMO_CHANNELS.find((c) => c.id === action.id);
+      if (!found || state.threads.some((t) => t.id === action.id)) return state;
+      const t: Thread = {
+        id: found.id, type: "channel", name: found.name, about: found.about, colorClass: found.colorClass,
+        initial: found.initial, memberIds: [], memberCount: found.members + 1, myRole: "member", canPost: false,
+      };
+      // منشورات القناة بتظهر بعد الاشتراك (زي ما بتتحمّل من السيرفر)
+      return { ...state, threads: [t, ...state.threads], messages: [...state.messages, ...demoChannelPosts(found.id)] };
     }
     case "CREATE_POLL": {
       const msg: Message = {
@@ -377,6 +397,14 @@ function mockActions(dispatch: D) {
     leaveThread: (threadId: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId }),
     markRead: (threadId: string): void | Promise<void> => dispatch({ type: "MARK_READ", threadId }),
     setPinned: (threadId: string, pinned: boolean): void | Promise<void> => dispatch({ type: "SET_PINNED", threadId, pinned }),
+    createChannel: (name: string, about?: string): string | Promise<string> => {
+      const id = uid("ch");
+      dispatch({ type: "CREATE_CHANNEL", id, name, about });
+      return id;
+    },
+    listChannels: (): Promise<Thread[] | null> => Promise.resolve(null),
+    subscribeChannel: (id: string): void | Promise<void> => dispatch({ type: "SUBSCRIBE_CHANNEL", id }),
+    unsubscribeChannel: (id: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId: id }),
     createPoll: (threadId: string, question: string, options: string[], multi: boolean): void | Promise<void> =>
       dispatch({ type: "CREATE_POLL", threadId, question, options, multi }),
     votePoll: (messageId: string, optionIds: string[]): void | Promise<void> => dispatch({ type: "VOTE_POLL", messageId, optionIds }),
@@ -439,6 +467,19 @@ function apiActions(dispatch: D) {
       dispatch({ type: "LEAVE_THREAD", threadId });
     },
     markRead: async (threadId: string) => { dispatch({ type: "MARK_READ", threadId }); await api(`/threads/${threadId}/read`, { method: "POST" }); },
+    createChannel: async (name: string, about?: string) => {
+      const t = mapThread(await createChannelApi(name, about) as ApiThread);
+      dispatch({ type: "UPSERT_THREAD", thread: t });
+      return t.id;
+    },
+    listChannels: async () => ((await listChannelsApi()) as ApiThread[]).map(mapThread),
+    subscribeChannel: async (id: string) => {
+      dispatch({ type: "UPSERT_THREAD", thread: mapThread(await subscribeChannelApi(id) as ApiThread) });
+    },
+    unsubscribeChannel: async (id: string) => {
+      await unsubscribeChannelApi(id);
+      dispatch({ type: "LEAVE_THREAD", threadId: id });
+    },
     createPoll: async (threadId: string, question: string, options: string[], multi: boolean) => {
       dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await createPollApi(threadId, question, options, multi) as ApiMessage) });
     },

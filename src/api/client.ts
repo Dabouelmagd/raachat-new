@@ -146,6 +146,12 @@ export const votePollApi = (messageId: string, optionIds: string[]) =>
   api(`/messages/${messageId}/poll/vote`, { body: { optionIds } });
 export const closePollApi = (messageId: string) => api(`/messages/${messageId}/poll/close`, { method: "POST" });
 
+/** القنوات */
+export const createChannelApi = (name: string, about?: string) => api("/threads", { body: { type: "channel", name, about } });
+export const listChannelsApi = () => api("/channels");
+export const subscribeChannelApi = (id: string) => api(`/threads/${id}/subscribe`, { method: "POST" });
+export const unsubscribeChannelApi = (id: string) => api(`/threads/${id}/subscribe`, { method: "DELETE" });
+
 export async function logoutApi() {
   try { await api("/auth/logout", { method: "POST" }); } catch { /* تجاهل */ }
   setSession(null);

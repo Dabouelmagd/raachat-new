@@ -20,6 +20,8 @@ export const INITIAL_THREADS: Thread[] = [
   // رابط طويل وكلمة إنجليزية بلا مسافات. المحتوى ده هو اللي بيكسّر العرض على
   // الموبايل (الصفحة تبقى أعرض من الشاشة فالرسايل تتقص من الناحية التانية)،
   // ومن غيره الاختبار مابيشوفش العطل. اتبلّغ من الإنتاج في ١٢ أكتوبر.
+  // قناة مشترك فيها **عن قصد**: «للقراءة بس» ومنع الكتابة لازم يتجرّبوا
+  { id: "ch1", type: "channel", get name() { return tr("أخبار رع شات 📣", "Raa Chat News 📣"); }, get about() { return tr("كل جديد في التطبيق", "Everything new in the app"); }, colorClass: "bg-rachat-gold", get initial() { return tr("أ", "R"); }, memberIds: [], memberCount: 1240, myRole: "member", canPost: false },
   { id: "t5", type: "group", get name() { return tr("nsw-bity& : ḥmt nswt 👑 : مجموعة باسم طويل جدًا للاختبار", "nsw-bity& : ḥmt nswt 👑 : a very long group name for testing"); }, colorClass: "bg-rachat-maroon", get initial() { return tr("ن", "N"); }, memberIds: ["u1", "u2", "u3"] },
 ];
 
@@ -56,11 +58,31 @@ export const INITIAL_MESSAGES: Message[] = [
       ],
     },
   },
+  { id: "cm1", threadId: "ch1", authorId: "u6", get authorName() { return tr("فريق رع شات", "Raa Chat team"); }, get text() { return tr("نزلنا الاستطلاعات وتثبيت المحادثات 🎉", "Polls and pinned chats are live 🎉"); }, time: "8:10", reactions: { "🎉": ["u1", "u2", "u3"] } },
+  { id: "cm2", threadId: "ch1", authorId: "u6", get authorName() { return tr("فريق رع شات", "Raa Chat team"); }, get text() { return tr("وكمان الرد بالصوت وسرعة التشغيل", "And voice replies with playback speed"); }, time: "8:12", reactions: {} },
   // رسايل الحالات الصعبة (t5) — رابط طويل وكلمة بلا مسافات: لو الفقاعة مش
   // بتكسر الكلمة، النص بيوسّع الصفحة كلها والرسايل تتقص على الموبايل.
   { id: "m7", threadId: "t5", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "https://app.kenoz.org/legal/privacy.html?utm_source=raachat&utm_campaign=very-long-link-for-layout-testing-1234567890", time: "7:07", reactions: {} },
   { id: "m8", threadId: "t5", authorId: "me", get authorName() { return tr("أنت", "You"); }, text: "Supercalifragilisticexpialidocious_pneumonoultramicroscopicsilicovolcanoconiosis", time: "7:08", reactions: {} },
   { id: "m9", threadId: "t5", authorId: "u2", get authorName() { return tr("يوسف كامل", "Youssef Kamel"); }, get text() { return tr("هي دي الحاجه الوحيده اللي محدش ليه أكسس عليها علشان تملكين الدومين", "This is the only thing nobody else has access to, so you own the domain"); }, time: "7:08", reactions: {} },
+];
+
+/**
+ * قنوات تجريبية للاكتشاف (في وضع الـ API بتيجي من `GET /channels`).
+ * **موجودة عن قصد**: من غير قناة فيها منشورات، شكل القناة «للقراءة بس» ومنع
+ * الكتابة مابيظهروش في بناء الديمو ولا بيتجرّبوا.
+ */
+export interface DemoChannel { id: string; name: string; about: string; members: number; initial: string; colorClass: string }
+export const DEMO_CHANNELS: DemoChannel[] = [
+  { id: "ch2", get name() { return tr("أخبار التقنية 📱", "Tech News 📱"); }, get about() { return tr("كل جديد في الموبايلات والتطبيقات", "Everything new in phones and apps"); }, members: 8420, get initial() { return tr("أ", "T"); }, colorClass: "bg-rachat-red" },
+  { id: "ch3", get name() { return tr("وظائف مصر 💼", "Egypt Jobs 💼"); }, get about() { return tr("فرص شغل جديدة كل يوم", "New job openings every day"); }, members: 15300, get initial() { return tr("و", "J"); }, colorClass: "bg-[#7a4a2a]" },
+  { id: "ch4", get name() { return tr("مواعيد الصلاة 🕌", "Prayer Times 🕌"); }, get about() { return tr("مواعيد الصلاة والأذكار اليومية", "Daily prayer times and remembrances"); }, members: 42100, get initial() { return tr("م", "P"); }, colorClass: "bg-rachat-maroon" },
+];
+
+/** منشورات تجريبية لقناة بعد الاشتراك فيها */
+export const demoChannelPosts = (channelId: string): Message[] => [
+  { id: `${channelId}_p1`, threadId: channelId, authorId: "u6", get authorName() { return tr("إدارة القناة", "Channel admin"); }, get text() { return tr("أهلًا بيكم في القناة 👋", "Welcome to the channel 👋"); }, time: "8:00", reactions: {} },
+  { id: `${channelId}_p2`, threadId: channelId, authorId: "u6", get authorName() { return tr("إدارة القناة", "Channel admin"); }, get text() { return tr("أول خبر: التحديث الجديد نزل النهارده", "First post: the new update shipped today"); }, time: "8:05", reactions: { "👍": ["u1", "u2"] } },
 ];
 
 export const INITIAL_ROOMS: VoiceRoom[] = [

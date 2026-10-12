@@ -16,12 +16,14 @@ export function mapContact(u: ApiUser): Contact {
 }
 
 export interface ApiThread {
-  id: string; type: "dm" | "group"; name: string; color?: string; icon?: string; photo?: string;
-  memberIds: string[]; createdByMe?: boolean; isPublic?: boolean; memberCount?: number; joined?: boolean; unread?: number; pinned?: boolean }
+  id: string; type: "dm" | "group" | "channel"; name: string; color?: string; icon?: string; photo?: string;
+  memberIds: string[]; createdByMe?: boolean; isPublic?: boolean; memberCount?: number; joined?: boolean; unread?: number; pinned?: boolean;
+  about?: string; myRole?: "owner" | "admin" | "member" | null; canPost?: boolean; subscribed?: boolean }
 export function mapThread(t: ApiThread): Thread {
   return {
     id: t.id, type: t.type, name: t.name, initial: initialOf(t.name), colorClass: COLORS[hash(t.id) % COLORS.length],
     memberIds: t.memberIds, createdByMe: t.createdByMe, color: t.color, icon: t.icon, photo: t.photo ? toAbs(t.photo) : undefined, unread: t.unread, pinned: t.pinned,
+    about: t.about, memberCount: t.memberCount, myRole: t.myRole, canPost: t.canPost,
   };
 }
 

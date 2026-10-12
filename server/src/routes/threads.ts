@@ -23,6 +23,18 @@ export async function assertNotRestricted(ctx: Ctx, threadId: string) {
   if (t?.restrictedAt) throw forbidden("الجروب ده متقيّد من إدارة التطبيق");
 }
 
+/**
+ * **النشر في القناة للمالك والمشرفين بس.** القناة بث مش جروب: المشترك بيقرا
+ * ويتفاعل، إنما مابيكتبش. الحارس ده لازم يبقى على **كل** مسار بيعمل رسالة
+ * جديدة (نص · مرفق · استطلاع) مش على مسار واحد — نفس درس مراجعة الجروبات.
+ */
+export async function assertCanPost(ctx: Ctx, threadId: string, userId: string) {
+  const t = await ctx.db.thread.findUnique({ where: { id: threadId }, select: { type: true } });
+  if (t?.type !== "channel") return;
+  const m = await ctx.db.membership.findUnique({ where: { threadId_userId: { threadId, userId } }, select: { role: true } });
+  if (m?.role !== "owner" && m?.role !== "admin") throw forbidden("القناة دي للقراءة بس — النشر لصاحب القناة والمشرفين");
+}
+
 export async function assertMember(ctx: Ctx, threadId: string, userId: string) {
   const m = await ctx.db.membership.findUnique({ where: { threadId_userId: { threadId, userId } } });
   if (!m) throw forbidden("مش عضو في المحادثة دي");
@@ -86,6 +98,51 @@ export function threadRoutes(ctx: Ctx) {
     res.json(rows.map((t) => ({ ...threadView(t, me), joined: t.members.some((m) => m.userId === me) })));
   }));
 
+  /** اكتشاف القنوات العامة — العدد بس، مفيش أسماء مشتركين. */
+  r.get("/channels", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const rows = await ctx.db.thread.findMany({
+      where: { type: "channel", isPublic: true },
+      include: { members: { include: { user: true } }, messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    res.json(rows.map((t) => ({
+      ...threadView(t, me),
+      subscribed: t.members.some((m) => m.userId === me),
+      lastActivity: (t.messages[0]?.createdAt ?? t.createdAt).toISOString(),
+    })));
+  }));
+
+  /**
+   * الاشتراك في قناة عامة. صاحب القناة اللي بيرجع يرجع **مالك** مش مشترك عادي
+   * (نفس درس الجروب العام: الـ create كان بيحطّه عضو عادي للأبد).
+   */
+  r.post("/threads/:id/subscribe", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const id = String(req.params.id);
+    const t0 = await ctx.db.thread.findUnique({ where: { id } });
+    if (!t0 || t0.type !== "channel" || !t0.isPublic) throw notFound("قناة غير موجودة");
+    const role = t0.createdById === me ? "owner" : "member";
+    await ctx.db.membership.upsert({ where: { threadId_userId: { threadId: id, userId: me } }, update: {}, create: { threadId: id, userId: me, role } });
+    const t = (await loadThreadFor(ctx.db, id))!;
+    emitToUsers(ctx, [me], "thread:updated", threadView(t, me));
+    res.json(threadView(t, me));
+  }));
+
+  /** إلغاء الاشتراك — والمالك مايقدرش يسيب قناته (تفضل بلا صاحب للأبد). */
+  r.delete("/threads/:id/subscribe", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const id = String(req.params.id);
+    const m = await assertMember(ctx, id, me);
+    const t0 = await ctx.db.thread.findUnique({ where: { id }, select: { type: true } });
+    if (t0?.type !== "channel") throw bad("not_channel", "المسار ده للقنوات بس");
+    if (m.role === "owner") throw bad("channel_owner", "إنت صاحب القناة — مينفعش تلغي اشتراكك فيها");
+    await ctx.db.membership.delete({ where: { threadId_userId: { threadId: id, userId: me } } });
+    emitToUsers(ctx, [me], "thread:removed", { id });
+    res.status(204).end();
+  }));
+
   r.post("/threads", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
     const b = z.discriminatedUnion("type", [
@@ -100,9 +157,33 @@ export function threadRoutes(ctx: Ctx) {
         photoUrl: z.string().max(500).optional(),
         isPublic: z.boolean().default(false),
       }),
+      z.object({
+        type: z.literal("channel"),
+        name: z.string().trim().min(1).max(80),
+        about: z.string().trim().max(300).optional(),
+        color: Color.optional(),
+        icon: z.string().max(30).optional(),
+        photoUrl: z.string().max(500).optional(),
+        // القناة عامة افتراضيًا — معناها إنها تتلاقى في الاكتشاف
+        isPublic: z.boolean().default(true),
+      }),
     ]).parse(req.body);
 
     if (b.type === "group") assertClean(ctx, b.name);
+    // اسم القناة ووصفها بيبانوا لكل الناس في الاكتشاف — الاتنين متفلترين
+    if (b.type === "channel") assertClean(ctx, b.name, b.about);
+    if (b.type === "channel") {
+      const created = await ctx.db.thread.create({
+        data: {
+          type: "channel", name: b.name, about: b.about, color: b.color, icon: b.icon, photoUrl: b.photoUrl,
+          isPublic: b.isPublic, createdById: me, members: { create: [{ userId: me, role: "owner" }] },
+        },
+      });
+      const t = (await loadThreadFor(ctx.db, created.id))!;
+      emitToUsers(ctx, [me], "thread:new", threadView(t, me));
+      res.status(201).json(threadView(t, me));
+      return;
+    }
     const others = [...new Set(b.memberIds)].filter((id) => id !== me);
     const found = await ctx.db.user.findMany({ where: { id: { in: others }, modStatus: { not: "deleted" } }, select: { id: true } });
     if (found.length !== others.length) throw bad("unknown_member", "في عضو غير موجود");
@@ -143,15 +224,16 @@ export function threadRoutes(ctx: Ctx) {
     const id = String(req.params.id);
     const m = await assertMember(ctx, id, me);
     const t0 = await ctx.db.thread.findUnique({ where: { id } });
-    if (!t0 || t0.type !== "group") throw notFound();
+    if (!t0 || (t0.type !== "group" && t0.type !== "channel")) throw notFound();
     if (m.role === "member") throw forbidden("للمشرفين فقط");
     const b = z.object({
       name: z.string().trim().min(1).max(80).optional(),
+      about: z.string().trim().max(300).nullable().optional(),
       color: Color.nullable().optional(),
       icon: z.string().max(30).nullable().optional(),
       photoUrl: z.string().max(500).nullable().optional(),
     }).parse(req.body);
-    assertClean(ctx, b.name); // كان على الإنشاء بس — فالتغيير كان بيعدّي
+    assertClean(ctx, b.name, b.about); // كان على الإنشاء بس — فالتغيير كان بيعدّي
     await assertNotRestricted(ctx, id);
     await ctx.db.thread.update({ where: { id }, data: b });
     const t = (await loadThreadFor(ctx.db, id))!;
@@ -202,6 +284,7 @@ export function threadRoutes(ctx: Ctx) {
     const t0 = await ctx.db.thread.findUnique({ where: { id }, select: { type: true } });
     // الخروج من محادثة فردية كان بيعدّي، والطرف التاني يشوف بعدها «الحساب ده
     // اتحذف ومينفعش تبعتله» — رسالة غلط تمامًا عن حساب شغّال.
+    if (t0?.type === "channel") throw bad("use_unsubscribe", "القناة بتتسيب بإلغاء الاشتراك");
     if (t0?.type !== "group") throw bad("not_group", "المحادثة الفردية مالهاش خروج");
     if (m.role !== "member") {
       const owners = await ctx.db.membership.count({ where: { threadId: id, role: { not: "member" } } });

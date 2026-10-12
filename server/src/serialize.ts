@@ -29,10 +29,21 @@ export function threadView(t: NonNullable<ThreadRow>, me: string) {
       memberIds: others.map((m) => m.userId), createdByMe: false,
     };
   }
+  const myRole = t.members.find((m) => m.userId === me)?.role ?? null;
+  if (t.type === "channel") {
+    // **المشتركين مابيشوفوش بعض** — القناة بث، مش جروب. فمفيش `memberIds`
+    // للقناة أبدًا (العدد بس)، والنشر للمالك والمشرفين.
+    return {
+      id: t.id, type: t.type, name: t.name ?? "", about: t.about ?? undefined,
+      color: t.color ?? undefined, icon: t.icon ?? undefined, photo: t.photoUrl ?? undefined,
+      memberIds: [], createdByMe: t.createdById === me, isPublic: t.isPublic,
+      memberCount: t.members.length, myRole, canPost: myRole === "owner" || myRole === "admin",
+    };
+  }
   return {
     id: t.id, type: t.type, name: t.name ?? "", color: t.color ?? undefined, icon: t.icon ?? undefined,
     photo: t.photoUrl ?? undefined, memberIds: others.map((m) => m.userId), createdByMe: t.createdById === me,
-    isPublic: t.isPublic, memberCount: t.members.length,
+    isPublic: t.isPublic, memberCount: t.members.length, myRole, canPost: true,
   };
 }
 

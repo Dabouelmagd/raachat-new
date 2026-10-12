@@ -1,7 +1,7 @@
 // أنواع البيانات المشتركة — هي نفسها الشكل المتوقع لاحقًا من الـ API الحقيقي
 // (راجع src/store لطبقة الحالة الوهمية الحالية، وREADME لخطة الربط بباك إند حقيقي)
 
-export type ThreadType = "dm" | "group";
+export type ThreadType = "dm" | "group" | "channel";
 
 export interface Contact {
   id: string;
@@ -25,6 +25,14 @@ export interface Thread {
   unread?: number;
   /** مثبّتة فوق القايمة — **خاص بيّا**، الطرف التاني مايعرفش */
   pinned?: boolean;
+  /** وصف القناة */
+  about?: string;
+  /** عدد الأعضاء/المشتركين (للقناة: العدد بس، مفيش أسماء) */
+  memberCount?: number;
+  /** دوري: owner · admin · member */
+  myRole?: "owner" | "admin" | "member" | null;
+  /** أقدر أنشر؟ في القناة: المالك والمشرفين بس */
+  canPost?: boolean;
 }
 
 export interface Attachment {

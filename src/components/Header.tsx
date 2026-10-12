@@ -49,7 +49,7 @@ export function Header({ title, showBack, right, globalActions = true }: HeaderP
         ) : (
           <HorusMark />
         )}
-        <span className="truncate font-extrabold text-lg">{title}</span>
+        <h1 className="truncate font-extrabold text-lg">{title}</h1>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-rachat-red">
         {right}

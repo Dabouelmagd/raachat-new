@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ThreadAvatar } from "../components/ThreadAvatar";
-import { Settings, Plus, Users, Phone, Star, Mic, Pin, PinOff } from "lucide-react";
+import { Settings, Plus, Users, Phone, Star, Mic, Pin, PinOff, Megaphone } from "lucide-react";
 import { phaKind } from "../components/PharaohEmoji";
 import { occKind } from "../components/OccasionSticker";
 import { toggleFavorite, useFavorites } from "../store/favorites";
@@ -13,6 +13,8 @@ import { SponsoredCard } from "../ads/SponsoredCard";
 import { useAppActions, useAppState } from "../store/AppContext";
 import { useT, num as n } from "../i18n";
 
+type Filter = "all" | "unread" | "dm" | "group" | "channel" | "room" | "fav";
+
 export default function ChatsScreen() {
   const navigate = useNavigate();
   const tx = useT();
@@ -20,10 +22,10 @@ export default function ChatsScreen() {
   const { setPinned } = useAppActions();
   const [pinNote, setPinNote] = useState("");
   const favs = useFavorites();
-  const [filter, setFilter] = useState<"all" | "unread" | "dm" | "group" | "room" | "fav">("all");
-  const FILTERS: ["all" | "unread" | "dm" | "group" | "room" | "fav", string, string][] = [["all", "الكل", "All"], ["unread", "غير المقروء", "Unread"], ["dm", "الخاصة", "Direct"], ["group", "الجروبات", "Groups"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
+  const [filter, setFilter] = useState<Filter>("all");
+  const FILTERS: [Filter, string, string][] = [["all", "الكل", "All"], ["unread", "غير المقروء", "Unread"], ["dm", "الخاصة", "Direct"], ["group", "الجروبات", "Groups"], ["channel", "القنوات", "Channels"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
   const ordered = [...threads.filter((t) => t.pinned), ...threads.filter((t) => !t.pinned)];
-  const shown = ordered.filter((x) => filter === "all" || (filter === "unread" && (x.unread ?? 0) > 0) || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "fav" && favs.includes(x.id)));
+  const shown = ordered.filter((x) => filter === "all" || (filter === "unread" && (x.unread ?? 0) > 0) || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "channel" && x.type === "channel") || (filter === "fav" && favs.includes(x.id)));
   const [showNewChat, setShowNewChat] = useState(false);
 
   const unreadOf = (t: { unread?: number }) => t.unread ?? 0;
@@ -67,6 +69,11 @@ export default function ChatsScreen() {
             <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold ${filter === k ? "bg-rachat-red text-white" : "bg-rachat-card text-neutral-400"}`}>{tx(ar, en)}</button>
           ))}
         </div>
+        {filter === "channel" && (
+          <button onClick={() => navigate("/channels")} className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-rachat-gold/60 py-3 text-sm font-bold text-rachat-gold">
+            <Megaphone size={16} /> {tx("اكتشف قنوات وأنشئ قناتك", "Discover channels & create yours")}
+          </button>
+        )}
         {pinNote && <p role="status" className="mb-2 rounded-xl bg-rachat-card px-3 py-2 text-xs text-rachat-gold">{pinNote}</p>}
         {filter === "all" && <SponsoredCard index={1} />}
         {filter === "room" && rooms.map((r) => (
@@ -88,6 +95,11 @@ export default function ChatsScreen() {
               className="mb-2.5 flex w-full items-center gap-3 rounded-2xl bg-rachat-card p-3 text-start shadow-lg shadow-black/20"
             >
               <ThreadAvatar thread={t}>
+                {t.type === "channel" && (
+                  <span className="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full bg-rachat-black text-rachat-gold ring-1 ring-rachat-black" aria-label={tx("قناة", "Channel")}>
+                    <Megaphone size={9} />
+                  </span>
+                )}
                 {t.type === "group" && (
                   <span className="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full bg-rachat-black text-rachat-gold ring-1 ring-rachat-black">
                     <Users size={9} />

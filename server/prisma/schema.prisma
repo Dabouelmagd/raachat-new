@@ -15,6 +15,8 @@ datasource db {
 enum ThreadType {
   dm
   group
+  /// قناة: المالك والمشرفين بس بينشروا، والمشتركين بيقروا ويتفاعلوا
+  channel
 }
 
 enum MemberRole {
@@ -108,7 +110,9 @@ model Session {
 model Thread {
   id        String     @id @default(cuid())
   type      ThreadType
-  name      String? // للجروبات فقط
+  name      String? // للجروبات والقنوات
+  /// وصف القناة (بيبان في الاكتشاف) — للقنوات بس
+  about     String?
   color     String? // لون الجروب (hex)
   icon      String? // مفتاح أيقونة
   photoUrl  String?
