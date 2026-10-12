@@ -5,6 +5,7 @@ import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, wrap } from "../lib/errors.js";
 import { ADULT_AGE, FULL_CAPACITY_AGE, YOUNG_LIMITS, isAdult, walletLimits } from "../lib/age.js";
+import { startOfCairoMonth } from "../lib/cairo.js";
 
 /** الطلب بعد ما الحارس يحسب سقوف السن مرة واحدة (بدل استعلام في كل مسار) */
 type WalletRequest = AuthedRequest & { rcLimits?: typeof YOUNG_LIMITS | null };
@@ -52,10 +53,14 @@ export function walletRoutes(ctx: Ctx) {
       throw new HttpError(403, "young_tx_limit", `أقصى مبلغ للعملية ${L.tx} جنيه لحد سن ${FULL_CAPACITY_AGE} سنة`);
     }
   };
-  /** مجموع الفواتير في الشهر الميلادي الحالي (بالتوقيت العالمي) */
+  /**
+   * مجموع الفواتير في الشهر الميلادي الحالي **بتوقيت القاهرة**.
+   * كان بالشهر العالمي، والفرق ٢–٣ ساعات في بداية كل شهر — يعني المستخدم اللي يدفع
+   * بين ١٢ و٢–٣ الفجر أول الشهر بتتحسب فواتيره على الشهر اللي فات، وبعد ساعتين
+   * السقف يرجع صفر: **٤٠٠٠ جنيه في شهر سقفه ٢٠٠٠**. والعكس كمان (رفض بالغلط آخر الشهر).
+   */
   async function billsThisMonth(userId: string) {
-    const n = new Date();
-    const from = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1));
+    const from = startOfCairoMonth();
     const agg = await db.walletTx.aggregate({ _sum: { amount: true }, where: { userId, kind: "bill", createdAt: { gte: from } } });
     return money(agg._sum.amount ?? 0);
   }

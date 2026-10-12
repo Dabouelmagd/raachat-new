@@ -16,13 +16,40 @@ import type { PushPayload, PushSender, PushSub } from "../src/lib/push.js";
 
 const PORT = 54330 + Math.floor(Math.random() * 500);
 
+/**
+ * الافتراضي: postgres مدمج (مفيش تجهيز على جهاز المطوّر ولا في CI).
+ * لكن النسخة المدمجة محتاجة مكتبات ICU قديمة ومابتشتغلش على كل توزيعة — فلو البيئة
+ * فيها postgres حقيقي، `TEST_PG_URL` بيستخدمه: بيعمل **قاعدة باسم فريد لكل ملف
+ * اختبار** (عشان الملفات اللي بتتشغّل بالتوازي ما تتلخبطش) وبيمسحها في الآخر.
+ * مثال: TEST_PG_URL=postgresql://rachat:rachat@localhost:5432/postgres
+ */
+const EXTERNAL = process.env.TEST_PG_URL;
+
 export async function startTestEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rc-pg-"));
-  const embedded = new EmbeddedPostgres({ databaseDir: dir, user: "rachat", password: "rachat", port: PORT, persistent: false, initdbFlags: ["--encoding=UTF8", "--locale=C.UTF-8"] });
-  await embedded.initialise();
-  await embedded.start();
-  await embedded.createDatabase("rachat");
-  const url = `postgresql://rachat:rachat@localhost:${PORT}/rachat`;
+  let embedded: EmbeddedPostgres | undefined;
+  let url: string;
+  let dropDb: (() => Promise<void>) | undefined;
+  if (EXTERNAL) {
+    const name = `rc_test_${process.pid}_${Math.floor(Math.random() * 1e6)}`;
+    const admin = new pg.Client({ connectionString: EXTERNAL });
+    await admin.connect();
+    await admin.query(`CREATE DATABASE "${name}"`);
+    await admin.end();
+    url = EXTERNAL.replace(/\/[^/?]*(\?|$)/, `/${name}$1`);
+    dropDb = async () => {
+      const a2 = new pg.Client({ connectionString: EXTERNAL });
+      await a2.connect();
+      await a2.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+      await a2.end();
+    };
+  } else {
+    embedded = new EmbeddedPostgres({ databaseDir: dir, user: "rachat", password: "rachat", port: PORT, persistent: false, initdbFlags: ["--encoding=UTF8", "--locale=C.UTF-8"] });
+    await embedded.initialise();
+    await embedded.start();
+    await embedded.createDatabase("rachat");
+    url = `postgresql://rachat:rachat@localhost:${PORT}/rachat`;
+  }
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   for (const d of fs.readdirSync(path.resolve("prisma/migrations")).sort()) {
@@ -71,7 +98,8 @@ export async function startTestEnv() {
       server.close();
       ctx.io?.close();
       await ctx.db.$disconnect();
-      await embedded.stop();
+      if (embedded) await embedded.stop();
+      if (dropDb) await dropDb();
       fs.rmSync(dir, { recursive: true, force: true });
       fs.rmSync(uploads, { recursive: true, force: true });
     },

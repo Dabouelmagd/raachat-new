@@ -28,22 +28,12 @@ export const isDay = (s: string) => {
   const d = new Date(s + "T00:00:00Z");
   return !isNaN(+d) && d.toISOString().slice(0, 10) === s;
 };
-/** تاريخ النهارده بتوقيت القاهرة */
-export const todayCairo = () => new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
-
 /**
- * بداية «النهارده» بتوقيت القاهرة.
- * فرق القاهرة عن UTC بيتغير بالتوقيت الصيفي (+02 شتاءً و+03 صيفًا)، فبنحسبه من الساعة
- * الفعلية بدل ما نثبّته: بناخد ساعة/دقيقة/ثانية القاهرة ونطرحها من الوقت الحالي.
- * (تثبيت الفرق على +02:00 كان بيرجّع وقت **في المستقبل** بين ١٢ و١ بالليل في التوقيت
- * الصيفي، فأرقام «النهارده» في اللوحة كانت بتطلع صفر الساعة دي.)
+ * حسابات تقويم القاهرة كلها بقت في `lib/cairo.ts` (مصدر واحد بدل نسخة في كل ملف —
+ * التشتت ده هو اللي ولّد عطل «أرقام النهارده صفر» وعطل «سقف الشهر العالمي»).
+ * الاستيراد من هنا لسه شغّال عشان الكود القديم.
  */
-export function startOfCairoDay(now: Date = new Date()): Date {
-  const [h, m, s] = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).format(now).split(":").map(Number);
-  return new Date(now.getTime() - (((h * 60 + m) * 60 + s) * 1000 + now.getMilliseconds()));
-}
+export { startOfCairoDay, startOfCairoMonth, todayCairo } from "./cairo.js";
 export const addDays = (s: string, n: number) => new Date(+new Date(s + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 export function daysBetween(from: string, to: string): string[] {
   const out: string[] = [];

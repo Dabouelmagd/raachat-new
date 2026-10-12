@@ -1,4 +1,6 @@
 /** حساب السن من تاريخ الميلاد وقواعد خدمات ١٨+ */
+import { cairoParts, todayCairo } from "./cairo.js";
+
 export const ADULT_AGE = 18;
 
 /**
@@ -19,11 +21,17 @@ export const YOUNG_LIMITS = {
   month: 2000,
 } as const;
 
-/** السن بالسنين الكاملة في تاريخ معيّن (افتراضيًا النهارده) */
+/**
+ * السن بالسنين الكاملة في تاريخ معيّن (افتراضيًا النهارده).
+ * **اليوم بتوقيت القاهرة** مش UTC: `birthDate` عمود `@db.Date` (منتصف ليل UTC) فأجزاؤه
+ * صح، إنما «النهارده» لازم تبقى بتقويم المستخدم — غير كده اللي يكمّل ١٨ النهارده يتقال
+ * له «ممنوع» أول ٢–٣ ساعات من يوم عيد ميلاده (والعكس في ٢١: السقوف تفضل مطبّقة).
+ */
 export function ageOn(birth: Date, now: Date = new Date()): number {
-  let a = now.getUTCFullYear() - birth.getUTCFullYear();
-  const m = now.getUTCMonth() - birth.getUTCMonth();
-  if (m < 0 || (m === 0 && now.getUTCDate() < birth.getUTCDate())) a--;
+  const t = cairoParts(now);
+  let a = t.y - birth.getUTCFullYear();
+  const m = t.m - 1 - birth.getUTCMonth();
+  if (m < 0 || (m === 0 && t.d < birth.getUTCDate())) a--;
   return a;
 }
 
@@ -42,9 +50,13 @@ export const isFullCapacity = (birth: Date | null | undefined, now?: Date): bool
 export const walletLimits = (birth: Date | null | undefined, now?: Date): typeof YOUNG_LIMITS | null =>
   isFullCapacity(birth, now) ? null : YOUNG_LIMITS;
 
-/** تاريخ ميلاد مقبول: مش في المستقبل ومش أقدم من ١٢٠ سنة */
+/**
+ * تاريخ ميلاد مقبول: مش في المستقبل ومش أقدم من ١٢٠ سنة.
+ * المقارنة **بيوم القاهرة** مش بلحظة UTC — غير كده تاريخ النهارده نفسه بيترفض أول
+ * ٢–٣ ساعات من اليوم (لأنه بيتفسّر كمنتصف ليل UTC اللي لسه ما جاش).
+ */
 export function validBirthDate(d: Date, now: Date = new Date()): boolean {
   if (Number.isNaN(d.getTime())) return false;
-  if (d.getTime() > now.getTime()) return false;
+  if (d.toISOString().slice(0, 10) > todayCairo(now)) return false;
   return ageOn(d, now) <= 120;
 }

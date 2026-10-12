@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { startTestEnv } from "./helpers.js";
 
@@ -156,5 +156,31 @@ describe("wallet", () => {
     expect(before.body).toMatchObject({ birthDate: null, isAdult: false });
     const after = await setBirth(a, "1988-03-04").expect(200);
     expect(after.body).toMatchObject({ birthDate: "1988-03-04", isAdult: true });
+  });
+
+  /**
+   * العطل: مجموع فواتير الشهر كان بيتحسب على **الشهر العالمي**، والقاهرة +02/+03.
+   * فالفاتورة اللي بتتدفع بين ١٢ و٢–٣ الفجر أول الشهر بتخرج من الحساب بعد ساعتين،
+   * والسقف ينفتح من جديد → ٤٠٠٠ جنيه في شهر سقفه ٢٠٠٠.
+   */
+  it("سقف الشهر بشهر القاهرة: فاتورة ١٢:٣٠ بالليل أول الشهر تفضل محسوبة الصبح", async () => {
+    const a = await env.login("01070000011");
+    await setBirth(a, "2007-03-15").expect(200); // ١٩ سنة → عليه سقوف
+    await request(env.app).get("/wallet").set(a.auth).expect(200); // المحفظة اتعملت
+    await env.ctx.db.walletTx.create({
+      data: {
+        userId: a.user.id, kind: "bill", service: "elec", amount: 500, ref: "cairo-month-bill",
+        createdAt: new Date("2026-09-30T21:30:00Z"), // ١٢:٣٠ بالليل أول أكتوبر بتوقيت القاهرة
+      },
+    });
+
+    // الساعة ٩ الصبح أول أكتوبر بالقاهرة: الشهر العالمي بدأ خلاص، وشهر القاهرة لسه هو هو
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-01T06:00:00Z") });
+    try {
+      const w = await request(env.app).get("/wallet").set(a.auth).expect(200);
+      expect(w.body.limits.monthUsed).toBe(500); // بالحساب القديم كان بيطلع صفر
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
