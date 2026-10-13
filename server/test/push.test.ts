@@ -71,6 +71,17 @@ describe("web push", () => {
     expect(await env.ctx.db.pushSub.count({ where: { userId: b.user.id } })).toBe(0);
   });
 
+  it("توقيع مرفوض (403 بعد تبديل مفاتيح VAPID) بيمسح الاشتراك عشان الجهاز يشترك من جديد", async () => {
+    const a = await env.login("01096000051", "أ٢"); const b = await env.login("01096000052", "ب٢");
+    const th = (await request(env.app).post("/threads").set(a.auth).send({ type: "dm", memberIds: [b.user.id] })).body;
+    await request(env.app).post("/push/subscribe").set(b.auth).send(sub("rotated")).expect(204);
+    env.refused.add(sub("rotated").endpoint);
+    await request(env.app).post(`/threads/${th.id}/messages`).set(a.auth).send({ text: "y" }).expect(201);
+    await wait(300);
+    // من غير المسح: الصف بيفضل والإشعارات بتفشل للأبد في سكوت
+    expect(await env.ctx.db.pushSub.count({ where: { userId: b.user.id } })).toBe(0);
+  });
+
   it("مكالمة لأوفلاين: من غير اشتراك = offline؛ باشتراك = push + call:pending عند الاتصال + فائتة", async () => {
     const a = await env.login("01096000041", "المتصلة"); const b = await env.login("01096000042", "المتلقي");
     const th = (await request(env.app).post("/threads").set(a.auth).send({ type: "dm", memberIds: [b.user.id] })).body;

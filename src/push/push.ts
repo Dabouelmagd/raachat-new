@@ -15,13 +15,26 @@ async function registration() {
   return (await navigator.serviceWorker.getRegistration("/")) ?? (await navigator.serviceWorker.register("/sw.js"));
 }
 
+const sameKey = (a: ArrayBuffer | null | undefined, b: Uint8Array) =>
+  !!a && a.byteLength === b.length && new Uint8Array(a).every((v, i) => v === b[i]);
+
 /** يسجّل الاشتراك على السيرفر (آمن يتكرر). بيرجّع true لو الجهاز مشترك فعلًا. */
 async function subscribe(): Promise<boolean> {
   const { publicKey } = await api<{ publicKey: string | null }>("/push/key");
   if (!publicKey) return false; // السيرفر مش مفعّل VAPID
+  const key = b64ToU8(publicKey);
   const reg = await registration();
   await navigator.serviceWorker.ready;
-  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(publicKey) }));
+  let existing = await reg.pushManager.getSubscription();
+  // لو السيرفر بدّل مفاتيح VAPID، الاشتراك القديم بقى ميّت (كل إشعار بيترفض في
+  // سكوت) ومابيصلّحش نفسه لأن `getSubscription()` بترجّعه زي ما هو — فنلغيه
+  // ونشترك من جديد بالمفتاح الحالي.
+  if (existing && !sameKey(existing.options.applicationServerKey, key)) {
+    await api("/push/unsubscribe", { method: "POST", body: { endpoint: existing.endpoint } }).catch(() => {});
+    await existing.unsubscribe().catch(() => {});
+    existing = null;
+  }
+  const sub = existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
   const j = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
   await api("/push/subscribe", { method: "POST", body: { endpoint: j.endpoint, keys: j.keys } });
   return true;

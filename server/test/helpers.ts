@@ -78,7 +78,12 @@ export async function startTestEnv() {
   }) as typeof fetch;
   const pushed: { sub: PushSub; payload: PushPayload }[] = [];
   const dead = new Set<string>(); // endpoints اللي هترجّع 410
-  const push: PushSender = { publicKey: "test-public-key", async send(sub, payload) { if (dead.has(sub.endpoint)) throw Object.assign(new Error("gone"), { statusCode: 410 }); pushed.push({ sub, payload }); } };
+  const refused = new Set<string>(); // endpoints اللي هترجّع 403 (توقيعنا مرفوض = مفاتيح VAPID اتبدّلت)
+  const push: PushSender = { publicKey: "test-public-key", async send(sub, payload) {
+    if (dead.has(sub.endpoint)) throw Object.assign(new Error("gone"), { statusCode: 410 });
+    if (refused.has(sub.endpoint)) throw Object.assign(new Error("forbidden"), { statusCode: 403 });
+    pushed.push({ sub, payload });
+  } };
   const ctx: Ctx = { db: createDb(url), config, sender, fetch: fakeFetch, push };
   const app = createApp(ctx);
   const server = http.createServer(app);
@@ -96,7 +101,7 @@ export async function startTestEnv() {
   }
 
   return {
-    app, ctx, sent, port, login, pushed, dead, fetched,
+    app, ctx, sent, port, login, pushed, dead, refused, fetched,
     async stop() {
       server.close();
       ctx.io?.close();

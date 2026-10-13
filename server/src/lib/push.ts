@@ -11,6 +11,17 @@ export interface PushPayload {
   callId?: string;
 }
 export interface PushSub { endpoint: string; p256dh: string; auth: string }
+
+/**
+ * أكواد معناها «الاشتراك ده مايتبعتلوش تاني بالمفاتيح الحالية»، فيتمسح:
+ *  - 404/410 = الاشتراك مات عند المتصفح/الخدمة.
+ *  - 401/403 = خدمة الدفع رفضت توقيعنا. السبب العملي الوحيد عندنا هو **تبديل
+ *    مفاتيح VAPID**: الجهاز اشترك بالمفتاح القديم، وإحنا بنوقّع بالجديد. من غير
+ *    المسح الصف بيفضل للأبد وكل إشعار بيفشل **في سكوت** (الكود القديم كان بيطبع
+ *    في اللوج بس)، والجهاز مش بيصلّح نفسه لأن `getSubscription()` بترجّع القديم.
+ *    بعد المسح، الواجهة بتعيد الاشتراك بالمفتاح الجديد لوحدها.
+ */
+const DEAD_CODES = new Set([401, 403, 404, 410]);
 /** مُرسِل Push — قابل للاستبدال في الاختبارات. يرمي { statusCode } لو الاشتراك مات (404/410). */
 export interface PushSender {
   publicKey: string;
@@ -44,7 +55,7 @@ export async function notifyPush(ctx: Ctx, userIds: string[], payload: PushPaylo
       try { await ctx.push!.send(s, payload); }
       catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
-        if (code === 404 || code === 410) await ctx.db.pushSub.deleteMany({ where: { endpoint: s.endpoint } });
+        if (code && DEAD_CODES.has(code)) await ctx.db.pushSub.deleteMany({ where: { endpoint: s.endpoint } });
         else console.error("push failed", code ?? e);
       }
     }));

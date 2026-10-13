@@ -19,6 +19,13 @@ KEYS=$(echo "$KEYS" | tr -d '\r' | tail -n 1)
 PUB=${KEYS%% *}; PRV=${KEYS##* }
 [ ${#PUB} -gt 80 ] && [ ${#PRV} -gt 40 ] || { echo "❌ التوليد فشل"; exit 1; }
 
+# فحص إيجابي **قبل** الكتابة: المفتاح العام مشتق من الخاص، والتوقيع (ES256) متحقَّق.
+# لو الزوج غلط، كل إشعار بيترفض 403 في سكوت — فالكتابة مابتحصلش أصلًا.
+echo "↪ فحص المفاتيح…"
+$DC run --rm --no-deps -T -e VAPID_PUBLIC="$PUB" -e VAPID_PRIVATE="$PRV" -e VAPID_SUBJECT="$SUBJ" \
+  --entrypoint node api --input-type=module - < scripts/lib/vapidcheck.mjs \
+  || { echo "❌ المفاتيح المولّدة ما عدّتش الفحص — مفيش حاجة اتكتبت في .env.production"; exit 1; }
+
 python3 - "$PUB" "$PRV" "$SUBJ" <<'PY'
 import sys,re
 p='.env.production'; s=open(p).read()
@@ -34,9 +41,11 @@ $DC up -d api
 sleep 5
 $DC logs --tail 5 api
 echo
-# /push/key محمي بتسجيل دخول، فالتحقق من اللوج: التحذير لازم يختفي
-if $DC logs --tail 40 api | grep -q "VAPID غير متضبط"; then
-  echo "❌ الـ API لسه شايف VAPID مش متضبط — ابعتي ناتج الأمر ده لـ Claude:"
+# فحص إيجابي جوه الكونتينر الشغّال نفسه: بيثبّت إن المفاتيح **وصلت للعملية**
+# (درس RETENTION: المفتاح في الملف ومش في `environment:` = مابيوصلش خالص)
+# وإنها متطابقة — مش «التحذير اختفى من اللوج».
+if ! $DC exec -T api node --input-type=module - < scripts/lib/vapidcheck.mjs; then
+  echo "❌ الكونتينر الشغّال مش شايف مفاتيح VAPID سليمة — ابعتي ناتج الأمر ده لـ Claude:"
   echo "   docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail 20 api"; exit 1
 fi
-echo "✅ VAPID اتضبط (الموضوع: $SUBJ). افتحي التطبيق واسمحي بالإشعارات من المتصفح."
+echo "✅ VAPID اتضبط ومتحقَّق جوه الكونتينر (الموضوع: $SUBJ). افتحي التطبيق واسمحي بالإشعارات من المتصفح."
