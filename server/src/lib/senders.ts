@@ -1,5 +1,6 @@
 import type { Config } from "../config.js";
 import { otpEmail } from "./otp-email.js";
+import { buildSmsRequest, parseSmsSpec, redactSmsSecrets, smsOtpText, smsSucceeded, type SmsSpec } from "./sms.js";
 
 /** مُرسِل رمز التحقق — بدّليه بأي مزود SMS/Email */
 export interface OtpSender {
@@ -19,15 +20,40 @@ export const consoleSender: OtpSender = {
   },
 };
 
-/** Twilio (SMS) + Resend (Email) عبر REST. لم تُجرَّب على الشبكة الحقيقية — راجعيها بمفاتيحك. */
+/**
+ * SMS (مجمّع عام أو Twilio) + Resend (Email) عبر REST.
+ *
+ * ترتيب الـ SMS: `SMS_HTTP` (أي مجمّع مصري) له الأولوية، وTwilio بديل — لأن
+ * Twilio مسدود لمصر (محتاج تسجيل Alphanumeric Sender ID). ولو `SMS_HTTP` موجود
+ * ومعطوب، القناة تتعامل كأنها **مش متضبطة** (رسالة واضحة للمستخدم بدل انهيار
+ * الـ API كله على غلطة في مفتاح).
+ */
 export function providerSender(c: Config, f: typeof fetch = fetch): OtpSender {
+  let sms: SmsSpec | undefined;
+  try {
+    sms = parseSmsSpec(c.SMS_HTTP);
+  } catch (e) {
+    console.error("⚠️ SMS_HTTP معطوب فالـ SMS متوقف:", (e as Error).message);
+  }
   return {
     ready: (channel) =>
       channel === "phone"
-        ? !!(c.TWILIO_SID && c.TWILIO_TOKEN && c.TWILIO_FROM)
+        ? !!sms || !!(c.TWILIO_SID && c.TWILIO_TOKEN && c.TWILIO_FROM)
         : !!(c.RESEND_KEY && c.EMAIL_FROM),
     async send(channel, target, code) {
       if (channel === "phone") {
+        if (sms) {
+          const { url, init } = buildSmsRequest(sms, target, code);
+          const r = await f(url, init as RequestInit);
+          const body = await r.text().catch(() => "");
+          // النجاح = 2xx **و** علامة المزوّد في الجسم. أغلب المجمّعات بترجّع 200
+          // مع كود خطأ (رصيد خلص · مرسل مرفوض)، فالحكم بـ r.ok لوحده = ✅ كدّابة.
+          if (!smsSucceeded(sms, r.status, body)) {
+            console.error(`sms_failed status=${r.status} body=${redactSmsSecrets(sms, body).slice(0, 200)}`);
+            throw new Error("sms_failed");
+          }
+          return;
+        }
         if (!c.TWILIO_SID || !c.TWILIO_TOKEN || !c.TWILIO_FROM) throw new Error("sms_not_configured");
         const to = target.startsWith("+") ? target : `+2${target}`; // أرقام مصر 01xxxxxxxxx
         const r = await f(`https://api.twilio.com/2010-04-01/Accounts/${c.TWILIO_SID}/Messages.json`, {
@@ -36,7 +62,7 @@ export function providerSender(c: Config, f: typeof fetch = fetch): OtpSender {
             Authorization: "Basic " + Buffer.from(`${c.TWILIO_SID}:${c.TWILIO_TOKEN}`).toString("base64"),
             "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: new URLSearchParams({ To: to, From: c.TWILIO_FROM, Body: `رع شات: كود التحقق ${code}` }),
+          body: new URLSearchParams({ To: to, From: c.TWILIO_FROM, Body: smsOtpText(code) }),
         });
         if (!r.ok) throw new Error("sms_failed");
       } else {

@@ -32,6 +32,14 @@ const Env = z.object({
   TWILIO_SID: z.string().optional(),
   TWILIO_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
+  /**
+   * مجمّع SMS عام (أي مزوّد مصري) — base64 لـ JSON، التفاصيل في `lib/sms.ts`.
+   * بيتضبط بـ `scripts/set-sms-keys.sh` اللي بيتحقق **بإرسالة حقيقية** قبل ما يكتبه.
+   * لو متضبط بياخد الأولوية على Twilio (اللي مسدود لمصر).
+   */
+  SMS_HTTP: z.string().optional(),
+  /** سقف الرسائل في اليوم (بالقاهرة) — سقف للفاتورة. صفر = بلا سقف (مش موصى به مع قناة مدفوعة). */
+  SMS_DAILY_MAX: z.coerce.number().int().min(0).default(300),
   RESEND_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
   GOOGLE_TRANSLATE_KEY: z.string().optional(),

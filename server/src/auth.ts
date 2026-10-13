@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import type { Ctx } from "./context.js";
+import { todayCairo } from "./lib/cairo.js";
 import { HttpError, unauthorized } from "./lib/errors.js";
 import { getSettings } from "./lib/settings.js";
+import { smsCountSent, smsUnderDailyCap } from "./lib/sms.js";
 import { hashPassword, verifyPassword, wastePasswordTime } from "./lib/password.js";
 import { randomToken, sha256, signAccess, verifyAccess } from "./lib/tokens.js";
 
@@ -38,6 +40,12 @@ export async function requestOtp(ctx: Ctx, channel: "phone" | "email", rawTarget
       ? "التحقق بالرقم موقوف مؤقتًا — استخدم الإيميل"
       : "التحقق بالإيميل موقوف مؤقتًا");
   }
+  // سقف الفاتورة اليومي للـ SMS — **قبل الكتابة** زي فحص القناة فوقه، عشان
+  // الطلب المرفوض مايستهلكش حد الساعة بتاع الرقم.
+  if (channel === "phone" && !smsUnderDailyCap(ctx.config.SMS_DAILY_MAX, todayCairo())) {
+    console.warn(`⚠️ سقف الـ SMS اليومي خلص (${ctx.config.SMS_DAILY_MAX} رسالة) — التحقق بالرقم متوقف لباقي اليوم`);
+    throw new HttpError(429, "sms_quota", "سقف الرسائل اليومي خلص — استخدم الإيميل أو حاول بكرة");
+  }
   const since = new Date(Date.now() - 3600_000);
   const recent = await ctx.db.otpCode.count({ where: { channel, target, createdAt: { gte: since } } });
   if (recent >= MAX_REQUESTS_PER_HOUR) throw new HttpError(429, "too_many", "محاولات كثيرة، حاول بعد ساعة");
@@ -54,6 +62,7 @@ export async function requestOtp(ctx: Ctx, channel: "phone" | "email", rawTarget
     console.error("OTP send failed:", (e as Error).message);
     throw new HttpError(503, "otp_unavailable", "تعذّر إرسال الكود الآن");
   }
+  if (channel === "phone") smsCountSent(todayCairo()); // الناجحة بس هي اللي بتتحاسب
 }
 
 export async function newSession(ctx: Ctx, userId: string, device: string) {

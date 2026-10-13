@@ -3,6 +3,8 @@ import request from "supertest";
 import { startTestEnv } from "./helpers.js";
 import { providerSender } from "../src/lib/senders.js";
 import type { Config } from "../src/config.js";
+import { todayCairo } from "../src/lib/cairo.js";
+import { smsCountSent, smsResetDay } from "../src/lib/sms.js";
 
 /**
  * قنوات التحقق المتاحة. **SMS مش شغّال في الإنتاج**، وقبل كده كان طلب كود على
@@ -45,6 +47,33 @@ describe("قنوات التحقق", () => {
     await request(env.app).post("/auth/otp/request").send({ channel: "phone", target: "01095000002" }).expect(204);
     const r = await request(env.app).get("/auth/channels").expect(200);
     expect(r.body).toEqual({ phone: true, email: true });
+  });
+
+  it("سقف الـ SMS اليومي بيوقف الطلب **قبل** الكتابة، ومابيستهلكش حد الساعة", async () => {
+    useSender(() => true);
+    smsResetDay();
+    env.ctx.config.SMS_DAILY_MAX = 2;
+    try {
+      await request(env.app).post("/auth/otp/request").send({ channel: "phone", target: "01095000011" }).expect(204);
+      await request(env.app).post("/auth/otp/request").send({ channel: "phone", target: "01095000012" }).expect(204);
+
+      const before = await env.ctx.db.otpCode.count();
+      const r = await request(env.app).post("/auth/otp/request").send({ channel: "phone", target: "01095000013" }).expect(429);
+      expect(r.body.code).toBe("sms_quota");
+      expect(await env.ctx.db.otpCode.count()).toBe(before); // ولا صف اتكتب
+
+      // الرقم اللي اترفض لسه عنده كل حدّه لما السقف يرجع
+      env.ctx.config.SMS_DAILY_MAX = 10;
+      await request(env.app).post("/auth/otp/request").send({ channel: "phone", target: "01095000013" }).expect(204);
+
+      // والإيميل مالوش علاقة بسقف الـ SMS
+      env.ctx.config.SMS_DAILY_MAX = 1;
+      smsResetDay(); smsCountSent(todayCairo());
+      await request(env.app).post("/auth/otp/request").send({ channel: "email", target: "cap@example.com" }).expect(204);
+    } finally {
+      env.ctx.config.SMS_DAILY_MAX = 300;
+      smsResetDay();
+    }
   });
 
   it("مُرسِل المزوّد بيحسب الجاهزية من المفاتيح الموجودة (أسماء بس، مفيش قيم حقيقية)", () => {
