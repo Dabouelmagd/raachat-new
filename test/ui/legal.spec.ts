@@ -14,14 +14,21 @@ for (const p of pages) {
   test.describe(p.label, () => {
     test.beforeEach(async ({ page }) => { await page.goto(legalUrl(p.file)); });
 
-    test("بتقول إن التطبيق لكل الأعمار بالعربي والإنجليزي", async ({ page }) => {
+    test("بتقول إن التطبيق للبالغين ١٨+ بالعربي والإنجليزي", async ({ page }) => {
       const body = page.locator("body");
-      await expect(body).toContainText("مفتوح لكل الأعمار");
-      await expect(body).toContainText("open to all ages");
-      // الصياغة القديمة («مخصص لمن بلغ ١٨ سنة» / «must be 18+») لازم تكون اتشالت
-      await expect(body).not.toContainText("مخصص لمن بلغ");
-      await expect(body).not.toContainText("must be 18+");
-      await expect(body).not.toContainText("for people aged");
+      await expect(body).toContainText(/للبالغين/);
+      await expect(body).toContainText(/18 and over|adults/);
+      // صياغة «مفتوح لكل الأعمار» اتشالت بقرار الـ ١٨+ (١٣ أكتوبر ٢٠٢٦) — ولو رجعت
+      // تبقى الصفحات بتقول للعميل حاجة والتطبيق والمتاجر بيقولوا حاجة تانية
+      await expect(body).not.toContainText("مفتوح لكل الأعمار");
+      await expect(body).not.toContainText("open to all ages");
+    });
+
+    test("بتقول إن تاريخ الميلاد مطلوب لإنشاء الحساب وإنه إقرار مش مستند", async ({ page }) => {
+      const body = page.locator("body");
+      await expect(body).toContainText(/تاريخ الميلاد|تاريخ ميلادك/);
+      await expect(body).toContainText(/إقرار/);          // مش تحقق هوية
+      await expect(body).toContainText(/self-declaration/);
     });
 
     test("بتوضّح حدود المحفظة لحد ٢١ وتنبيه المسوّدة", async ({ page }) => {
@@ -38,11 +45,24 @@ for (const p of pages) {
   });
 }
 
-test("سياسة الخصوصية بتوصّف حفظ أحداث إعلانات الأقل من ١٨", async ({ page }) => {
+test("سياسة الخصوصية بتوصّف حفظ أحداث إعلانات مجهولي السن", async ({ page }) => {
   await page.goto(legalUrl("privacy"));
   const body = page.locator("body");
   await expect(body).toContainText("أحداث الإعلانات");
   await expect(body).toContainText("يومان");
   await expect(body).toContainText("المراقبة السلوكية");
   await expect(body).toContainText(/وليّ? الأمر/); // بشدّة أو بدونها
+  // الحسابات القديمة سنّها مجهول — ولسه بتتعامل معاملة الأقل من ١٨ تحوّطًا
+  await expect(body).toContainText(/مجهول/);
+});
+
+test("معايير المجتمع فيها بند CSAE صريح وجهة اتصال لسلامة الأطفال", async ({ page }) => {
+  await page.goto(legalUrl("community"));
+  const body = page.locator("body");
+  // بلاي بتطلب حظرًا **صريحًا** — «أي محتوى يمسّ القُصَّر» مكانش كفاية
+  await expect(body).toContainText(/الاعتداء الجنسي على الأطفال واستغلالهم/);
+  await expect(body).toContainText(/Child sexual abuse and exploitation/);
+  await expect(body).toContainText(/مسؤولًا لسلامة الأطفال|مسؤول سلامة الأطفال/);
+  await expect(body).toContainText(/child safety contact/);
+  await expect(page.locator("#draft")).toBeVisible(); // لسه مسوّدة لحد المحامي
 });

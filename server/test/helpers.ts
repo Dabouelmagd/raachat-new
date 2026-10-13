@@ -37,11 +37,33 @@ export async function startTestEnv() {
     await admin.query(`CREATE DATABASE "${name}"`);
     await admin.end();
     url = EXTERNAL.replace(/\/[^/?]*(\?|$)/, `/${name}$1`);
+    /**
+     * تنضيف قاعدة الاختبار. `WITH (FORCE)` بيحاول يقطع الجلسات المتبقية، وده
+     * **محتاج صلاحية إنهاء عمليات** — ومستخدم `rachat` العادي مش superuser، فلو
+     * فضل اتصال متعلق بالقاعدة الأمر بيرجّع `permission denied to terminate process`
+     * و**ملف اختبار عدّى بالكامل يتحسب فاشل**. (حصل فعلًا في `rtc.test.ts`.)
+     *
+     * فبنحاول عدة مرات بفاصل صغير لحد ما الاتصالات تقفل. ولو فضلت فاشلة، **بنحذّر
+     * ومابنفشّلش الاختبار**: الحكم على الكود خلص قبل التنضيف، وقاعدة متبقية مشكلة
+     * نظافة مش نتيجة اختبار — والتحذير بيطبع اسمها عشان تتمسح بإيدك.
+     */
     dropDb = async () => {
-      const a2 = new pg.Client({ connectionString: EXTERNAL });
-      await a2.connect();
-      await a2.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-      await a2.end();
+      for (let i = 0; i < 6; i++) {
+        const a2 = new pg.Client({ connectionString: EXTERNAL });
+        try {
+          await a2.connect();
+          await a2.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+          await a2.end();
+          return;
+        } catch (e) {
+          await a2.end().catch(() => {});
+          if (i === 5) {
+            console.warn(`⚠️ ما قدرناش نمسح قاعدة الاختبار "${name}": ${(e as Error).message}\n   امسحيها بإيدك: DROP DATABASE "${name}";`);
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 250));
+        }
+      }
     };
   } else {
     embedded = new EmbeddedPostgres({ databaseDir: dir, user: "rachat", password: "rachat", port: PORT, persistent: false, initdbFlags: ["--encoding=UTF8", "--locale=C.UTF-8"] });
