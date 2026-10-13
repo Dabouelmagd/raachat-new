@@ -42,8 +42,7 @@ const apiEnv = (() => {
  * أي مفتاح جديد خارج القايمة دي بيفشّل الاختبار.
  */
 const KNOWN_UNPASSED: Record<string, string> = {
-  // (ب) عطل معروف — محتاج سطر في compose. التفاصيل في store-declarations.md القسم ١-أ
-  BANNED_WORDS: "❌ عطل: فلتر المحتوى مقفول في الإنتاج لأن المفتاح مابيوصلش للكونتينر",
+  // (ب) عطل معروف — محتاج سطر في compose
   SMS_HTTP: "⏳ مستني موافقة داليا على سطر في compose (شغل SMS، ١٣ أكتوبر)",
   SMS_DAILY_MAX: "⏳ مع SMS_HTTP — الافتراضي ٣٠٠ شغّال، والتغيير بس هو اللي محتاج السطر",
   // (أ) الافتراضي كافي في الإنتاج
@@ -71,6 +70,7 @@ describe("متغيرات الإنتاج توصل للكونتينر فعلًا",
       "STUN_URLS", "TURN_URLS", "TURN_SECRET", // المكالمات
       "VAPID_PUBLIC", "VAPID_PRIVATE", "VAPID_SUBJECT", // الإشعارات
       "RETENTION",                         // الحذف التلقائي (الدرس الأصلي)
+      "BANNED_WORDS",                      // فلتر المحتوى — كان ناقصًا لحد ١٤ أكتوبر
     ]) {
       expect(apiEnv.has(k), `${k} مش في environment: بتاعة الـ api — الميزة دي هتموت في سكوت`).toBe(true);
     }
@@ -89,8 +89,10 @@ describe("متغيرات الإنتاج توصل للكونتينر فعلًا",
   it("فلتر المحتوى: القايمة الفاضية معناها الفلتر بيعدّي كل حاجة — فالمفتاح مش رفاهية", () => {
     const cf = fs.readFileSync(path.join(ROOT, "server/src/lib/contentFilter.ts"), "utf8");
     expect(cf).toContain("if (!list.length) return;");
-    // التوثيق لازم يفضل متماشي مع الواقع لحد ما يتصلح
-    expect(KNOWN_UNPASSED.BANNED_WORDS).toMatch(/عطل/);
-    expect(apiEnv.has("BANNED_WORDS")).toBe(false);
+    // اتصلح ١٤ أكتوبر: السطر موجود في compose، ولو اتشال تاني الاختبار الأول فوق
+    // بيكشفه — لأن سياسة الخصوصية (بند ١١) بتوعد العميل بمرشّح آلي، وبند ١.٢ عند
+    // آبل وسياسة UGC عند بلاي بيطلبوه.
+    expect(apiEnv.has("BANNED_WORDS")).toBe(true);
+    expect("BANNED_WORDS" in KNOWN_UNPASSED).toBe(false);
   });
 });
