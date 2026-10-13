@@ -119,14 +119,35 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
     }
   };
 
+  /**
+   * بيحطّ أرقام في الخانات من موضع `from` ويكمّل اللي بعدها.
+   * **اللصق لازم يملا الخانات كلها**: المستخدم بينسخ الكود من الإيميل ويلزقه في
+   * أول خانة — وقبل كده كان بيتحط رقم واحد بس والباقي يضيع، فيضطر يكتبه بإيده.
+   * وده كمان بيمسك الكيبورد اللي بيكتب الكود كله في خانة واحدة (autofill).
+   */
+  const fillFrom = (from: number, raw: string) => {
+    const typed = raw.replace(/\D/g, "");
+    if (!typed) return;
+    const next = [...digits];
+    for (let k = 0; k < typed.length && from + k < 6; k++) next[from + k] = typed[k]!;
+    setDigits(next);
+    setError("");
+    const last = Math.min(from + typed.length, 6) - 1;
+    refs.current[Math.min(last + 1, 5)]?.focus();
+    // «نسيت كلمة السر» محتاج كلمة السر الجديدة كمان، فالتأكيد بزرار مش تلقائي
+    if (next.every(Boolean) && mode !== "forgot") void useCode(next.join(""));
+  };
+
   const setDigit = (i: number, v: string) => {
-    const d = v.replace(/\D/g, "").slice(-1);
+    // الخانة فيها رقم واحد، فلو جه أكتر (لصق أو autofill) بنوزّعه على اللي بعدها
+    const typed = v.replace(/\D/g, "");
+    if (typed.length > 1) { fillFrom(i, typed); return; }
+    const d = typed.slice(-1);
     const next = [...digits];
     next[i] = d;
     setDigits(next);
     setError("");
     if (d && i < 5) refs.current[i + 1]?.focus();
-    // «نسيت كلمة السر» محتاج كلمة السر الجديدة كمان، فالتأكيد بزرار مش تلقائي
     if (next.every(Boolean) && mode !== "forgot") void useCode(next.join(""));
   };
 
@@ -272,6 +293,12 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
                 maxLength={1}
                 aria-label={t(`خانة ${num(i + 1)}`, `Digit ${i + 1}`)}
                 onChange={(e) => setDigit(i, e.target.value)}
+                onPaste={(e) => {
+                  // لازم نمنع السلوك الافتراضي: المتصفح بياخد أول حرف بس بسبب maxLength
+                  const text = e.clipboardData.getData("text");
+                  if (/\d/.test(text)) { e.preventDefault(); fillFrom(i, text); }
+                }}
+                onFocus={(e) => e.currentTarget.select()}
                 onKeyDown={(e) => e.key === "Backspace" && !d && i > 0 && refs.current[i - 1]?.focus()}
                 className="h-12 w-10 rounded-lg bg-rachat-card text-center text-xl font-extrabold outline-none ring-1 ring-rachat-maroon/50 focus:ring-rachat-red"
               />
