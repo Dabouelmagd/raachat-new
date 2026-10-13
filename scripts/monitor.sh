@@ -159,7 +159,26 @@ elif [ "${usize:-0}" -lt 100 ]; then fail "backup:uploads" "أحدث أرشيف 
 elif [ "${uage:-99}" -gt "$MAX_DUMP_AGE_H" ]; then fail "backup:uploads" "أحدث أرشيف ($uname) عمره $uage ساعة — نسخ المرفوعات واقفة"
 else ok "backup:uploads" "$uname · $usize بايت · عمره $uage ساعة"; fi
 
-# ٨) الشهادة
+# ٨) TURN للمكالمات — **بس لو متضبط** (مش متضبط = مش فحص فاشل، دي حالة معروفة)
+if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRET=.+' .env.production 2>/dev/null; then
+  tsec=$(grep -E '^TURN_SECRET=' .env.production | cut -d= -f2-)
+  tcid=$(timeout 30 $DC ps -q turn 2>/dev/null | tr -d '\r')
+  if [ -z "$tcid" ]; then
+    fail "turn" "TURN متضبط في .env.production بس حاوية coturn مش شغّالة — المكالمات هتفشل لكل اللي ورا CGNAT"
+  else
+    # **Allocate حقيقي** على العنوان العام (نفس طريق المستخدم: DNS + جدار ناري)،
+    # بنفس حساب كلمة السر بتاع السيرفر. الفاحص مجرَّب على coturn حقيقي.
+    if tout=$(timeout 40 $DC run --rm --no-deps -T \
+        -e TURN_HOST="$DOMAIN" -e TURN_PORT=3478 -e TURN_SECRET="$tsec" -e TURN_USER=monitor \
+        api node < scripts/lib/turncheck.mjs 2>&1) && echo "$tout" | grep -q "allocate ok"; then
+      ok "turn" "Allocate ناجح على turn:$DOMAIN:3478"
+    else
+      fail "turn" "TURN مش بيرحّل من بره — المكالمات هتفشل للي ورا CGNAT. الناتج: $(echo "$tout" | tail -n 2)"
+    fi
+  fi
+fi
+
+# ٩) الشهادة
 days=$(echo | openssl s_client -servername "api.$DOMAIN" -connect "api.$DOMAIN:443" 2>/dev/null \
   | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
 if [ -n "$days" ]; then

@@ -22,13 +22,24 @@ const MESH_MAX = 8;
 
 export const peerKey = (roomId: string, userId: string) => sha256(`${roomId}:${userId}`).slice(0, 12); // نفس اشتقاق routes/rooms.ts
 
+/**
+ * STUN/TURN للمتصفح. كلمة سر TURN **مؤقتة** ومحسوبة بنفس طريقة coturn مع
+ * `--use-auth-secret`: الاسم `<وقت الانتهاء>:<المستخدم>` والكلمة
+ * **base64(HMAC-SHA1(secret, username))** — أي تغيير في الخوارزمية (sha256 أو
+ * hex) بيخلي coturn يرفض المصادقة في سكوت والمكالمة تفضل بلا صوت، فالاختبار
+ * بيحسبها لوحده ويقارن.
+ */
 export function iceServers(ctx: Ctx, userId: string) {
   const c = ctx.config;
-  const out: { urls: string[]; username?: string; credential?: string }[] = [{ urls: c.STUN_URLS.split(",").map((s) => s.trim()).filter(Boolean) }];
-  if (c.TURN_URLS && c.TURN_SECRET) {
+  const list = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
+  const out: { urls: string[]; username?: string; credential?: string }[] = [{ urls: list(c.STUN_URLS) }];
+  // العناوين الفاضية (فاصلة زايدة في .env مثلًا) كانت بتدخل كـ "" في القايمة —
+  // والمتصفح بيرفض مدخل ICE فيه عنوان غير صالح، فيضيع TURN كله.
+  const turn = c.TURN_URLS ? list(c.TURN_URLS) : [];
+  if (turn.length && c.TURN_SECRET) {
     const exp = Math.floor(Date.now() / 1000) + 3600;
     const username = `${exp}:${userId}`;
-    out.push({ urls: c.TURN_URLS.split(",").map((s) => s.trim()), username, credential: crypto.createHmac("sha1", c.TURN_SECRET).update(username).digest("base64") });
+    out.push({ urls: turn, username, credential: crypto.createHmac("sha1", c.TURN_SECRET).update(username).digest("base64") });
   }
   return out;
 }

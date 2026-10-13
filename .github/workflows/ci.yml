@@ -27,6 +27,8 @@ jobs:
       - name: تنزيل التبعيات
         working-directory: server
         run: npm ci
+      - name: coturn (عشان اختبار فاحص TURN يشتغل فعلًا مش يتخطّى)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq coturn
       - name: توليد Prisma Client
         working-directory: server
         run: npx prisma generate
