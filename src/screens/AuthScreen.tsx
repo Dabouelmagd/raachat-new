@@ -5,7 +5,7 @@ import { HorusMark } from "../components/Header";
 import { LangSwitch } from "../components/LangSwitch";
 import { useDir, useT, num } from "../i18n";
 import { ArrowLeft } from "lucide-react";
-import { API_ON, loginWithPassword, registerWithPassword, requestOtp, resetPassword, verifyOtp } from "../api/client";
+import { API_ON, api, loginWithPassword, registerWithPassword, requestOtp, resetPassword, verifyOtp } from "../api/client";
 
 // كود التحقق في وضع الديمو (مفيش سيرفر، فمفيش رسالة بتتبعت)
 export const MOCK_OTP = "123456";
@@ -38,6 +38,21 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
   const t = useT();
   const Back = useDir() === "rtl" ? ArrowRight : ArrowLeft;
   const refs = useRef<(HTMLInputElement | null)[]>([]);
+  /**
+   * قنوات التحقق المتاحة من السيرفر. SMS **مش شغّال في الإنتاج**، فخيار «التليفون»
+   * كان طريق مسدود: المستخدم يكتب رقمه ويستنى كود عمره ما هييجي. دلوقتي الخيار
+   * بيتقفل بقرار السيرفر — ولما SMS يتفعّل بيرجع لوحده من غير نشر واجهة.
+   * في وضع الديمو (مفيش API) الاتنين متاحين.
+   */
+  const [channels, setChannels] = useState<{ phone: boolean; email: boolean }>({ phone: true, email: true });
+  useEffect(() => {
+    if (!API_ON) return;
+    let alive = true;
+    void api<{ phone: boolean; email: boolean }>("/auth/channels", { auth: false })
+      .then((c) => { if (alive) { setChannels(c); if (!c.phone) setMethod("email"); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (step !== "code" || seconds <= 0) return;
@@ -149,14 +164,21 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
               {(["phone", "email"] as Method[]).map((m) => (
                 <button
                   key={m}
+                  disabled={!channels[m]}
+                  aria-disabled={!channels[m]}
                   onClick={() => { setMethod(m); setValue(""); setError(""); }}
-                  className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold ${method === m ? "bg-rachat-red text-white" : "text-neutral-400"}`}
+                  className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold ${method === m ? "bg-rachat-red text-white" : "text-neutral-400"} ${!channels[m] ? "opacity-40" : ""}`}
                 >
                   {m === "phone" ? <Phone size={16} /> : <Mail size={16} />}
                   {m === "phone" ? t("التليفون", "Phone") : t("الإيميل", "Email")}
                 </button>
               ))}
             </div>
+          )}
+          {mode === "otp" && !channels.phone && (
+            <p role="status" className="rounded-xl bg-rachat-card px-3 py-2 text-[11.5px] leading-5 text-rachat-gold">
+              {t("الدخول بالرقم موقوف مؤقتًا — استخدم الإيميل.", "Signing in with a phone number is temporarily unavailable — please use email.")}
+            </p>
           )}
 
           {mode === "signup" && (

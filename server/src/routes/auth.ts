@@ -9,6 +9,16 @@ const Chan = z.enum(["phone", "email"]);
 
 export function authRoutes(ctx: Ctx) {
   const r = Router();
+  /**
+   * قنوات التحقق المتاحة فعلًا (مفاتيحها مضبوطة) — **عام بلا توكن** عشان
+   * شاشة الدخول تعرف قبل ما المستخدم يحاول. لما SMS يتفعّل، الخيار بيرجع
+   * لوحده من غير أي نشر للواجهة.
+   */
+  r.get("/auth/channels", wrap(async (_req, res) => {
+    const ready = (ch: "phone" | "email") => ctx.sender.ready?.(ch) !== false;
+    res.json({ phone: ready("phone"), email: ready("email") });
+  }));
+
   r.post("/auth/otp/request", wrap(async (req, res) => {
     const b = z.object({ channel: Chan, target: z.string().min(3).max(200) }).parse(req.body);
     await requestOtp(ctx, b.channel, b.target);

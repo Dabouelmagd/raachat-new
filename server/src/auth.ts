@@ -30,6 +30,14 @@ const hashCode = (ctx: Ctx, target: string, code: string) => sha256(`${ctx.confi
 export async function requestOtp(ctx: Ctx, channel: "phone" | "email", rawTarget: string) {
   const target = normalizeTarget(channel, rawTarget);
   if (!validTarget(channel, target)) throw new HttpError(400, "invalid_target", "رقم أو إيميل غير صحيح");
+  // **الفحص قبل الكتابة**: القناة غير مضبوطة (مثلًا SMS) كانت بتعمل كود في
+  // القاعدة وتستهلك حد الساعة وبعدين الإرسال يفشل بـ «تعذّر إرسال الكود» —
+  // فالمستخدم يفضل يحاول على طريق مسدود من غير ما يعرف السبب.
+  if (ctx.sender.ready?.(channel) === false) {
+    throw new HttpError(503, "channel_unavailable", channel === "phone"
+      ? "التحقق بالرقم موقوف مؤقتًا — استخدم الإيميل"
+      : "التحقق بالإيميل موقوف مؤقتًا");
+  }
   const since = new Date(Date.now() - 3600_000);
   const recent = await ctx.db.otpCode.count({ where: { channel, target, createdAt: { gte: since } } });
   if (recent >= MAX_REQUESTS_PER_HOUR) throw new HttpError(429, "too_many", "محاولات كثيرة، حاول بعد ساعة");

@@ -4,9 +4,16 @@ import { otpEmail } from "./otp-email.js";
 /** مُرسِل رمز التحقق — بدّليه بأي مزود SMS/Email */
 export interface OtpSender {
   send(channel: "phone" | "email", target: string, code: string): Promise<void>;
+  /**
+   * هل القناة دي مضبوطة فعلًا؟ (مفاتيح موجودة). لو رجّعت `false` بنرفض الطلب
+   * **قبل** ما نكتب كود في القاعدة ونستهلك حد الساعة — ونقول للمستخدم السبب
+   * بدل «تعذّر إرسال الكود» المبهمة. مش موجودة = نفترض شغّالة (الاختبارات).
+   */
+  ready?(channel: "phone" | "email"): boolean;
 }
 
 export const consoleSender: OtpSender = {
+  ready: () => true,
   async send(channel, target, code) {
     console.log(`[OTP dev] ${channel} ${target} → ${code}`);
   },
@@ -15,6 +22,10 @@ export const consoleSender: OtpSender = {
 /** Twilio (SMS) + Resend (Email) عبر REST. لم تُجرَّب على الشبكة الحقيقية — راجعيها بمفاتيحك. */
 export function providerSender(c: Config, f: typeof fetch = fetch): OtpSender {
   return {
+    ready: (channel) =>
+      channel === "phone"
+        ? !!(c.TWILIO_SID && c.TWILIO_TOKEN && c.TWILIO_FROM)
+        : !!(c.RESEND_KEY && c.EMAIL_FROM),
     async send(channel, target, code) {
       if (channel === "phone") {
         if (!c.TWILIO_SID || !c.TWILIO_TOKEN || !c.TWILIO_FROM) throw new Error("sms_not_configured");
