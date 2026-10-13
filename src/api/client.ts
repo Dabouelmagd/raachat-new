@@ -106,8 +106,9 @@ export async function ensureUploaded(url: string | undefined, name: string): Pro
 export async function requestOtp(channel: "phone" | "email", target: string) {
   await api("/auth/otp/request", { body: { channel, target }, auth: false });
 }
-export async function verifyOtp(channel: "phone" | "email", target: string, code: string) {
-  const j = await api<{ accessToken: string; refreshToken: string; user: { id: string } }>("/auth/otp/verify", { body: { channel, target, code }, auth: false });
+/** `birthDate` بيتبعت **بس** لو الكود ده هيعمل حساب جديد (التطبيق ١٨+). */
+export async function verifyOtp(channel: "phone" | "email", target: string, code: string, birthDate?: string) {
+  const j = await api<{ accessToken: string; refreshToken: string; user: { id: string } }>("/auth/otp/verify", { body: { channel, target, code, ...(birthDate ? { birthDate } : {}) }, auth: false });
   setSession({ access: j.accessToken, refresh: j.refreshToken, meId: j.user.id });
   return j.user;
 }
@@ -118,8 +119,8 @@ const keep = (j: AuthOut) => {
 };
 
 /** حساب جديد: الكود بيتأكد **مرة واحدة** هنا، وبعدها الدخول بكلمة السر. */
-export async function registerWithPassword(target: string, code: string, name: string, password: string) {
-  return keep(await api<AuthOut>("/auth/register", { body: { target, code, name, password }, auth: false }));
+export async function registerWithPassword(target: string, code: string, name: string, password: string, birthDate: string) {
+  return keep(await api<AuthOut>("/auth/register", { body: { target, code, name, password, birthDate }, auth: false }));
 }
 /** دخول بالإيميل وكلمة السر — من غير أي كود. */
 export async function loginWithPassword(target: string, password: string) {

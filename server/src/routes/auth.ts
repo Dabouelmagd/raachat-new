@@ -25,8 +25,9 @@ export function authRoutes(ctx: Ctx) {
     res.status(204).end();
   }));
   r.post("/auth/otp/verify", wrap(async (req, res) => {
-    const b = z.object({ channel: Chan, target: z.string().min(3).max(200), code: z.string().regex(/^\d{6}$/) }).parse(req.body);
-    const s = await verifyOtp(ctx, b.channel, b.target, b.code, String(req.headers["user-agent"] ?? ""));
+    // birthDate مطلوب **بس** لو الكود ده هيعمل حساب جديد (رع شات ١٨+) — الحارس في verifyOtp
+    const b = z.object({ channel: Chan, target: z.string().min(3).max(200), code: z.string().regex(/^\d{6}$/), birthDate: z.string().max(40).optional() }).parse(req.body);
+    const s = await verifyOtp(ctx, b.channel, b.target, b.code, String(req.headers["user-agent"] ?? ""), b.birthDate);
     res.json({ accessToken: s.accessToken, refreshToken: s.refreshToken, user: meUser(s.user) });
   }));
   const Password = z.string().min(8).max(200);
@@ -39,6 +40,7 @@ export function authRoutes(ctx: Ctx) {
       code: z.string().regex(/^\d{6}$/),
       name: z.string().min(2).max(60),
       password: Password,
+      birthDate: z.string().max(40).optional(), // الحارس في registerWithPassword بيرمي رسالة واضحة لو ناقص
     }).parse(req.body);
     const s = await registerWithPassword(ctx, { ...b, device: dev(req) });
     res.status(201).json({ accessToken: s.accessToken, refreshToken: s.refreshToken, user: meUser(s.user) });

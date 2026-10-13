@@ -1,5 +1,6 @@
 /** حساب السن من تاريخ الميلاد وقواعد خدمات ١٨+ */
 import { cairoParts, todayCairo } from "./cairo.js";
+import { HttpError } from "./errors.js";
 
 export const ADULT_AGE = 18;
 
@@ -59,4 +60,29 @@ export function validBirthDate(d: Date, now: Date = new Date()): boolean {
   if (Number.isNaN(d.getTime())) return false;
   if (d.toISOString().slice(0, 10) > todayCairo(now)) return false;
   return ageOn(d, now) <= 120;
+}
+
+/**
+ * **حارس السن عند إنشاء أي حساب — رع شات تطبيق ١٨+ (قرار داليا ١٣ أكتوبر ٢٠٢٦).**
+ *
+ * مصدر واحد لكل مسارات إنشاء الحساب (التسجيل بكلمة سر · الدخول بكود لحساب جديد)،
+ * بنفس درس «الحارس لازم يبقى على كل المسارات»: القاعدة على مسار واحد تبان مطبّقة
+ * وهي متخطّاة بخطوة.
+ *
+ * بيرمي `HttpError` برسالة واضحة: `birth_date_required` لو ناقص،
+ * `invalid_birth_date` لو التاريخ مش منطقي، `under_age` لو أقل من ١٨.
+ *
+ * ⚠️ **ده شرط متاجر مش حماية قانونية:** `docs/legal/age-and-capacity-egypt.md` بند ٦ —
+ * القاصر اللي يكتب تاريخ ميلاد كاذب يفضل من حقه يطلب إبطال العقد (م١١٩ مدني).
+ */
+export function assertSignupAge(raw: unknown, now: Date = new Date()): Date {
+  if (raw === undefined || raw === null || raw === "") {
+    throw new HttpError(400, "birth_date_required", "اكتب تاريخ ميلادك — رع شات للبالغين (١٨ سنة أو أكثر)");
+  }
+  const d = new Date(String(raw));
+  if (!validBirthDate(d, now)) throw new HttpError(400, "invalid_birth_date", "تاريخ الميلاد غير صحيح");
+  if (ageOn(d, now) < ADULT_AGE) {
+    throw new HttpError(403, "under_age", "رع شات للبالغين (١٨ سنة أو أكثر) — ماينفعش نفتح حساب لأقل من كده");
+  }
+  return d;
 }

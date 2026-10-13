@@ -13,17 +13,17 @@ describe("auth", () => {
     await request(app).post("/auth/otp/request").send({ channel: "phone", target: "01011112222" }).expect(204);
     const code = sent.at(-1)!.code;
     const wrong = code === "000000" ? "111111" : "000000";
-    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code: wrong }).expect(401);
-    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code }).expect(200);
-    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code }).expect(401);
+    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code: wrong, birthDate: "1990-01-01" }).expect(401);
+    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code, birthDate: "1990-01-01" }).expect(200);
+    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code, birthDate: "1990-01-01" }).expect(401);
   });
   it("5 محاولات خاطئة تقفل الكود", async () => {
     const { app, sent } = env;
     await request(app).post("/auth/otp/request").send({ channel: "email", target: "A@B.com" }).expect(204);
     const code = sent.at(-1)!.code;
     const wrong = code === "000000" ? "111111" : "000000";
-    for (let i = 0; i < 5; i++) await request(app).post("/auth/otp/verify").send({ channel: "email", target: "a@b.com", code: wrong }).expect(401);
-    await request(app).post("/auth/otp/verify").send({ channel: "email", target: "a@b.com", code }).expect(401);
+    for (let i = 0; i < 5; i++) await request(app).post("/auth/otp/verify").send({ channel: "email", target: "a@b.com", code: wrong, birthDate: "1990-01-01" }).expect(401);
+    await request(app).post("/auth/otp/verify").send({ channel: "email", target: "a@b.com", code, birthDate: "1990-01-01" }).expect(401);
   });
   it("حد 5 طلبات في الساعة لنفس الهدف", async () => {
     const { app } = env;

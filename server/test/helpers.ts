@@ -91,10 +91,15 @@ export async function startTestEnv() {
   await new Promise<void>((r) => server.listen(0, r));
   const port = (server.address() as AddressInfo).port;
 
-  async function login(phone: string, name?: string) {
+  /**
+   * حساب تجريبي. `birthDate` مطلوب لإنشاء أي حساب جديد (رع شات ١٨+ من ١٣ أكتوبر
+   * ٢٠٢٦)، فالافتراضي هنا بالغ ٢١+ عشان الاختبارات المالية تفضل شغّالة؛ ومين عايز
+   * سنًّا معيّنًا (سقوف ١٨–٢١ أو حارس المحفظة) يبعته صريح.
+   */
+  async function login(phone: string, name?: string, birthDate = "1990-01-01") {
     await request(app).post("/auth/otp/request").send({ channel: "phone", target: phone }).expect(204);
     const code = sent.filter((s) => s.target === phone).at(-1)!.code;
-    const r = await request(app).post("/auth/otp/verify").send({ channel: "phone", target: phone, code }).expect(200);
+    const r = await request(app).post("/auth/otp/verify").send({ channel: "phone", target: phone, code, birthDate }).expect(200);
     const token = r.body.accessToken as string;
     if (name) await request(app).patch("/me").set("Authorization", `Bearer ${token}`).send({ name }).expect(200);
     return { token, refresh: r.body.refreshToken as string, user: r.body.user as { id: string; name: string }, auth: { Authorization: `Bearer ${token}` } };

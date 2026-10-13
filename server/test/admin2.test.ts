@@ -107,7 +107,7 @@ describe("لوحة الإدارة — المرحلة التانية", () => {
     expect((await api().get("/public/settings").expect(200)).body.registrationOpen).toBe(false);
     await api().post("/auth/otp/request").send({ channel: "phone", target: "01096000099" }).expect(204);
     const code = env.sent.filter((x) => x.target === "01096000099").at(-1)!.code;
-    expect((await api().post("/auth/otp/verify").send({ channel: "phone", target: "01096000099", code }).expect(403)).body.code).toBe("registration_closed");
+    expect((await api().post("/auth/otp/verify").send({ channel: "phone", target: "01096000099", code, birthDate: "1990-01-01" }).expect(403)).body.code).toBe("registration_closed");
     await env.login("01096000031"); // موجود
     await api().put("/admin/settings").set(owner.auth).send({ registrationOpen: true }).expect(200);
     // الصيانة

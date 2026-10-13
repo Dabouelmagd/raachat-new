@@ -86,7 +86,10 @@ describe("wallet", () => {
 
   it("خدمة ١٨+: من غير تاريخ ميلاد مقفولة، القاصر مقفول، البالغ مفتوح، وباقي التطبيق مايتأثرش", async () => {
     const a = await env.login("01070000007", "كريم");
-    // تاريخ الميلاد لسه غير محدد = مقفول (الأحوط)، والكود بيقول للمستخدم يعمل إيه
+    // بنفضّي العمود عن قصد: التطبيق بقى ١٨+ وكل حساب جديد لازم تاريخ ميلاد، إنما
+    // الحسابات القديمة (الـ ٨ في الإنتاج) مالهاش — وحارس المحفظة لازم يفضل يقفل عليها.
+    await env.ctx.db.user.update({ where: { id: a.user.id }, data: { birthDate: null } });
+    // تاريخ الميلاد غير محدد = مقفول (الأحوط)، والكود بيقول للمستخدم يعمل إيه
     const no = await request(env.app).get("/wallet").set(a.auth).expect(403);
     expect(no.body.code).toBe("birth_date_required");
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 100 }).expect(403);
@@ -152,6 +155,7 @@ describe("wallet", () => {
 
   it("‏/me بيرجّع birthDate وisAdult", async () => {
     const a = await env.login("01070000008");
+    await env.ctx.db.user.update({ where: { id: a.user.id }, data: { birthDate: null } }); // حساب قديم
     const before = await request(env.app).get("/me").set(a.auth).expect(200);
     expect(before.body).toMatchObject({ birthDate: null, isAdult: false });
     const after = await setBirth(a, "1988-03-04").expect(200);

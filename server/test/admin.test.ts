@@ -98,13 +98,13 @@ describe("admin RBAC", () => {
     await api().get("/me").set(u.auth).expect(401); // الجلسات اتلغت فورًا
     await api().post("/auth/otp/request").send({ channel: "phone", target: "01099000050" }).expect(204);
     const code = env.sent.filter((x) => x.target === "01099000050").at(-1)!.code;
-    expect((await api().post("/auth/otp/verify").send({ channel: "phone", target: "01099000050", code }).expect(403)).body.code).toBe("account_suspended");
+    expect((await api().post("/auth/otp/verify").send({ channel: "phone", target: "01099000050", code, birthDate: "1990-01-01" }).expect(403)).body.code).toBe("account_suspended");
     const list = (await api().get("/admin/users?status=banned").set(owner.auth).expect(200)).body;
     expect(list.map((x: any) => x.name)).toContain("مخالف");
     await api().patch(`/admin/users/${u.user.id}/status`).set(owner.auth).send({ status: "active" }).expect(200);
     await api().post("/auth/otp/request").send({ channel: "phone", target: "01099000050" }).expect(204);
     const code2 = env.sent.filter((x) => x.target === "01099000050").at(-1)!.code;
-    await api().post("/auth/otp/verify").send({ channel: "phone", target: "01099000050", code: code2 }).expect(200);
+    await api().post("/auth/otp/verify").send({ channel: "phone", target: "01099000050", code: code2, birthDate: "1990-01-01" }).expect(200);
     sock.close();
   });
 

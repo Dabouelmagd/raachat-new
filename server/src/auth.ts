@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import type { Ctx } from "./context.js";
 import { todayCairo } from "./lib/cairo.js";
+import { assertSignupAge } from "./lib/age.js";
 import { HttpError, unauthorized } from "./lib/errors.js";
 import { getSettings } from "./lib/settings.js";
 import { smsCountSent, smsUnderDailyCap } from "./lib/sms.js";
@@ -78,8 +79,15 @@ export async function newSession(ctx: Ctx, userId: string, device: string) {
   return { accessToken: signAccess({ sub: userId, sid: s.id }, ctx.config.JWT_SECRET, ctx.config.ACCESS_TTL_MIN), refreshToken: refresh };
 }
 
-/** يتحقق من كود OTP ويستهلكه (٥ محاولات، ٥ دقايق). بيرمي 401 لو غلط. */
-export async function consumeOtp(ctx: Ctx, channel: "phone" | "email", rawTarget: string, code: string) {
+/**
+ * يتحقق من صحة الكود **من غير ما يستهلكه** (٥ محاولات، ٥ دقايق). بيرمي 401 لو غلط.
+ *
+ * الفصل بين «التحقق» و«الاستهلاك» مقصود: أي رفض **بعد** التحقق (تاريخ ميلاد ناقص،
+ * كلمة سر مرفوضة) ماينفعش يضيّع كود المستخدم ويخلّيه يستنى كود جديد. وفي نفس الوقت
+ * الرفض بيحصل **بعد** التحقق مش قبله، عشان الرد مايبقاش وسيلة لمعرفة إن إيميل معيّن
+ * له حساب عندنا أو لأ (نفس مبدأ `bad_credentials` الموحّد في الدخول بكلمة السر).
+ */
+async function checkOtp(ctx: Ctx, channel: "phone" | "email", rawTarget: string, code: string) {
   const target = normalizeTarget(channel, rawTarget);
   const otp = await ctx.db.otpCode.findFirst({
     where: { channel, target, usedAt: null, expiresAt: { gt: new Date() } },
@@ -91,18 +99,38 @@ export async function consumeOtp(ctx: Ctx, channel: "phone" | "email", rawTarget
     await ctx.db.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
     throw new HttpError(401, "invalid_code", "الكود غير صحيح أو منتهي");
   }
-  await ctx.db.otpCode.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
+  return { target, otpId: otp.id };
+}
+
+const burnOtp = (ctx: Ctx, otpId: string) =>
+  ctx.db.otpCode.update({ where: { id: otpId }, data: { usedAt: new Date() } });
+
+/** يتحقق من كود OTP ويستهلكه. بيرمي 401 لو غلط. */
+export async function consumeOtp(ctx: Ctx, channel: "phone" | "email", rawTarget: string, code: string) {
+  const { target, otpId } = await checkOtp(ctx, channel, rawTarget, code);
+  await burnOtp(ctx, otpId);
   return target;
 }
 
-export async function verifyOtp(ctx: Ctx, channel: "phone" | "email", rawTarget: string, code: string, device: string) {
-  const target = await consumeOtp(ctx, channel, rawTarget, code);
+export async function verifyOtp(
+  ctx: Ctx, channel: "phone" | "email", rawTarget: string, code: string, device: string,
+  birthDate?: unknown,
+) {
+  const { target, otpId } = await checkOtp(ctx, channel, rawTarget, code);
   const where = channel === "phone" ? { phone: target } : { email: target };
   let user = await ctx.db.user.findUnique({ where });
   if (!user) {
     if (!(await getSettings(ctx)).registrationOpen) throw new HttpError(403, "registration_closed", "التسجيل الجديد مقفول مؤقتًا");
+    // حساب جديد = إنشاء حساب، فحارس السن لازم يمرّ هنا كمان مش في /auth/register بس.
+    // والرفض قبل `burnOtp` عشان الكود ما يضيعش لو تاريخ الميلاد ناقص — المستخدم
+    // يكتبه ويبعت نفس الكود تاني. والحساب **الموجود** مابيتسألش (الحسابات القديمة
+    // مالهاش تاريخ ميلاد ودخولها مابيتأثرش).
+    const birth = assertSignupAge(birthDate);
+    await burnOtp(ctx, otpId);
     const fallback = channel === "phone" ? `مستخدم ${target.slice(-4)}` : target.split("@")[0];
-    user = await ctx.db.user.create({ data: { ...where, name: fallback, wallet: { create: {} } } });
+    user = await ctx.db.user.create({ data: { ...where, name: fallback, birthDate: birth, wallet: { create: {} } } });
+  } else {
+    await burnOtp(ctx, otpId);
   }
   if (user.modStatus !== "active") throw new HttpError(403, "account_suspended", "الحساب موقوف");
   const session = await newSession(ctx, user.id, device);
@@ -116,12 +144,14 @@ export async function verifyOtp(ctx: Ctx, channel: "phone" | "email", rawTarget:
  */
 export async function registerWithPassword(
   ctx: Ctx,
-  p: { target: string; code: string; name: string; password: string; device: string },
+  p: { target: string; code: string; name: string; password: string; device: string; birthDate?: unknown },
 ) {
   const target = normalizeTarget("email", p.target);
   if (!validTarget("email", target)) throw new HttpError(400, "invalid_target", "إيميل غير صحيح");
   const name = p.name.trim();
   if (name.length < 2) throw new HttpError(400, "invalid_name", "اكتب اسمك");
+  // رع شات ١٨+: الحارس قبل أي كتابة وقبل استهلاك الكود
+  const birth = assertSignupAge(p.birthDate);
   // الهاش قبل استهلاك الكود: لو كلمة السر مرفوضة، الكود يفضل صالح ومايضيعش على المستخدم
   const passwordHash = await hashPassword(p.password);
   // الحساب الموجود ما ينفعش يتسجّل تاني — رسالة واضحة بدل خطأ قاعدة بيانات
@@ -134,7 +164,7 @@ export async function registerWithPassword(
   }
   if (!(await getSettings(ctx)).registrationOpen) throw new HttpError(403, "registration_closed", "التسجيل الجديد مقفول مؤقتًا");
   await consumeOtp(ctx, "email", target, p.code);
-  const user = await ctx.db.user.create({ data: { email: target, name, passwordHash, wallet: { create: {} } } });
+  const user = await ctx.db.user.create({ data: { email: target, name, passwordHash, birthDate: birth, wallet: { create: {} } } });
   const session = await newSession(ctx, user.id, p.device);
   return { ...session, user };
 }

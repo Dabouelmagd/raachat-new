@@ -48,6 +48,45 @@ test("الحساب الجديد بياخد اسم، وكلمة السر أقل �
   await page.getByLabel("كلمة السر", { exact: true }).fill("1234567");
   await expect(send).toBeDisabled(); // ٧ حروف
   await page.getByLabel("كلمة السر", { exact: true }).fill("12345678");
+  await expect(send).toBeDisabled(); // ولسه ناقص تاريخ الميلاد (التطبيق ١٨+)
+  await page.getByLabel("تاريخ الميلاد").fill(adultDate());
+  await expect(send).toBeEnabled();
+});
+
+/**
+ * تاريخ ميلاد بعمر محدد، **بهامش يومين** بعيد عن حدود اليوم.
+ * الحساب على الحدّ بالظبط بيخلّي الاختبار يسقط عند منتصف الليل (فرق المنطقة
+ * الزمنية بين المتصفح والسيرفر) — نفس العلّة اللي سقطت في `adultOnly.test.ts`.
+ */
+function dobFor(years: number) {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  d.setDate(d.getDate() - 2);
+  return d.toISOString().slice(0, 10);
+}
+const adultDate = () => dobFor(30);
+
+test("رع شات ١٨+: تاريخ الميلاد مطلوب، والأقل من ١٨ مابيقدرش يكمّل", async ({ page }) => {
+  await open(page);
+  await btn(page, /^حساب جديد$/).click();
+  const send = btn(page, /ابعتلي كود التأكيد/);
+  await page.getByLabel("الاسم").fill("داليا");
+  await page.getByLabel("الإيميل").fill("dalia@example.com");
+  await page.getByLabel("كلمة السر", { exact: true }).fill("كلمة-سر-كفاية");
+
+  // الخانة موجودة ومكتوب تحتها إن التطبيق للبالغين
+  const dob = page.getByLabel("تاريخ الميلاد");
+  await expect(dob).toBeVisible();
+  await expect(page.getByText(/رع شات للبالغين/)).toBeVisible();
+  await expect(send).toBeDisabled();
+
+  // أقل من ١٨ = الزرار مقفول ورسالة واضحة
+  await dob.fill(dobFor(15));
+  await expect(send).toBeDisabled();
+  await expect(page.getByText(/١٨ سنة أو أكثر/)).toBeVisible();
+
+  // ١٨ (بهامش يومين) = مفتوح
+  await dob.fill(dobFor(18));
   await expect(send).toBeEnabled();
 });
 

@@ -30,6 +30,14 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [pass, setPass] = useState("");
+  /**
+   * تاريخ الميلاد — **رع شات ١٨+**. مطلوب لإنشاء أي حساب جديد: في «حساب جديد»
+   * بيبان في الفورم، وفي «دخول بكود» بيبان **بس** لو السيرفر قال `birth_date_required`
+   * (يعني الكود ده هيعمل حساب جديد). والسيرفر **مابيستهلكش الكود** في الحالة دي،
+   * فنفس الكود بيشتغل بعد ما المستخدم يكتب تاريخه.
+   */
+  const [birth, setBirth] = useState("");
+  const [needBirth, setNeedBirth] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [error, setError] = useState("");
@@ -64,12 +72,23 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
   const target = codeChannel === "phone" ? value.replace(/\s/g, "") : value.trim().toLowerCase();
   const targetOk = codeChannel === "phone" ? /^01[0-9]{9}$/.test(target) : /^\S+@\S+\.\S+$/.test(target);
   const passOk = pass.length >= MIN_PASS;
+  /** السن بالسنين الكاملة من `yyyy-mm-dd` (تقويم المتصفح — السيرفر هو الحكم النهائي بتوقيت القاهرة) */
+  const ageOf = (v: string) => {
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return -1;
+    const now = new Date();
+    let a = now.getFullYear() - d.getUTCFullYear();
+    const m = now.getMonth() - d.getUTCMonth();
+    if (m < 0 || (m === 0 && now.getDate() < d.getUTCDate())) a--;
+    return a;
+  };
+  const birthOk = ageOf(birth) >= 18 && ageOf(birth) <= 120;
   const formOk =
     mode === "login" ? targetOk && pass.length > 0
-    : mode === "signup" ? targetOk && passOk && name.trim().length >= 2
+    : mode === "signup" ? targetOk && passOk && name.trim().length >= 2 && birthOk
     : targetOk; // forgot · otp
 
-  const go = (m: Mode) => { setMode(m); setStep("form"); setError(""); setPass(""); setDigits(Array(6).fill("")); };
+  const go = (m: Mode) => { setMode(m); setStep("form"); setError(""); setPass(""); setBirth(""); setNeedBirth(false); setDigits(Array(6).fill("")); };
   const fail = (e: unknown) => { setError((e as Error).message || t("حصلت مشكلة، حاول تاني", "Something went wrong, try again")); setBusy(false); };
 
   /** يطلب كود ويروح لخطوة الكود (التسجيل · النسيان · الدخول بكود) */
@@ -106,16 +125,27 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
     }
     setBusy(true);
     try {
-      if (mode === "signup") await registerWithPassword(target, full, name.trim(), pass);
+      if (mode === "signup") await registerWithPassword(target, full, name.trim(), pass, birth);
       else if (mode === "forgot") await resetPassword(target, full, pass);
-      else await verifyOtp(codeChannel, target, full);
+      else await verifyOtp(codeChannel, target, full, needBirth ? birth : undefined);
       onDone();
     } catch (e) {
+      const code = (e as { code?: string }).code;
       const msg = (e as Error).message;
+      // حساب جديد بكود: السيرفر عايز تاريخ الميلاد و**الكود لسه صالح** — فبنطلبه
+      // ومابنفضّيش الخانات، والمستخدم يضغط «تأكيد» بنفس الكود.
+      if (code === "birth_date_required") {
+        setNeedBirth(true);
+        setError(msg);
+        setBusy(false);
+        return;
+      }
       setError(msg || t("الكود غير صحيح، حاول مرة تانية", "Incorrect code, please try again"));
       setBusy(false);
-      setDigits(Array(6).fill(""));
-      refs.current[0]?.focus();
+      if (code !== "under_age" && code !== "invalid_birth_date") {
+        setDigits(Array(6).fill(""));
+        refs.current[0]?.focus();
+      }
     }
   };
 
@@ -212,6 +242,26 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
             />
           )}
 
+          {/* رع شات ١٨+: تاريخ الميلاد مطلوب لأي حساب جديد */}
+          {mode === "signup" && (
+            <div>
+              <input
+                type="date"
+                dir="ltr"
+                value={birth}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setBirth(e.target.value)}
+                aria-label={t("تاريخ الميلاد", "Date of birth")}
+                className={`${field} text-left`}
+              />
+              <p className="px-1 pt-1 text-[11px] leading-4 text-rachat-sand/70">
+                {birth && !birthOk
+                  ? t("رع شات للبالغين — ١٨ سنة أو أكثر.", "Raa Chat is for adults — 18 or older.")
+                  : t("تاريخ الميلاد مطلوب: رع شات للبالغين (١٨ سنة أو أكثر).", "Date of birth required: Raa Chat is for adults (18+).")}
+              </p>
+            </div>
+          )}
+
           <input
             dir="ltr"
             inputMode={codeChannel === "phone" ? "tel" : "email"}
@@ -304,6 +354,32 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
               />
             ))}
           </div>
+
+          {/* حساب جديد بكود: السيرفر طلب تاريخ الميلاد، و**الكود لسه صالح** */}
+          {needBirth && (
+            <div>
+              <input
+                type="date"
+                dir="ltr"
+                value={birth}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setBirth(e.target.value)}
+                aria-label={t("تاريخ الميلاد", "Date of birth")}
+                className={`${field} text-left`}
+              />
+              <p className="px-1 pt-1 text-[11px] leading-4 text-rachat-sand/70">
+                {t("ده أول دخول ليك، ورع شات للبالغين (١٨ سنة أو أكثر). كودك لسه صالح.",
+                   "This is your first sign-in, and Raa Chat is for adults (18+). Your code is still valid.")}
+              </p>
+              <button
+                disabled={busy || !birthOk}
+                onClick={() => void useCode(digits.join(""))}
+                className="mt-2 w-full rounded-xl bg-rachat-red px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
+              >
+                {t("تأكيد", "Confirm")}
+              </button>
+            </div>
+          )}
 
           {mode === "forgot" && (
             <input
