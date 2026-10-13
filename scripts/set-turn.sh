@@ -93,32 +93,49 @@ fi
 echo "↪ تشغيل coturn…"
 $DC --profile turn up -d turn
 
-# ٤) **الانتظار لحد ما يبقى جاهز فعلًا**: coturn بيكتشف عناوين الترحيل وبيجهّز
-#    منافذها، وده بياخد أكتر من ثانيتين. النسخة الأولى كانت بتنام ٤ ثواني وتفحص،
-#    فتطلع ❌ على سيرفر سليم لسه بيقوم.
-GW=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)
-check() { # check HOST
+# ٤) **الفحص الداخلي لازم يبقى جوه شبكة المضيف نفسها.**
+#    الغلط اللي حصل: الفحص الداخلي كان من حاوية على شبكة compose بيكلّم
+#    `172.17.0.1` — وده بيمرّ على **جدار المضيف** زي الطريق العام بالظبط، فالفحصين
+#    بيفشلوا لنفس السبب ومابيفرّقوش بين «coturn غلط» و«الجدار مقفول» (وده كان
+#    الهدف منهم). الحل: `--network host` وفحص على `127.0.0.1` — مابيمرّش على أي جدار.
+#    وبنستقصي لحد ٤٠ ثانية لأن coturn بيجهّز منافذ الترحيل لكل عنوان بيكتشفه.
+NODE_IMG="node:22-alpine"
+check_local() {
+  docker run --rm --network host \
+    -e TURN_HOST=127.0.0.1 -e TURN_PORT=3478 -e TURN_SECRET="$SECRET" -e TURN_USER=setup \
+    -v "$PWD/scripts/lib:/rc:ro" "$NODE_IMG" node /rc/turncheck.mjs
+}
+check_public() { # check_public HOST — من جوه حاوية الـ api: DNS + جدار + رجوع
   in_api -e TURN_HOST="$1" -e TURN_PORT=3478 -e TURN_SECRET="$SECRET" -e TURN_USER=setup \
     api node < scripts/lib/turncheck.mjs
 }
+
 ready=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if [ -n "$GW" ] && check "$GW" >/tmp/turnlocal.log 2>&1; then ready=1; break; fi
+  if check_local >/tmp/turnlocal.log 2>&1; then ready=1; break; fi
   sleep 4
 done
 if [ "$ready" != "1" ]; then
-  echo "❌ coturn مارضيش يرد من جوه السيرفر بعد ٤٠ ثانية. آخر ناتج فحص:"; tail -n 5 /tmp/turnlocal.log
-  echo "   ولوج coturn:"; $DC logs --tail 25 turn; exit 1
+  echo "❌ coturn نفسه مش بيرد على 127.0.0.1:3478 بعد ٤٠ ثانية. آخر ناتج فحص:"; tail -n 4 /tmp/turnlocal.log
+  echo
+  echo "   هل هو سامع أصلًا؟ (المفروض 0.0.0.0:3478 أو *:3478)"
+  ss -lun 2>/dev/null | grep -E '(^|\s)(\*|0\.0\.0\.0|\[::\]):3478' || echo "     — مفيش حاجة سامعة على 3478/udp"
+  echo
+  echo "   لوج coturn:"; $DC logs --tail 40 turn
+  exit 1
 fi
-echo "✔ coturn بيصادق ويرحّل من جوه السيرفر"
+echo "✔ coturn بيصادق ويرحّل فعلًا (فحص داخلي على 127.0.0.1)"
 
 # ٥) الفحص من **العنوان اللي المستخدم هيستخدمه** (DNS + جدار ناري)
-echo "↪ فحص TURN على $TURN_HOST…"
-if ! check "$TURN_HOST" >/tmp/turnpublic.log 2>&1; then
-  echo "❌ coturn سليم من جوه، بس $TURN_HOST:3478 مش شغّال من بره:"; tail -n 4 /tmp/turnpublic.log
-  echo "   يعني المشكلة **الجدار الناري** (أو الـ DNS)، مش coturn:"
-  echo "   • افتحي 3478/udp و3478/tcp و49160-49200/udp (ufw + جدار Hetzner لو مفعّل)"
+echo "↪ فحص TURN على $TURN_HOST (نفس طريق المستخدم: DNS + جدار ناري)…"
+if ! check_public "$TURN_HOST" >/tmp/turnpublic.log 2>&1; then
+  echo "❌ **coturn سليم** (الفحص الداخلي عدّى)، بس $TURN_HOST:3478 مش شغّال من بره:"; tail -n 4 /tmp/turnpublic.log
+  echo "   يعني المشكلة **الجدار الناري** (أو الـ DNS) — مش coturn:"
+  echo "   • افتحي المنافذ:  ufw allow 3478/udp && ufw allow 3478/tcp && ufw allow 49160:49200/udp"
+  echo "   • ولو فيه Hetzner Cloud Firewall لازم تتفتح من لوحة Hetzner كمان"
   echo "   • واتأكدي إن $TURN_HOST بيشاور على IP السيرفر"
+  echo
+  echo "   حالة ufw دلوقتي:"; (ufw status 2>/dev/null | head -12) || echo "     — ufw مش متثبّت/مش متاح"
   echo "   ومابنكتبش TURN_URLS طالما الفحص فشل — الإنتاج يفضل على STUN زي ما هو."
   [ -n "$PREV_URLS" ] && echo "   (TURN_URLS الحالي في .env.production: $PREV_URLS)"
   exit 1
