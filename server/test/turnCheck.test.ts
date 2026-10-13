@@ -69,6 +69,21 @@ describe("فاحص TURN على coturn حقيقي", () => {
     expect(r.out).toMatch(/TURN_SECRET/);
   }, 20_000);
 
+  it("**السكربت بيتحقق قبل ما يعلن**: كتابة TURN_URLS بعد الفحص مش قبله", async () => {
+    // العطل اللي حصل فعلًا: النسخة الأولى كتبت `TURN_URLS=turn:kenoz.org:…` الأول
+    // وبعدين فحصت — والدومين المجرّد مالوش سجل A، فالإنتاج فضل بيوزّع على كل
+    // المتصفحات عنوان TURN مستحيل يوصله (تأخير في كل مكالمة بلا فايدة).
+    // الاختبار ده حارس على **ترتيب** السكربت نفسه.
+    const sh = await import("node:fs/promises").then((fs) => fs.readFile(path.resolve("../scripts/set-turn.sh"), "utf8"));
+    const write = sh.indexOf("set_kv TURN_URLS \"turn:");
+    const verify = sh.indexOf('echo "↪ فحص TURN على');
+    expect(write).toBeGreaterThan(0);
+    expect(verify).toBeGreaterThan(0);
+    expect(write).toBeGreaterThan(verify); // الكتابة بعد الفحص
+    // ومفيش `|| true` على مسار الحكم في الفحص نفسه
+    expect(sh).not.toMatch(/check "\$TURN_HOST".*\|\|\s*true/);
+  });
+
   it("كلمة السر اللي الفاحص بيستخدمها هي نفسها اللي السيرفر بيولّدها", () => {
     // الفاحص والسيرفر لازم يتفقوا: base64(HMAC-SHA1(secret, "<exp>:<user>"))
     const username = `${Math.floor(Date.now() / 1000) + 600}:setup`;
