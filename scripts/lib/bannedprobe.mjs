@@ -13,14 +13,32 @@
  */
 const LIB = process.env.RC_FILTER_LIB || "/app/dist/lib/contentFilter.js";
 const probe = process.env.RC_PROBE || "";
-const words = (process.env.BANNED_WORDS || "").split(",").map((w) => w.trim()).filter(Boolean);
+const raw = process.env.BANNED_WORDS;
+const words = (raw || "").split(",").map((w) => w.trim()).filter(Boolean);
 
-if (!words.length) {
-  console.error("❌ BANNED_WORDS مش واصل للكونتينر أو فاضي — الفلتر بيعدّي كل حاجة في سكوت.");
-  console.error("   لازم يبقى في environment: بتاعة الـ api في docker-compose.prod.yml.");
+/**
+ * **«مش واصل» و«واصل وفاضي» حالتان مختلفتان** ولازم نفرّق بينهم:
+ *   - `undefined` = السطر مش في `environment:` بتاعة الـ api، فالمتغير **مابيوصلش
+ *     للعملية خالص** — ده عطل في compose (درس RETENTION).
+ *   - `""` = السطر موجود والمتغير واصل، بس القايمة لسه مش متحدّدة — ده **حالة
+ *     معروفة** مش عطل، والفلتر بيعدّي كل حاجة لحد ما القايمة تتكتب.
+ * الرسالة الواحدة «مش واصل أو فاضي» كانت بتخلّي الاتنين شكل واحد، فالواحد
+ * يصلّح الحاجة الغلط.
+ */
+if (raw === undefined) {
+  console.error("❌ BANNED_WORDS **مش واصل للعملية** — السطر ناقص من environment: بتاعة الـ api في docker-compose.prod.yml.");
   process.exit(1);
 }
-if (!probe) { console.error("❌ مفيش RC_PROBE (كلمة للفحص)"); process.exit(1); }
+if (!words.length) {
+  console.error("⚠️ BANNED_WORDS واصل للعملية بس **القايمة فاضية** — الفلتر بيعدّي كل حاجة.");
+  console.error("   الضبط: bash scripts/set-banned-words.sh <ملف القايمة>");
+  process.exit(2);
+}
+// بلا كلمة فحص = وضع «اطمّني على التوصيل بس» (مفيد قبل ما القايمة تتحدّد)
+if (!probe) {
+  console.log(`✅ BANNED_WORDS واصل للعملية و فيه ${words.length} كلمة.`);
+  process.exit(0);
+}
 
 let assertClean;
 try {

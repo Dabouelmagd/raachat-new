@@ -2,6 +2,7 @@
 # يضبط فلتر الكلمات الممنوعة ويتأكد **بفحص حقيقي جوه الكونتينر** إنه بقى شغّال.
 #
 #   على السيرفر:  cd /opt/rachat && bash scripts/set-banned-words.sh /root/banned.txt
+#   اطمّني بس:    bash scripts/set-banned-words.sh --check   (مابيغيّرش حاجة)
 #   للإيقاف:      bash scripts/set-banned-words.sh --off
 #
 # الملف: كل سطر كلمة (أو مفصولة بفاصلة)، والأسطر اللي تبدأ بـ # تعليق.
@@ -21,6 +22,12 @@ open(p,'w').write(s)
 PY
   chmod 600 "$ENVF"
 }
+
+# وضع القراءة: بيقول الحالة الحقيقية جوه الكونتينر الشغّال ومابيكتبش حاجة
+if [ "${1:-}" = "--check" ]; then
+  $DC exec -T api node --input-type=module - < scripts/lib/bannedprobe.mjs || true
+  exit 0
+fi
 
 if [ "${1:-}" = "--off" ]; then
   echo "⚠️ إيقاف الفلتر معناه إن أي كلام بيعدّي — وسياسة الخصوصية (بند ١١) بتوعد العميل بمرشّح آلي."

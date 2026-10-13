@@ -28,6 +28,17 @@ const run = (args: string[], env: Record<string, string> = {}, stdin?: string) =
   });
 const CHECK = path.join(ROOT, "scripts/lib/bannedcheck.mjs");
 
+/** زي `run` بس بيحذف متغيرًا من البيئة خالص (مش يفضّيه) — الفرق بين الحالتين مهم */
+const runWithout = (drop: string, args: string[], env: Record<string, string>, stdin?: string) => {
+  const clean = { ...process.env, ...env } as Record<string, string | undefined>;
+  delete clean[drop];
+  return new Promise<{ code: number; out: string }>((resolve) => {
+    const child = execFile("node", args, { encoding: "utf8", env: clean as NodeJS.ProcessEnv, cwd: path.join(ROOT, "server") },
+      (err, stdout, stderr) => resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, out: stdout + stderr }));
+    if (stdin !== undefined) { child.stdin!.write(stdin); child.stdin!.end(); }
+  });
+};
+
 describe("تطبيع الكلمات", () => {
   it("فحص القايمة بيستخدم **نفس** تطبيع السيرفر — لو اختلفوا الفحص يبقى بيفحص حاجة تانية", () => {
     for (const s of ["الأَحْمَر", "مــدرسة", "نهايه", "عـلى", "ABCd"]) {
@@ -64,9 +75,21 @@ describe("فحص القايمة قبل الضبط", () => {
     expect(falsePositives(["كلمهمسيئهجدا", "اهانهصريحه"])).toEqual([]);
   });
 
-  it("جُمل الفحص السليمة فيها عربي وإنجليزي ومصطلحات عادية", () => {
-    expect(INNOCENT.length).toBeGreaterThanOrEqual(10);
+  it("جُمل الفحص السليمة فيها عربي وإنجليزي والمصايد الحقيقية", () => {
+    expect(INNOCENT.length).toBeGreaterThanOrEqual(20);
     expect(INNOCENT.some((s) => /hello/i.test(s))).toBe(true);
+    // مصايد اتكشفت وقت تجهيز أول مسوّدة: كلمة شكلها مسيئة وهي جوه كلام عادي
+    for (const trap of ["الجنسية", "كلبه", "متخلف عن السداد", "النصاب", "احتيال", "عنصري"]) {
+      expect(INNOCENT.some((s) => s.includes(trap)), `المصيدة «${trap}» اختفت من جُمل الفحص`).toBe(true);
+    }
+  });
+
+  it("**كلمات الأزمة ممنوعة تدخل الفلتر** — الحجب بيسكّت اللي محتاج يوصل لحد", () => {
+    // اللي بيقول «بفكر في الانتحار» محتاج يتكلم، والفلتر لو حجبه بيمنعه في سكوت.
+    // الجملة دي في جُمل الفحص عن قصد: أي قايمة فيها «انتحار» بتترفض من الأساس.
+    const crisis = INNOCENT.find((s) => s.includes("الانتحار"));
+    expect(crisis, "جملة الأزمة اختفت من جُمل الفحص").toBeTruthy();
+    expect(falsePositives(parseList("انتحار").words)).not.toEqual([]);
   });
 });
 
@@ -112,11 +135,28 @@ describe("الفحص جوه الكونتينر (bannedprobe)", () => {
     expect(r.out).toContain("✅");
   });
 
-  it("**بيفشل لما القايمة مش واصلة للعملية** — ده العطل اللي كان في الإنتاج", async () => {
-    const r = await run(["--import", "tsx", ...probeArgs],
+  it("**بيفرّق بين «مش واصل» و«واصل وفاضي»** — حالتان مختلفتان وإصلاحهما مختلف", async () => {
+    // (أ) المتغير مش موجود خالص = السطر ناقص من compose → خطأ (exit 1)
+    const missing = await runWithout("BANNED_WORDS", ["--import", "tsx", ...probeArgs],
+      { RC_FILTER_LIB: lib, RC_PROBE: "كلمهمسيئهجدا" }, src);
+    expect(missing.code).toBe(1);
+    expect(missing.out).toMatch(/مش واصل للعملية/);
+    expect(missing.out).toMatch(/docker-compose/);
+
+    // (ب) موجود وفاضي = السطر تمام والقايمة لسه مش متحدّدة → حالة معروفة (exit 2)
+    const empty = await run(["--import", "tsx", ...probeArgs],
       { RC_FILTER_LIB: lib, RC_PROBE: "كلمهمسيئهجدا", BANNED_WORDS: "" }, src);
-    expect(r.code).toBe(1);
-    expect(r.out).toMatch(/مش واصل للكونتينر أو فاضي/);
+    expect(empty.code).toBe(2);
+    expect(empty.out).toMatch(/القايمة فاضية/);
+    expect(empty.out).not.toMatch(/مش واصل للعملية/);
+  });
+
+  it("بلا كلمة فحص = يطمّن على التوصيل بس (قبل ما القايمة تتحدّد)", async () => {
+    const r = await run(["--import", "tsx", ...probeArgs],
+      { RC_FILTER_LIB: lib, BANNED_WORDS: "كلمهمسيئهجدا,اهانهصريحه" }, src);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/واصل للعملية/);
+    expect(r.out).toContain("2");
   });
 
   it("بيفشل لو الفلتر رفض جملة سليمة", async () => {
