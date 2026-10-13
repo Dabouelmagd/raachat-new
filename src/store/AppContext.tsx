@@ -38,6 +38,7 @@ type Action =
   | { type: "UPSERT_THREAD"; thread: Thread }
   | { type: "MARK_READ"; threadId: string }
   | { type: "SET_PINNED"; threadId: string; pinned: boolean }
+  | { type: "MERGE_MESSAGES"; messages: Message[] }
   | { type: "UPSERT_MESSAGE"; message: Message }
   | { type: "UPSERT_STORY"; story: Story }
   | { type: "SET_ROOMS"; rooms: VoiceRoom[] }
@@ -86,6 +87,15 @@ function reducer(state: AppState, action: Action): AppState {
     case "UPSERT_THREAD": {
       const has = state.threads.some((t) => t.id === action.thread.id);
       return { ...state, threads: has ? state.threads.map((t) => (t.id === action.thread.id ? action.thread : t)) : [action.thread, ...state.threads] };
+    }
+    case "MERGE_MESSAGES": {
+      // دمج بالمعرّف: الجاي من السيرفر يحدّث اللي عندنا، والجديد بيتضاف.
+      // والترتيب بوقت الإرسال عشان الرسايل القديمة اللي وصلت متأخرة ما تقعدش في
+      // آخر المحادثة. (الديمو مفيهوش `at` فبيفضل بترتيبه الأصلي.)
+      const byId = new Map(state.messages.map((m) => [m.id, m]));
+      for (const m of action.messages) byId.set(m.id, m);
+      const messages = [...byId.values()].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+      return { ...state, messages };
     }
     case "UPSERT_MESSAGE": {
       const m = action.message;
@@ -397,6 +407,8 @@ function mockActions(dispatch: D) {
     leaveThread: (threadId: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId }),
     markRead: (threadId: string): void | Promise<void> => dispatch({ type: "MARK_READ", threadId }),
     setPinned: (threadId: string, pinned: boolean): void | Promise<void> => dispatch({ type: "SET_PINNED", threadId, pinned }),
+    /** الديمو محمّل من الأول، فمفيش تحميل عند الفتح */
+    loadMessages: (_threadId: string): void | Promise<void> => undefined,
     createChannel: (name: string, about?: string): string | Promise<string> => {
       const id = uid("ch");
       dispatch({ type: "CREATE_CHANNEL", id, name, about });
@@ -467,6 +479,16 @@ function apiActions(dispatch: D) {
       dispatch({ type: "LEAVE_THREAD", threadId });
     },
     markRead: async (threadId: string) => { dispatch({ type: "MARK_READ", threadId }); await api(`/threads/${threadId}/read`, { method: "POST" }); },
+    /**
+     * رسايل محادثة واحدة عند فتحها.
+     * **السبب:** التحميل الأول (`HYDRATE`) بيجيب رسايل المحادثات الموجودة وقتها
+     * بس — فأي محادثة بتدخلها بعد كده (جروب عام · قناة · محادثة جديدة جاية من
+     * السوكت) كانت بتبان **فاضية** لحد ما تعمل تحديث للصفحة.
+     */
+    loadMessages: async (threadId: string) => {
+      const rows = await api<ApiMessage[]>(`/threads/${threadId}/messages?limit=50`);
+      dispatch({ type: "MERGE_MESSAGES", messages: rows.map(mapMessage) });
+    },
     createChannel: async (name: string, about?: string) => {
       const t = mapThread(await createChannelApi(name, about) as ApiThread);
       dispatch({ type: "UPSERT_THREAD", thread: t });
@@ -475,6 +497,9 @@ function apiActions(dispatch: D) {
     listChannels: async () => ((await listChannelsApi()) as ApiThread[]).map(mapThread),
     subscribeChannel: async (id: string) => {
       dispatch({ type: "UPSERT_THREAD", thread: mapThread(await subscribeChannelApi(id) as ApiThread) });
+      // المنشورات القديمة لازم تبان على طول — القناة فاضية معناها «مفيش حاجة هنا»
+      const rows = await api<ApiMessage[]>(`/threads/${id}/messages?limit=50`);
+      dispatch({ type: "MERGE_MESSAGES", messages: rows.map(mapMessage) });
     },
     unsubscribeChannel: async (id: string) => {
       await unsubscribeChannelApi(id);
@@ -506,6 +531,9 @@ function apiActions(dispatch: D) {
     joinPublicGroup: async (id: string) => {
       const t = await api<ApiThread>(`/threads/${id}/join`, { method: "POST" });
       dispatch({ type: "UPSERT_THREAD", thread: mapThread(t) });
+      // كلام الجروب اللي قبل ما تنضم لازم يبان — من غير كده الجروب بيبان فاضي
+      const rows = await api<ApiMessage[]>(`/threads/${id}/messages?limit=50`);
+      dispatch({ type: "MERGE_MESSAGES", messages: rows.map(mapMessage) });
     },
     addStory: async (caption: string, colorFrom: string, colorTo: string, image?: string) => {
       const imageUrl = await ensureUploaded(image, "story.jpg");

@@ -36,7 +36,7 @@ export default function ChatScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const { threads, messages, contacts } = useAppState();
-  const { sendMessage, receiveMessage, leaveThread, markRead, unsubscribeChannel } = useAppActions();
+  const { sendMessage, receiveMessage, leaveThread, markRead, unsubscribeChannel, loadMessages } = useAppActions();
 
   const thread = threads.find((t) => t.id === id);
   const threadMessages = messages.filter((m) => m.threadId === id);
@@ -116,6 +116,14 @@ export default function ChatScreen() {
   const lastMsgId = threadMessages[threadMessages.length - 1]?.id;
   // علامة «مقروءة» في الوضعين: مع السيرفر بتروح له، وفي الديمو بتشيل البولد والعدّاد
   useEffect(() => { if (id) void markRead(id); }, [id, lastMsgId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * رسايل المحادثة عند فتحها. التحميل الأول بيجيب رسايل المحادثات اللي كانت
+   * موجودة وقت تشغيل التطبيق بس — فأي محادثة بتدخلها بعد كده (جروب عام انضميتي
+   * له · قناة اشتركتي فيها · محادثة جديدة جاية من السوكت) كانت بتبان **فاضية**
+   * لحد ما تعملي تحديث للصفحة. (في الديمو ده مابيعملش حاجة.)
+   */
+  useEffect(() => { if (id) void loadMessages(id); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // آخر رسالة تتبعت/تتستقبل تظهر دايمًا
   const endRef = useRef<HTMLDivElement>(null);
