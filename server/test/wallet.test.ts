@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { startTestEnv } from "./helpers.js";
+import { createApp } from "../src/app.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 beforeAll(async () => { env = await startTestEnv(); }, 120_000);
@@ -186,5 +187,41 @@ describe("wallet", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * **مفيش أي مسار دفع مفتوح في الإنتاج — وده التزام منشور، مش تفصيلة.**
+ *
+ * `terms.html` (الإصدار ٢٫٣، بعد مراجعة المحامي) بيقول بالحرف إن أي **شراء رقمي
+ * داخل التطبيق** يمرّ على **Google Play Billing** و**Apple In-App Purchase**، وإن
+ * **«لا يوجد في التطبيق اليوم أي شراء رقمي داخلي»**. والشيء الوحيد اللي بيخلّي
+ * الجملة دي صحيحة هو سطر واحد: `NODE_ENV === "production"` → 501 `no_gateway`.
+ *
+ * **والسطر ده مكانش متفحوصًا خالص** — كل اختبارات المحفظة بتشتغل بـ `NODE_ENV=test`
+ * واللي فيه الشحن بيرجّع 201، فلو السطر اتشال أو اتغيّر شرطه، الطقم كله يفضل أخضر
+ * والإنتاج يفتح شحنًا بلا بوابة: **مخالفة لشروطنا المنشورة ولسياسة مدفوعات بلاي**
+ * (والعقوبة عندهم إزالة التطبيق مش تحذير)، ومعاها قانون ١٩٤/٢٠٢٠ لخدمات الدفع.
+ *
+ * فالاختبار ده **حارس مقصود** لحالة «مؤجّلة» (قرار داليا ١٥ أكتوبر ٢٠٢٦: تأجيل
+ * ميزة الدفع). لو اتوصلت بوابة مرخّصة فعلًا، الاختبار ده هو المكان اللي بيتغيّر
+ * فيه القرار — عن قصد، مش بالسهو.
+ */
+describe("الإنتاج: مفيش شحن محفظة بلا بوابة دفع مرخّصة", () => {
+  const prodApp = () => createApp({ ...env.ctx, config: { ...env.ctx.config, NODE_ENV: "production" } });
+
+  it("`POST /wallet/topup` بيرجّع 501 no_gateway في الإنتاج", async () => {
+    const a = await login("01070000020", "منى");
+    const r = await request(prodApp()).post("/wallet/topup").set(a.auth).send({ amount: 500 }).expect(501);
+    expect(r.body.code).toBe("no_gateway");
+  });
+
+  it("ومابيضيفش ولا جنيه على الرصيد", async () => {
+    const a = await login("01070000021");
+    await request(prodApp()).post("/wallet/topup").set(a.auth).send({ amount: 999 }).expect(501);
+    // الرفض قبل أي كتابة: الرصيد صفر ومفيش أي حركة
+    const w = await request(env.app).get("/wallet").set(a.auth).expect(200);
+    expect(w.body.balance).toBe(0);
+    expect(w.body.txns).toHaveLength(0);
   });
 });
