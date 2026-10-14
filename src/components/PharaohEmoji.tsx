@@ -17,6 +17,13 @@ import anubis from "../assets/pha/anubis.png";
 import sphinx from "../assets/pha/sphinx.png";
 import eye from "../assets/pha/eye.png";
 import scarab from "../assets/pha/scarab.png";
+import tut from "../assets/pha/tut.png";
+import horus from "../assets/pha/horus.png";
+import bastet from "../assets/pha/bastet.png";
+import ankh from "../assets/pha/ankh.png";
+import pyramid from "../assets/pha/pyramid.png";
+import felucca from "../assets/pha/felucca.png";
+import fanous from "../assets/pha/fanous.png";
 
 export const PHARAOH_KINDS: [string, string, string][] = [
   ["smile", "مبتسم", "Smile"], ["laugh", "بيضحك", "Laugh"], ["love", "بيحب", "Love"], ["wink", "غمزة", "Wink"],
@@ -27,9 +34,13 @@ export const PHARAOH_KINDS: [string, string, string][] = [
   // رموز مصرية (بطلب داليا ١٤ أكتوبر) — نفس المصدر والأسلوب
   ["anubis", "أنوبيس", "Anubis"], ["sphinx", "أبو الهول", "Sphinx"],
   ["eye", "عين حورس", "Eye of Horus"], ["scarab", "جعران", "Scarab"],
+  ["tut", "توت عنخ آمون", "Tutankhamun"], ["horus", "حورس", "Horus"],
+  ["bastet", "باستت", "Bastet"], ["ankh", "مفتاح الحياة", "Ankh"],
+  ["pyramid", "الأهرام", "Pyramids"], ["felucca", "فلوكة", "Felucca"],
+  ["fanous", "فانوس", "Lantern"],
 ];
 
-const IMG: Record<string, string> = { smile, laugh, love, wink, cool, cry, angry, wow, kiss, sleep, think, thumbs, cleo, nefer, anubis, sphinx, eye, scarab };
+const IMG: Record<string, string> = { smile, laugh, love, wink, cool, cry, angry, wow, kiss, sleep, think, thumbs, cleo, nefer, anubis, sphinx, eye, scarab, tut, horus, bastet, ankh, pyramid, felucca, fanous };
 
 const TOKEN = /^\[\[pha:([a-z]+)\]\]$/;
 export const phaKind = (text: string): string | null => {

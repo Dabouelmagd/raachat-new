@@ -86,12 +86,15 @@ test.describe("أكبر حجم خط على أصغر شاشة", () => {
 const EGY = [
   ["أنوبيس", "Anubis"], ["أبو الهول", "Sphinx"],
   ["عين حورس", "Eye of Horus"], ["جعران", "Scarab"],
+  ["توت عنخ آمون", "Tutankhamun"], ["حورس", "Horus"], ["باستت", "Bastet"],
+  ["مفتاح الحياة", "Ankh"], ["الأهرام", "Pyramids"], ["فلوكة", "Felucca"],
+  ["فانوس", "Lantern"],
 ] as const;
 
 for (const [ar] of EGY) {
   test(`ملصق «${ar}» موجود وصورته بتتحمّل فعلًا`, async ({ page }) => {
     await openStickers(page);
-    const btn = page.getByRole("button", { name: ar });
+    const btn = page.getByRole("button", { name: ar, exact: true });
     await expect(btn).toBeVisible();
     const img = btn.locator("img");
     await expect(img).toBeVisible();
@@ -103,9 +106,28 @@ for (const [ar] of EGY) {
 
 test("إرسال ملصق مصري بيظهر في المحادثة", async ({ page }) => {
   await openStickers(page);
-  await page.getByRole("button", { name: "أنوبيس" }).click();
+  await page.getByRole("button", { name: "أنوبيس", exact: true }).click();
   const sent = page.locator('img[alt="pharaoh emoji"]').last();
   await expect(sent).toBeVisible();
   expect(await sent.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  expectNoPageErrors(page);
+});
+
+/**
+ * **حارس عام على كل الملصقات**: أي واحد يتضاف بعد كده وصورته مش بتتحمّل
+ * (مسار غلط · ملف ناقص من البناء · اسم في `PHARAOH_KINDS` بلا صورة في `IMG`)
+ * بيتكشف هنا من غير ما حد يفتكر يكتب له اختبارًا.
+ */
+test("مفيش ولا ملصق فرعوني صورته مكسورة", async ({ page }) => {
+  await openStickers(page);
+  const imgs = page.locator('[role="tabpanel"] img, button img');
+  const n = await imgs.count();
+  expect(n, "مفيش ملصقات ظاهرة أصلًا — المنتقي ما فتحش").toBeGreaterThan(10);
+  const broken: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const w = await imgs.nth(i).evaluate((el) => (el as HTMLImageElement).naturalWidth);
+    if (w === 0) broken.push((await imgs.nth(i).getAttribute("src")) ?? `#${i}`);
+  }
+  expect(broken, `ملصقات صورتها مكسورة: ${broken.join(", ")}`).toEqual([]);
   expectNoPageErrors(page);
 });
