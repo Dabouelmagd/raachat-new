@@ -9,6 +9,9 @@
  * صراحةً — وإلا بنكتب إقرارًا منسوبًا لصاحب الحساب وهو ما قالوش.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { startTestEnv } from "./helpers.js";
 import { setBirthDateByContact } from "../src/lib/setBirthDate.js";
 
@@ -66,5 +69,56 @@ describe("تحديد تاريخ ميلاد لحساب قديم", () => {
     expect(r.ok, "التطبيع مختلف عن السيرفر — الحساب مش هيتلاقى").toBe(true);
     const after = await env.ctx.db.user.findUnique({ where: { id: u.id } });
     expect(after!.birthDate?.toISOString().slice(0, 10)).toBe("1990-11-06");
+  });
+});
+
+/**
+ * **السكربت نفسه، مش الدالة بس.** أول تشغيل حقيقي على الإنتاج فشل بـ
+ * `Cannot find module '.prisma/client/default'`: السكربت كان بيستورد
+ * `@prisma/client` مباشرةً، والـ client مولَّد في مسار مخصّص
+ * (`output = "../src/generated/prisma"` في `schema.prisma`) ومعاه adapter.
+ * الاختبار ده بيشغّل السكربت فعلًا على قاعدة حقيقية — ده اللي بيمسك الحالة دي،
+ * لأن الدالة لوحدها كانت عدّت في الاختبارات وهي سليمة.
+ */
+describe("السكربت جوه الحاوية", () => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const src = () => fs.readFileSync(path.join(ROOT, "scripts/lib/setbirth.mjs"), "utf8");
+  const run = (env: Record<string, string>) =>
+    new Promise<{ code: number; out: string }>((resolve) => {
+      const child = execFile("node", ["--import", "tsx", "--input-type=module", "-"],
+        { encoding: "utf8", cwd: path.join(ROOT, "server"), env: {
+          ...process.env, DATABASE_URL: env.DATABASE_URL, JWT_SECRET: "test-secret-test-secret",
+          RC_SETBIRTH_LIB: path.join(ROOT, "server/src/lib/setBirthDate.ts"),
+          RC_DB_LIB: path.join(ROOT, "server/src/db.ts"),
+          RC_CONFIG_LIB: path.join(ROOT, "server/src/config.ts"),
+          ...env,
+        } },
+        (err, so, se) => resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, out: so + se }));
+      child.stdin!.write(src()); child.stdin!.end();
+    });
+
+  it("بيكتب فعلًا لما يتشغّل كأمر — بقاعدة حقيقية", async () => {
+    const u = await env.login("01099300001", "من السكربت");
+    await env.ctx.db.user.update({ where: { id: u.user.id }, data: { birthDate: null } });
+    const r = await run({ DATABASE_URL: env.dbUrl, RC_CONTACT: "01099300001", RC_BIRTH: "1972-09-01" });
+    expect(r.out).toContain("✅");
+    expect(r.code).toBe(0);
+    const after = await env.ctx.db.user.findUnique({ where: { id: u.user.id } });
+    expect(after!.birthDate?.toISOString().slice(0, 10)).toBe("1972-09-01");
+  }, 60_000);
+
+  it("بيرجّع خطأ واضح على حساب مش موجود، ومابيكتبش حاجة", async () => {
+    const r = await run({ DATABASE_URL: env.dbUrl, RC_CONTACT: "01099399999", RC_BIRTH: "1990-11-06" });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/مفيش حساب/);
+  }, 60_000);
+
+  it("**مابيستوردش `@prisma/client`** — الـ client مولَّد في مسار مخصّص", () => {
+    // التعليق بيشرح ليه مابنستوردوش، فبنشيل التعليقات قبل الفحص
+    const code = src().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code, "الاستيراد ده بيفشل في حاوية الإنتاج").not.toMatch(/@prisma\/client/);
+    expect(src()).toMatch(/createDb/);
+    // وكل استيراد لوحده عشان الرسالة تسمّي اللي فشل فعلًا مش أول واحد
+    expect(src()).toMatch(/async function need/);
   });
 });

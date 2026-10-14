@@ -128,7 +128,8 @@ export async function startTestEnv() {
   }
 
   return {
-    app, ctx, sent, port, login, pushed, dead, refused, fetched,
+    // `dbUrl` عشان سكربت يتشغّل في عملية تانية يقدر يوصل لنفس القاعدة
+    app, ctx, sent, port, login, pushed, dead, refused, fetched, dbUrl: url,
     async stop() {
       server.close();
       ctx.io?.close();
