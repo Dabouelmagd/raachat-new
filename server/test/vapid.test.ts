@@ -129,6 +129,41 @@ describe("مفاتيح VAPID", () => {
     expect(mon).not.toMatch(/logs .*\|\s*grep -q "VAPID/);
   });
 
+  it("مفتاح واحد بس متضبط = الإشعارات مقفولة **في سكوت** (ده اللي --check بيكشفه)", async () => {
+    const { pub, prv } = generate();
+    const { createWebPush } = await import("../src/lib/push.js");
+    // الحارس في set-vapid.sh بيطابق `^VAPID_PRIVATE=.+` لوحده — فلو العام ناقص،
+    // السكربت يقول «متضبط بالفعل» و`createWebPush` بيرجّع undefined، و/push/key
+    // بيرجّع null، والواجهة تقول «غير متاح»: مفيش ولا إشعار ومفيش ولا خطأ.
+    expect(createWebPush({ VAPID_PUBLIC: "", VAPID_PRIVATE: prv, VAPID_SUBJECT: "mailto:a@b.c" } as never)).toBeUndefined();
+    expect(createWebPush({ VAPID_PUBLIC: pub, VAPID_PRIVATE: "", VAPID_SUBJECT: "mailto:a@b.c" } as never)).toBeUndefined();
+    // والزوج الكامل بيطلّع مُرسِلًا، والمفتاح العام هو اللي /push/key بيوزّعه
+    expect(createWebPush({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv, VAPID_SUBJECT: "mailto:a@b.c" } as never)?.publicKey).toBe(pub);
+  });
+
+  it("السكربت فيه --check بيفحص بلا كتابة ولا توليد", () => {
+    const sh = fs.readFileSync(path.join(ROOT, "scripts/set-vapid.sh"), "utf8");
+    const chk = sh.indexOf('--check');
+    expect(chk, "مفيش --check — الحالة الحقيقية مش معروفة إلا بتوليد مفاتيح جديدة").toBeGreaterThan(0);
+    // بيخرج قبل التوليد وقبل الكتابة: مفيش أثر جانبي خالص
+    const exitChk = sh.indexOf("exit 0", chk);
+    expect(exitChk).toBeLessThan(sh.indexOf("vapidgen.js"));
+    expect(exitChk).toBeLessThan(sh.indexOf("open(p,'w').write"));
+    // وبيفحص الزوج جوه الكونتينر **و**/push/key من بره
+    expect(sh.slice(chk, exitChk)).toMatch(/vapidcheck\.mjs/);
+    expect(sh.slice(chk, exitChk)).toMatch(/push\/key/);
+  });
+
+  it("المراقبة مابتكتفيش بتطابق الزوج — بتتأكد إن /push/key بيوزّعه فعلًا", () => {
+    const mon = fs.readFileSync(path.join(ROOT, "scripts/monitor.sh"), "utf8");
+    const i = mon.indexOf("vapidcheck.mjs");
+    const j = mon.indexOf("push/key", i);
+    // الزوج المتطابق مش كفاية: المتصفح بيشترك بالمفتاح اللي المسار ده بيوزّعه،
+    // فـ null أو مفتاح مختلف = كل اشتراك جديد بيترفض وشكله متضبط.
+    expect(j, "فحص Push مابيلمسش /push/key — null أو مفتاح مختلف بيعدّي بـ ✅").toBeGreaterThan(i);
+    expect(mon.slice(i)).toMatch(/fail "push"[\s\S]*null/);
+  });
+
   it("الفاحص بيرفض المفتاح المقصوص والمفقود", () => {
     const { pub, prv } = generate();
     expect(check({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv.slice(0, 20) }).code).toBe(1);
