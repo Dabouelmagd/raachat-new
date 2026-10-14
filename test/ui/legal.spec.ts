@@ -45,15 +45,44 @@ for (const p of pages) {
   });
 }
 
-test("سياسة الخصوصية بتوصّف حفظ أحداث إعلانات مجهولي السن", async ({ page }) => {
+test("سياسة الخصوصية بتوصّف حفظ أحداث إعلانات الحسابات غير محدَّدة السن", async ({ page }) => {
   await page.goto(legalUrl("privacy"));
   const body = page.locator("body");
   await expect(body).toContainText("أحداث الإعلانات");
   await expect(body).toContainText("يومان");
   await expect(body).toContainText("المراقبة السلوكية");
   await expect(body).toContainText(/وليّ? الأمر/); // بشدّة أو بدونها
-  // الحسابات القديمة سنّها مجهول — ولسه بتتعامل معاملة الأقل من ١٨ تحوّطًا
-  await expect(body).toContainText(/مجهول/);
+  // الحسابات اللي قبل ١٣ أكتوبر سنّها غير محدَّد — ودي سبب مدة اليومين
+  await expect(body).toContainText(/غير محدَّدة السن|غير محدَّد/);
+});
+
+/**
+ * مراجعة المحامي (١٤ أكتوبر ٢٠٢٦): التصنيف العمري ١٨+ عند بلاي بيترفض لو
+ * السياسة فيها **أي** فقرة توحي بوجود قاصرين متوقَّعين (IARC). فجدول الاحتفاظ
+ * مابقاش يقول «من يثبت أنه دون ١٨» — القاصر لو اتكشف **بيتقفل حسابه وتتمسح
+ * بياناته فورًا**، مش بتتحفظ له أحداث إعلانات يومين.
+ */
+test("السياسة مابتوحيش بوجود قاصرين متوقَّعين، والمسح فوري", async ({ page }) => {
+  await page.goto(legalUrl("privacy"));
+  const body = page.locator("body");
+  await expect(body).not.toContainText("أو من يثبت أنه دون ١٨");
+  await expect(body).not.toContainText("or found to be under 18");
+  await expect(body).toContainText(/فورًا ودون انتظار طلب/);
+  await expect(body).toContainText(/immediately, without waiting for a request/);
+});
+
+/**
+ * شرط جوجل: Play Billing **حصرًا** لأي شراء رقمي داخل التطبيق، والدفع الخارجي
+ * لفواتير العالم الحقيقي بس. البند ٧ كان بيقول «دفع فواتير عبر شريك دفع» من غير
+ * التفرقة دي — وهي اللي بتتقاس عليها الموافقة.
+ */
+test("الشروط بتفرّق بين فواتير العالم الحقيقي والمشتريات الرقمية", async ({ page }) => {
+  await page.goto(legalUrl("terms"));
+  const body = page.locator("body");
+  await expect(body).toContainText(/العالم الحقيقي/);
+  await expect(body).toContainText("Google Play Billing");
+  await expect(body).toContainText(/In-App Purchase/);
+  await expect(body).toContainText(/real-world/);
 });
 
 test("معايير المجتمع فيها بند CSAE صريح وجهة اتصال لسلامة الأطفال", async ({ page }) => {
