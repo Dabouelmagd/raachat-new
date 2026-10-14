@@ -183,20 +183,17 @@ fi
 # ويوقّع JWT (ES256) ويتحقق منه. ليه: الزوج غير المتطابق **مافيهوش أي خطأ
 # عندنا** — web-push بيبعت عادي وخدمة الدفع ترفض بـ 403، فالمستخدم مايوصلوش
 # إشعار من غير ما حد يعرف. ومابيكلّفش حاجة (حساب محلي، بلا شبكة).
-# ومعاه `/push/key` من بره: الزوج المتطابق مش كفاية — المتصفح بيشترك بالمفتاح
-# اللي المسار ده بيوزّعه، فلازم يرجّع مفتاحًا مش null و**نفس** المفتاح المضبوط.
+# ومعاه المفتاح اللي `/push/key` بيوزّعه: الزوج المتطابق مش كفاية — لو مفتاح
+# من الزوج ناقص، `createWebPush` بترجّع undefined والمسار يرجّع null والواجهة
+# تقول «غير متاح». الفحص بـ `pushprobe.mjs` **جوه الحاوية** مش بـ curl، لأن
+# المسار ورا التوكن وبيرجّع 401 لأي نداء من سكربت.
 if grep -qE '^VAPID_PRIVATE=.+' .env.production 2>/dev/null; then
   if ! vout=$(timeout 30 $DC exec -T api node --input-type=module - < scripts/lib/vapidcheck.mjs 2>&1); then
     fail "push" "مفاتيح VAPID مش سليمة جوه الـ API — كل إشعار هيترفض في سكوت. الناتج: $(echo "$vout" | tail -n 2)"
+  elif ! pout=$(timeout 30 $DC exec -T api node --input-type=module - < scripts/lib/pushprobe.mjs 2>&1); then
+    fail "push" "المفتاح العام مابيوصلش للمتصفحات — الواجهة تقول «الإشعارات غير متاحة». الناتج: $(echo "$pout" | tail -n 2)"
   else
-    served=$(curl -fsS --max-time 15 "https://api.$DOMAIN/push/key" 2>/dev/null | sed -n 's/.*"publicKey":"\([^"]*\)".*/\1/p')
-    if [ -z "$served" ]; then
-      fail "push" "/push/key بيرجّع null — المفتاح مش واصل للعملية، فالواجهة تقول «الإشعارات غير متاحة»"
-    elif [ "$served" != "$(cfg VAPID_PUBLIC)" ]; then
-      fail "push" "/push/key بيوزّع مفتاحًا **غير** المضبوط — كل اشتراك جديد هيترفض بـ 403 في سكوت"
-    else
-      ok "push" "$(echo "$vout" | tail -n 1) · /push/key بيوزّع نفس المفتاح"
-    fi
+    ok "push" "$(echo "$vout" | tail -n 1) · $(echo "$pout" | tail -n 1)"
   fi
 fi
 

@@ -11,7 +11,8 @@
  * PKCS8 DER (`subarray(36, 68)`). الفحص بالاشتقاق هو اللي بيثبّت إن الإزاحة صح.
  */
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
+import request from "supertest";
+import { execFile, execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -149,20 +150,96 @@ describe("مفاتيح VAPID", () => {
     const exitChk = sh.indexOf("exit 0", chk);
     expect(exitChk).toBeLessThan(sh.indexOf("vapidgen.js"));
     expect(exitChk).toBeLessThan(sh.indexOf("open(p,'w').write"));
-    // وبيفحص الزوج جوه الكونتينر **و**/push/key من بره
+    // وبيفحص الزوج **و** المفتاح اللي بيوصل للمتصفح — والاتنين جوه الحاوية
     expect(sh.slice(chk, exitChk)).toMatch(/vapidcheck\.mjs/);
-    expect(sh.slice(chk, exitChk)).toMatch(/push\/key/);
+    expect(sh.slice(chk, exitChk)).toMatch(/pushprobe\.mjs/);
+    // **مش بـ curl على /push/key** — المسار ورا التوكن (الاختبار اللي بعده).
+    // بنشيل التعليقات الأول، لأن التعليق نفسه بيشرح إننا مابنستخدمش curl.
+    const code = sh.slice(chk, exitChk).split("\n").filter((l) => !l.trimStart().startsWith("#")).join("\n");
+    expect(code).not.toMatch(/curl/);
   });
 
-  it("المراقبة مابتكتفيش بتطابق الزوج — بتتأكد إن /push/key بيوزّعه فعلًا", () => {
+  it("المراقبة مابتكتفيش بتطابق الزوج — بتتأكد إن المفتاح بيوصل للمتصفح", () => {
     const mon = fs.readFileSync(path.join(ROOT, "scripts/monitor.sh"), "utf8");
     const i = mon.indexOf("vapidcheck.mjs");
-    const j = mon.indexOf("push/key", i);
-    // الزوج المتطابق مش كفاية: المتصفح بيشترك بالمفتاح اللي المسار ده بيوزّعه،
-    // فـ null أو مفتاح مختلف = كل اشتراك جديد بيترفض وشكله متضبط.
-    expect(j, "فحص Push مابيلمسش /push/key — null أو مفتاح مختلف بيعدّي بـ ✅").toBeGreaterThan(i);
-    expect(mon.slice(i)).toMatch(/fail "push"[\s\S]*null/);
+    const j = mon.indexOf("pushprobe.mjs", i);
+    // الزوج المتطابق مش كفاية: لو مفتاح من الزوج ناقص، createWebPush بترجّع
+    // undefined و/push/key يرجّع null والواجهة تقول «غير متاح» — في سكوت.
+    expect(j, "فحص Push مابيتأكدش إن المفتاح بيتوزّع — null بيعدّي بـ ✅").toBeGreaterThan(i);
+    expect(mon.slice(i)).toMatch(/fail "push"/);
+    expect(mon.slice(i, i + 1200)).not.toMatch(/curl[\s\S]*push\/key/);
   });
+
+  it("`/push/key` ورا التوكن — فأي فحص بـ curl بيرجّع 401 مهما كانت المفاتيح سليمة", async () => {
+    // ده سبب وجود pushprobe.mjs: أول نسخة من --check نادت المسار بـ curl
+    // فطلعت 401 على إنتاج مفاتيحه سليمة تمامًا.
+    const { startTestEnv } = await import("./helpers.js");
+    const env = await startTestEnv();
+    try {
+      await request(env.app).get("/push/key").expect(401);
+      const a = await env.login("01097000001", "دالية");
+      expect((await request(env.app).get("/push/key").set(a.auth)).body.publicKey).toBeTruthy();
+    } finally { await env.stop(); }
+  }, 120_000);
+
+  it("الفاحص بيرفض الموضوع اللي web-push بترمي عليه (والـ API مش بيقوم بيه)", () => {
+    const { pub, prv } = generate();
+    for (const bad of ["admin@kenoz.org", "http://kenoz.org", "mailto:", "رع شات"]) {
+      const r = check({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv, VAPID_SUBJECT: bad });
+      expect(r.code, `الموضوع «${bad}» عدّى والمفروض يترفض`).toBe(1);
+      expect(r.out).toMatch(/mailto:/);
+    }
+    for (const good of ["mailto:info@datalifeai.com", "https://app.kenoz.org"]) {
+      expect(check({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv, VAPID_SUBJECT: good }).code).toBe(0);
+    }
+    // و`web-push` فعلًا بترمي على الشكل الغلط — فالفحص مطابق لسلوك الإنتاج
+    expect(() => webpush.setVapidDetails("admin@kenoz.org", pub, prv)).toThrow();
+  });
+
+  it("الموضوع النموذجي بيتنبّه عليه ومابيفشّلش (الاشتراكات مش بتتأثر بتغييره)", () => {
+    const { pub, prv } = generate();
+    // `.env.production.example` فيه `mailto:you@yourdomain.com` — إيميل مش
+    // موجود. المواصفة بتسمح لخدمة الدفع ترفض، فلازم ينبّه؛ إنما مش عطل مثبّت
+    // فمابيفشّلش المراقبة كل ١٠ دقايق.
+    const r = check({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv, VAPID_SUBJECT: "mailto:you@yourdomain.com" });
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/⚠️/);
+    expect(r.out).toMatch(/--subject/);
+    // والتصليح موجود فعلًا وبيغيّر الموضوع **بس**
+    const sh = fs.readFileSync(path.join(ROOT, "scripts/set-vapid.sh"), "utf8");
+    const i = sh.indexOf('"--subject"');
+    expect(i).toBeGreaterThan(0);
+    const block = sh.slice(i, sh.indexOf("exit 0", i));
+    expect(block).toMatch(/VAPID_SUBJECT=/);
+    expect(block, "مسار --subject بيولّد مفاتيح — ده بيقتل الاشتراكات").not.toMatch(/vapidgen/);
+    expect(block).toMatch(/VAPID_PUBLIC=/); // بيعيد استخدام المفاتيح الموجودة
+  });
+
+  it("pushprobe بيكشف اللي /push/key هيرجّعه فعلًا (بلا توكن)", async () => {
+    const { pub, prv } = generate();
+    const src = fs.readFileSync(path.join(ROOT, "scripts/lib/pushprobe.mjs"), "utf8");
+    const base = {
+      RC_PUSH_LIB: path.join(ROOT, "server/src/lib/push.ts"),
+      RC_CONFIG_LIB: path.join(ROOT, "server/src/config.ts"),
+      DATABASE_URL: "postgresql://x/y", JWT_SECRET: "x".repeat(20),
+      VAPID_SUBJECT: "mailto:a@b.co",
+    };
+    const run = (env: Record<string, string>) =>
+      new Promise<{ code: number; out: string }>((resolve) => {
+        execFile("node", ["--import", "tsx", "--input-type=module", "-"],
+          { encoding: "utf8", env: { ...process.env, ...base, ...env }, cwd: path.join(ROOT, "server") },
+          (err, so, se) => resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, out: so + se }),
+        ).stdin!.end(src);
+      });
+    // الزوج الكامل: المفتاح بيتوزّع
+    const okRun = await run({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv });
+    expect(okRun.out).toContain("✅");
+    expect(okRun.code).toBe(0);
+    // العام ناقص: createWebPush بترجّع undefined → /push/key = null **في سكوت**
+    const half = await run({ VAPID_PUBLIC: "", VAPID_PRIVATE: prv });
+    expect(half.code).toBe(1);
+    expect(half.out).toMatch(/null/);
+  }, 60_000);
 
   it("الفاحص بيرفض المفتاح المقصوص والمفقود", () => {
     const { pub, prv } = generate();
