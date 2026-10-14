@@ -178,7 +178,20 @@ if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRE
   fi
 fi
 
-# ٩) الشهادة
+# ٩) إشعارات Push (VAPID) — **بس لو متضبطة** (مش متضبطة = حالة معروفة مش عطل)
+# فحص إيجابي **جوه الكونتينر الشغّال**: بيشتق المفتاح العام من الخاص ويقارنه،
+# ويوقّع JWT (ES256) ويتحقق منه. ليه: الزوج غير المتطابق **مافيهوش أي خطأ
+# عندنا** — web-push بيبعت عادي وخدمة الدفع ترفض بـ 403، فالمستخدم مايوصلوش
+# إشعار من غير ما حد يعرف. ومابيكلّفش حاجة (حساب محلي، بلا شبكة).
+if grep -qE '^VAPID_PRIVATE=.+' .env.production 2>/dev/null; then
+  if vout=$(timeout 30 $DC exec -T api node --input-type=module - < scripts/lib/vapidcheck.mjs 2>&1); then
+    ok "push" "$(echo "$vout" | tail -n 1)"
+  else
+    fail "push" "مفاتيح VAPID مش سليمة جوه الـ API — كل إشعار هيترفض في سكوت. الناتج: $(echo "$vout" | tail -n 2)"
+  fi
+fi
+
+# ١٠) الشهادة
 days=$(echo | openssl s_client -servername "api.$DOMAIN" -connect "api.$DOMAIN:443" 2>/dev/null \
   | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
 if [ -n "$days" ]; then

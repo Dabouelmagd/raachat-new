@@ -120,6 +120,15 @@ describe("مفاتيح VAPID", () => {
     expect(sh).toMatch(/exec -T api node .*--input-type=module/);
   });
 
+  it("المراقبة بتفحص Push **بس لو متضبط**، وبفحص إيجابي مش بغياب تحذير", () => {
+    const mon = fs.readFileSync(path.join(ROOT, "scripts/monitor.sh"), "utf8");
+    const i = mon.indexOf("VAPID_PRIVATE=.+");
+    expect(i, "فحص Push مش مشروط بوجود المفتاح — مش متضبط هيبقى عطل كل ١٠ دقايق").toBeGreaterThan(0);
+    // الفحص نفسه هو vapidcheck (اشتقاق + توقيع)، مش grep على اللوج
+    expect(mon.indexOf("vapidcheck.mjs")).toBeGreaterThan(i);
+    expect(mon).not.toMatch(/logs .*\|\s*grep -q "VAPID/);
+  });
+
   it("الفاحص بيرفض المفتاح المقصوص والمفقود", () => {
     const { pub, prv } = generate();
     expect(check({ VAPID_PUBLIC: pub, VAPID_PRIVATE: prv.slice(0, 20) }).code).toBe(1);
