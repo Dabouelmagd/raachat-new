@@ -6,6 +6,7 @@ import type { Ctx } from "../context.js";
 import { HttpError, bad, notFound, wrap } from "../lib/errors.js";
 import { meUser, publicUser } from "../serialize.js";
 import { validBirthDate } from "../lib/age.js";
+import { eraseUser } from "../lib/eraseUser.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -107,31 +108,7 @@ export function meRoutes(ctx: Ctx) {
     if (balance > 0 && !b.forfeitBalance) throw new HttpError(409, "wallet_balance", `في محفظتك رصيد ${balance} ج.م هيضيع مع حذف الحساب. اصرفه الأول أو أكّد التنازل عنه.`);
     await consumeOtp(ctx, c.channel, c.target, b.code); // بعد فحص الشروط عشان الكود ما يتحرقش على خطأ
 
-    const ownedRooms = await db.room.findMany({ where: { ownerId: me, closedAt: null }, select: { id: true } });
-    const joined = await db.roomParticipant.findMany({ where: { userId: me }, select: { roomId: true } });
-    const now = new Date();
-    await db.$transaction([
-      db.session.updateMany({ where: { userId: me, revokedAt: null }, data: { revokedAt: now } }),
-      db.pushSub.deleteMany({ where: { userId: me } }),
-      db.adminHandoff.deleteMany({ where: { userId: me } }),
-      db.attachment.deleteMany({ where: { message: { authorId: me } } }),
-      db.message.updateMany({ where: { authorId: me }, data: { deleted: true, text: "" } }),
-      db.story.deleteMany({ where: { authorId: me } }),
-      db.callLog.deleteMany({ where: { userId: me } }),
-      // أحداث الإعلانات باسم المستخدم. (الأقل من ١٨ نقره وإغلاقه متخزنين بمعرّف مستعار
-      // ليوم واحد مش مربوط بهويته — بيتمسح بعمره في routes/ads.ts، ومفيش منه حاجة تُنسب له.)
-      db.adEvent.deleteMany({ where: { userId: me } }),
-      db.block.deleteMany({ where: { OR: [{ blockerId: me }, { blockedId: me }] } }),
-      db.roomParticipant.deleteMany({ where: { userId: me } }),
-      db.room.updateMany({ where: { ownerId: me, closedAt: null }, data: { closedAt: now } }),
-      db.membership.deleteMany({ where: { userId: me } }),
-      db.otpCode.deleteMany({ where: { channel: c.channel, target: c.target } }),
-      db.wallet.updateMany({ where: { userId: me }, data: { balance: 0, pinHash: null } }),
-      db.user.update({ where: { id: me }, data: { name: "حساب محذوف", phone: null, email: null, photoUrl: null, status: "", modStatus: "deleted", deletedAt: now } }),
-      db.auditLog.create({ data: { actorId: me, actorName: "المستخدم (حذف ذاتي)", action: "حذف حساب", target: me, meta: { forfeited: balance } } }),
-    ]);
-    ctx.io?.in(`user:${me}`).disconnectSockets(true);
-    for (const x of new Set([...ownedRooms.map((r) => r.id), ...joined.map((r) => r.roomId)])) ctx.io?.to("rooms").emit("room:changed", { id: x });
+    await eraseUser(ctx, me, { id: me, name: "المستخدم (حذف ذاتي)", action: "حذف حساب" });
     res.status(204).end();
   }));
   return r;

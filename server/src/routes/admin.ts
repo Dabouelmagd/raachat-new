@@ -12,6 +12,7 @@ import { getSettings, saveSettings } from "../lib/settings.js";
 import { notifyPush } from "../lib/push.js";
 import { messageInclude, messageView } from "../serialize.js";
 import { ALL_PERMS, CATALOG, effectivePerms, ensurePresetRoles, isPerm } from "../lib/permissions.js";
+import { eraseUser } from "../lib/eraseUser.js";
 
 export interface StaffInfo { userId: string; name: string; isOwner: boolean; perms: Set<string> }
 type StaffReq = AuthedRequest & { staff: StaffInfo };
@@ -219,6 +220,29 @@ export function adminRoutes(ctx: Ctx) {
     }
     await audit(s, status === "active" ? "فعّل حساب" : status === "suspended" ? "أوقف حساب" : "حظر حساب", u.name, { reason });
   }
+
+  /**
+   * محو بيانات حساب **نهائيًا**. موجود عشان الشروط (بند ٢) وسياسة الخصوصية
+   * (بند ١٠) بيوعدوا العميل: «متى تبيّن لنا أنّ حسابًا يخصّ من هو دون ١٨ سنة
+   * أغلقناه ومحونا بياناته فورًا». قبل كده كان فيه إيقاف بس، فالوعد كان بلا آلية.
+   * نفس ترانزاكشن الحذف الذاتي بالظبط (`lib/eraseUser.ts`) — مصدر واحد.
+   */
+  r.post("/admin/users/:id/erase", need("users.erase"), wrap(async (req, res) => {
+    const s = S(req);
+    const id = String(req.params.id);
+    const b = z.object({
+      reason: z.string().trim().min(3).max(200),
+      // تأكيد صريح: الحذف مابيرجعش، والرصيد بيضيع معاه
+      confirm: z.literal(true),
+    }).parse(req.body ?? {});
+    if (id === s.userId) throw forbidden("مينفعش تمحو حسابك من هنا — استخدم حذف الحساب من التطبيق");
+    const u = await db.user.findUnique({ where: { id }, include: { staff: true, wallet: { select: { balance: true } } } });
+    if (!u) throw notFound("المستخدم مش موجود");
+    if (u.modStatus === "deleted") throw new HttpError(409, "already_deleted", "الحساب ده ممحو بالفعل");
+    if (u.staff) throw forbidden("أعضاء الفريق لازم يتشالوا من الفريق الأول");
+    const erased = await eraseUser(ctx, id, { id: s.userId, name: s.name, action: "محو بيانات حساب", meta: { reason: b.reason } });
+    res.json({ id, erased: true, forfeited: erased?.balance ?? 0 });
+  }));
 
   r.patch("/admin/users/:id/status", need("users.manage"), wrap(async (req, res) => {
     const s = S(req);

@@ -4,6 +4,9 @@ import type { Ctx } from "../context.js";
 export const CATALOG = [
   { key: "users.view", group: "المستخدمون", label: "عرض المستخدمين" },
   { key: "users.manage", group: "المستخدمون", label: "إيقاف/حظر/تفعيل الحسابات" },
+  // محو نهائي مابيرجعش — **مش في أي دور جاهز** عن قصد: المالك بس، أو دور يمنحه
+  // المالك صراحةً. لازم للوفاء بوعد الشروط والخصوصية بمحو بيانات القاصر فورًا.
+  { key: "users.erase", group: "المستخدمون", label: "محو بيانات حساب نهائيًا (لا رجعة)" },
   { key: "finance.view", group: "المالية", label: "عرض المدفوعات والمعاملات" },
   { key: "finance.refund", group: "المالية", label: "استرداد المعاملات" },
   { key: "finance.offers", group: "المالية", label: "إدارة العروض والخصومات" },

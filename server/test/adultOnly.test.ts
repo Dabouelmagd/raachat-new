@@ -186,3 +186,58 @@ describe("الحارس نفسه", () => {
     expect(() => assertSignupAge("2026-01-05", cairoJustAfterMidnight)).toThrow(/غير صحيح/);
   });
 });
+
+/**
+ * محو بيانات حساب من اللوحة — الوفاء بوعد منشور.
+ *
+ * `terms.html` بند ٢ و`privacy.html` بند ١٠ بيقولوا للعميل: «متى تبيّن لنا أنّ
+ * حسابًا يخصّ من هو دون ١٨ سنة أغلقناه ومحونا بياناته **فورًا**». والمراجعة
+ * القانونية (١٤ أكتوبر ٢٠٢٦) طلبت ده صراحةً. وقبل الإصلاح `admin.ts` كان بيعرف
+ * `active/suspended/banned` بس، والمحو الكامل في `me.ts` **لصاحب الحساب وحده** —
+ * يعني وعد للعميل بلا آلية تنفّذه.
+ */
+describe("محو بيانات حساب من اللوحة", () => {
+  const erase = (auth: Record<string, string>, id: string, body: unknown = { reason: "تبيّن أنه دون ١٨ سنة", confirm: true }) =>
+    request(env.app).post(`/admin/users/${id}/erase`).set(auth).send(body);
+
+  it("بيمحو البيانات الشخصية فعلًا — مش بيوقف الحساب بس", async () => {
+    const owner = await env.login("01099000001", "داليا");
+    const victim = await env.login("01099100001", "حساب لقاصر");
+    await request(env.app).post("/push/subscribe").set(victim.auth)
+      .send({ endpoint: "https://push.example/erase-me", keys: { p256dh: "p".repeat(20), auth: "a".repeat(10) } }).expect(204);
+
+    await erase(owner.auth, victim.user.id).expect(200);
+
+    const after = await env.ctx.db.user.findUnique({ where: { id: victim.user.id } });
+    expect(after!.modStatus).toBe("deleted");
+    expect(after!.phone).toBeNull();
+    expect(after!.email).toBeNull();
+    expect(after!.name).toBe("حساب محذوف");
+    expect(after!.deletedAt).toBeTruthy();
+    // البيانات التابعة اتمسحت فعلًا — مش الصف الرئيسي بس
+    expect(await env.ctx.db.pushSub.count({ where: { userId: victim.user.id } })).toBe(0);
+    expect(await env.ctx.db.session.count({ where: { userId: victim.user.id, revokedAt: null } })).toBe(0);
+    // وفيه أثر في سجل الإجراءات بالسبب
+    const log = await env.ctx.db.auditLog.findFirst({ where: { target: victim.user.id, action: "محو بيانات حساب" } });
+    expect(log).toBeTruthy();
+    expect(JSON.stringify(log!.meta)).toContain("دون ١٨");
+  });
+
+  it("**الصلاحية مش في أي دور جاهز** — المحو لا رجعة فيه", async () => {
+    const { CATALOG, PRESET_ROLES } = await import("../src/lib/permissions.js");
+    expect(CATALOG.some((p) => p.key === "users.erase")).toBe(true);
+    for (const role of PRESET_ROLES) {
+      expect(role.permissions, `الدور «${role.name}» بياخد users.erase من غير قرار صريح`).not.toContain("users.erase");
+    }
+  });
+
+  it("بيرفض بلا تأكيد صريح أو بلا سبب، وبيرفض عضو الفريق والحساب الممحو", async () => {
+    const owner = await env.login("01099000001", "داليا");
+    const victim = await env.login("01099100002", "حساب تاني");
+    await erase(owner.auth, victim.user.id, { reason: "تبيّن أنه دون ١٨ سنة" }).expect(400); // مفيش confirm
+    await erase(owner.auth, victim.user.id, { confirm: true }).expect(400);                   // مفيش سبب
+    await erase(owner.auth, owner.user.id).expect(403);                                       // نفسه
+    await erase(owner.auth, victim.user.id).expect(200);
+    await erase(owner.auth, victim.user.id).expect(409);                                      // ممحو بالفعل
+  });
+});
