@@ -75,3 +75,37 @@ test.describe("أكبر حجم خط على أصغر شاشة", () => {
     expectNoPageErrors(page);
   });
 });
+
+/**
+ * رموز مصرية جديدة (بطلب داليا ١٤ أكتوبر): أنوبيس · أبو الهول · عين حورس · جعران.
+ *
+ * الاختبار **مابيكتفيش بوجود الزرار**: ملصق باسم موجود وصورته مكسورة بيعدّي من
+ * فحص الاسم، والمستخدم يشوف مربعًا فاضيًا. فبنقيس `naturalWidth` — دي بتبقى صفرًا
+ * لو الصورة ما اتحمّلتش أصلًا (مسار غلط أو ملف ناقص من البناء).
+ */
+const EGY = [
+  ["أنوبيس", "Anubis"], ["أبو الهول", "Sphinx"],
+  ["عين حورس", "Eye of Horus"], ["جعران", "Scarab"],
+] as const;
+
+for (const [ar] of EGY) {
+  test(`ملصق «${ar}» موجود وصورته بتتحمّل فعلًا`, async ({ page }) => {
+    await openStickers(page);
+    const btn = page.getByRole("button", { name: ar });
+    await expect(btn).toBeVisible();
+    const img = btn.locator("img");
+    await expect(img).toBeVisible();
+    // صفر = الصورة مكسورة، والزرار شكله سليم
+    expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    expectNoPageErrors(page);
+  });
+}
+
+test("إرسال ملصق مصري بيظهر في المحادثة", async ({ page }) => {
+  await openStickers(page);
+  await page.getByRole("button", { name: "أنوبيس" }).click();
+  const sent = page.locator('img[alt="pharaoh emoji"]').last();
+  await expect(sent).toBeVisible();
+  expect(await sent.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  expectNoPageErrors(page);
+});

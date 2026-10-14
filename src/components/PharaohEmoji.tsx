@@ -13,6 +13,10 @@ import think from "../assets/pha/think.png";
 import thumbs from "../assets/pha/thumbs.png";
 import cleo from "../assets/pha/cleo.png";
 import nefer from "../assets/pha/nefer.png";
+import anubis from "../assets/pha/anubis.png";
+import sphinx from "../assets/pha/sphinx.png";
+import eye from "../assets/pha/eye.png";
+import scarab from "../assets/pha/scarab.png";
 
 export const PHARAOH_KINDS: [string, string, string][] = [
   ["smile", "مبتسم", "Smile"], ["laugh", "بيضحك", "Laugh"], ["love", "بيحب", "Love"], ["wink", "غمزة", "Wink"],
@@ -20,9 +24,12 @@ export const PHARAOH_KINDS: [string, string, string][] = [
   ["kiss", "بوسة", "Kiss"], ["sleep", "نايم", "Sleep"], ["think", "بيفكر", "Thinking"], ["thumbs", "تمام", "Thumbs up"],
   // ملكات مصريات (بطلب داليا ١٢ أكتوبر) — اتصمّموا في Canva بنفس أسلوب الباقي
   ["cleo", "كليوباترا", "Cleopatra"], ["nefer", "نفرتيتي", "Nefertiti"],
+  // رموز مصرية (بطلب داليا ١٤ أكتوبر) — نفس المصدر والأسلوب
+  ["anubis", "أنوبيس", "Anubis"], ["sphinx", "أبو الهول", "Sphinx"],
+  ["eye", "عين حورس", "Eye of Horus"], ["scarab", "جعران", "Scarab"],
 ];
 
-const IMG: Record<string, string> = { smile, laugh, love, wink, cool, cry, angry, wow, kiss, sleep, think, thumbs, cleo, nefer };
+const IMG: Record<string, string> = { smile, laugh, love, wink, cool, cry, angry, wow, kiss, sleep, think, thumbs, cleo, nefer, anubis, sphinx, eye, scarab };
 
 const TOKEN = /^\[\[pha:([a-z]+)\]\]$/;
 export const phaKind = (text: string): string | null => {
