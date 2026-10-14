@@ -163,6 +163,7 @@ else ok "backup:uploads" "$uname · $usize بايت · عمره $uage ساعة";
 if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRET=.+' .env.production 2>/dev/null; then
   tsec=$(grep -E '^TURN_SECRET=' .env.production | cut -d= -f2-)
   tcid=$(timeout 30 $DC ps -q turn 2>/dev/null | tr -d '\r')
+  tapi=$(timeout 30 $DC ps -q api 2>/dev/null | tr -d '\r')
   # **العنوان من `TURN_URLS` نفسه، مش من `$DOMAIN`** — ده اللي بيتبعت للمتصفح.
   # `$DOMAIN` (kenoz.org) مالوش سجل DNS أصلًا، فالفحص كان بيفشل دايمًا بـ
   # ENOTFOUND على TURN شغّال: تنبيه كاذب، **وأعمى عن العطل الحقيقي**.
@@ -173,12 +174,26 @@ if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRE
     fail "turn" "TURN متضبط في .env.production بس حاوية coturn مش شغّالة — المكالمات هتفشل لكل اللي ورا CGNAT"
   elif [ -z "$thost" ]; then
     fail "turn" "TURN_URLS موجود بس مش قادر أطلّع منه اسم مضيف — المتصفح هياخد مدخل ICE بايظ"
+  elif [ -z "$tapi" ]; then
+    # الفحص بقى `exec` جوه الـ api، فلو الـ api واقف الرسالة لازم تقول كده
+    # بدل ما تلزّق العطل في TURN (فحص ٣ هو اللي بيحكم على الـ api نفسه).
+    fail "turn" "مش قادر أفحص TURN — حاوية الـ api مش شغّالة (شوفي فحص api فوق)"
   else
     # **Allocate حقيقي** على العنوان المنشور (نفس طريق المستخدم: DNS + جدار ناري)،
     # بنفس حساب كلمة السر بتاع السيرفر. الفاحص مجرَّب على coturn حقيقي.
-    if tout=$(timeout 40 $DC run --rm --no-deps -T \
+    #
+    # **`exec` جوه الـ api الشغّال، مش `run` بحاوية جديدة** (بطلب داليا، ١٤ أكتوبر):
+    # الفحص بيتكرر كل ١٠ دقايق = ١٤٤ حاوية في اليوم على سيرفر مشترك. و`--rm`
+    # بيتنفّذ لما الأمر يخلص بنظافة — لكن `timeout 40` بيقتل الـ CLI، وساعتها
+    # الحاوية بتفضل متبهدلة في `docker ps -a` وتتراكم في سكوت. و`exec` كمان أسرع
+    # (مفيش إنشاء/تشغيل حاوية) وبيستهلك قرصًا أقل.
+    # **وطريق الشبكة هو هو**: حاوية `run` كانت على نفس شبكة compose بتاعة الـ api،
+    # فالـ Allocate بيخرج من نفس المكان بالظبط — الفحص ما اتغيّرش معناه.
+    # و`--input-type=module` صريح لأن الفاحص ESM والقراءة من stdin بتعتمد على
+    # `"type": "module"` في package.json بتاعة مجلد العمل — نفس اللي فحص Push بيعمله.
+    if tout=$(timeout 40 $DC exec -T \
         -e TURN_HOST="$thost" -e TURN_PORT="$tport" -e TURN_SECRET="$tsec" -e TURN_USER=monitor \
-        api node < scripts/lib/turncheck.mjs 2>&1) && echo "$tout" | grep -q "allocate ok"; then
+        api node --input-type=module - < scripts/lib/turncheck.mjs 2>&1) && echo "$tout" | grep -q "allocate ok"; then
       ok "turn" "Allocate ناجح على turn:$thost:$tport"
     elif echo "$tout" | grep -q "ENOTFOUND"; then
       fail "turn" "«$thost» مالوش سجل DNS — المتصفح مش هيقدر يوصل لـ TURN أصلًا. صلّحي السجل أو شغّلي: bash scripts/set-turn.sh"

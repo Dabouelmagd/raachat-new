@@ -95,3 +95,39 @@ test("معايير المجتمع فيها بند CSAE صريح وجهة اتص�
   await expect(body).toContainText(/child safety contact/);
   await expect(page.locator("#draft")).toBeVisible(); // لسه مسوّدة لحد المحامي
 });
+
+/**
+ * **بريد مسؤول سلامة الأطفال لازم يكون بريدًا حقيقيًا قابلًا للنقر.**
+ * بلاي بتطلب جهة اتصال معيَّنة لسلامة الأطفال، و«عيّنّا مسؤولًا» فوق بريد
+ * بين أقواس (`[child-safety@]`) = إقرار غير صحيح في نموذج الرفع: الصفحة
+ * بتقول إن فيه مسؤول وطريقة الوصول له مش موجودة.
+ *
+ * والفحص على **الـ mailto نفسه** مش على نصّ الصفحة: `[بريد مسؤول سلامة
+ * الأطفال]` كان نصًّا جوه `<a href="mailto:[child-safety@]">`، فأي فحص على
+ * «فيه كلمة بريد» كان بيعدّي وهو placeholder.
+ */
+test("بريد سلامة الأطفال بريد حقيقي — مفيش خانة فاضية في الصفحة", async ({ page }) => {
+  await page.goto(legalUrl("community"));
+
+  // كل `mailto:` في الصفحة لازم يكون بريدًا صالحًا — مش `mailto:[child-safety@]`
+  const hrefs = await page
+    .locator('a[href^="mailto:"]')
+    .evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).getAttribute("href") ?? ""));
+  expect(hrefs.length, "مفيش ولا بريد في الصفحة").toBeGreaterThan(1);
+  for (const h of hrefs) {
+    expect(h, `mailto لسه خانة فاضية: ${h}`).toMatch(/^mailto:[^[\]\s@]+@[^[\]\s@]+\.[a-z]{2,}$/i);
+  }
+
+  // ومفيش أي خانة `[...]` فاضلة في نصّ الصفحة
+  const text = await page.locator("main").innerText();
+  expect(text, "لسه فيه خانة فاضية في معايير المجتمع").not.toMatch(/\[[^\]\n]{2,60}\]/);
+
+  // ونسختا الصفحة لازم يبقى عليهما **نفس** رقم الإصدار — الإنجليزية كانت
+  // فاضلة على ٢٫٠ بعد ما البند الجديد اتضاف للنسختين.
+  const ver = text.match(/Version (\d+)\.(\d+)/);
+  expect(ver, "رقم إصدار النسخة الإنجليزية مش موجود").toBeTruthy();
+  // الأرقام العربية-الهندية والفاصلة العربية (٫) — مش نفس محارف الإنجليزي
+  const ar = (s: string) => s.replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
+  const arVer = `الإصدار ${ar(ver![1])}٫${ar(ver![2])}`;
+  expect(text, `الإصدار العربي مش مطابق للإنجليزي (${ver![0]} ← ${arVer})`).toContain(arVer);
+});

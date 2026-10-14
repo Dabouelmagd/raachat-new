@@ -107,6 +107,21 @@ describe("عنوان TURN في المراقبة", () => {
   const sh = (body: string) =>
     execFileSync("bash", ["-c", `. ${path.join(ROOT, "scripts/lib/turnhost.sh")}; ${body}`], { encoding: "utf8" }).trim();
 
+  /**
+   * **قسم TURN بحدوده، مش نافذة بايتات حول `turncheck.mjs`.**
+   * النسخة الأولى كانت `slice(i - 1500, i + 400)`، فأول ما اتضافت تعليقات
+   * للقسم خرج `turn_host_of` من النافذة واختبار سليم سقط. الحدّان دلوقتي من
+   * عنوان القسم لعنوان القسم اللي بعده.
+   */
+  const turnBlock = () => {
+    const mon = fs.readFileSync(path.join(ROOT, "scripts/monitor.sh"), "utf8");
+    const from = mon.search(/^# ٨\) TURN/m);
+    const to = mon.search(/^# ٩\)/m);
+    expect(from, "مش لاقي قسم TURN في المراقبة").toBeGreaterThan(-1);
+    expect(to, "مش لاقي القسم اللي بعد TURN").toBeGreaterThan(from);
+    return { mon, block: mon.slice(from, to) };
+  };
+
   it("بيطلّع المضيف والمنفذ من TURN_URLS بكل أشكاله", () => {
     const urls = "turn:api.kenoz.org:3478?transport=udp,turn:api.kenoz.org:3478?transport=tcp";
     expect(sh(`turn_host_of "${urls}"`)).toBe("api.kenoz.org");
@@ -119,13 +134,31 @@ describe("عنوان TURN في المراقبة", () => {
   });
 
   it("المراقبة بتفحص العنوان المنشور — مش $DOMAIN اللي مالوش DNS", () => {
-    const mon = fs.readFileSync(path.join(ROOT, "scripts/monitor.sh"), "utf8");
-    const i = mon.indexOf("turncheck.mjs");
-    const block = mon.slice(Math.max(0, i - 1500), i + 400);
+    const { mon, block } = turnBlock();
     expect(block, "المراقبة لسه بتفحص $DOMAIN — تنبيه كاذب دائم").not.toMatch(/TURN_HOST="\$DOMAIN"/);
     expect(block).toMatch(/turn_host_of/);
     // ولو الاسم مش بيتحلّ، الرسالة تقول السبب الحقيقي مش «TURN مش بيرحّل»
     expect(mon).toMatch(/ENOTFOUND[\s\S]{0,200}سجل DNS/);
+  });
+
+  /**
+   * **الفحص بـ `exec` جوه الـ api الشغّال، مش `run` بحاوية جديدة.**
+   * المراقبة بتشتغل كل ١٠ دقايق على سيرفر **مشترك** مع مشاريع تانية، و`run`
+   * كان بيخلق حاوية في كل فحصة = ١٤٤ في اليوم. و`--rm` بيتنفّذ لما الأمر
+   * يخلص بنظافة بس — و`timeout 40` بيقتل الـ CLI، فالحاوية تفضل متبهدلة
+   * في `docker ps -a` وتتراكم في سكوت. وطريق الشبكة هو هو (نفس شبكة compose)
+   * فالفحص ما اتغيّرش معناه.
+   */
+  it("المراقبة بتفحص TURN بـ exec جوه الـ api مش بحاوية جديدة كل ١٠ دقايق", () => {
+    const { mon, block } = turnBlock();
+    expect(block, "فحص TURN مش موجود في القسم").toMatch(/turncheck\.mjs/);
+    expect(block, "لسه `docker compose run` — حاويات بتتراكم على سيرفر مشترك")
+      .not.toMatch(/\$DC run\b/);
+    expect(block).toMatch(/\$DC exec -T/);
+    // الفاحص ESM، والقراءة من stdin بتعتمد على package.json لو مفيش العلم ده
+    expect(block).toMatch(/--input-type=module/);
+    // ولو الـ api واقف، الرسالة تقول كده بدل ما تلزّق العطل في TURN
+    expect(mon).toMatch(/حاوية الـ api مش شغّالة/);
   });
 
   it("السكربت والمراقبة بيستخدموا **نفس** الاستخراج (مصدر واحد)", () => {
