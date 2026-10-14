@@ -1,0 +1,70 @@
+/**
+ * تحديد تاريخ ميلاد لحساب قديم **بإدخال من المالك**.
+ *
+ * الحسابات المنشأة قبل ١٣ أكتوبر ٢٠٢٦ مالهاش `birthDate` (كان اختياريًا)،
+ * فالمحفظة مقفولة عليها وبتتعامل معاملة «غير محدَّدة السن» في الإعلانات.
+ *
+ * **الحسّاس هنا:** `terms.html` و`privacy.html` بيقولوا إن تاريخ الميلاد
+ * **«إقرار من المستخدم»**. فلو المالك أدخله نيابةً عن حد، لازم السجل يقول كده
+ * صراحةً — وإلا بنكتب إقرارًا منسوبًا لصاحب الحساب وهو ما قالوش.
+ */
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { startTestEnv } from "./helpers.js";
+import { setBirthDateByContact } from "../src/lib/setBirthDate.js";
+
+let env: Awaited<ReturnType<typeof startTestEnv>>;
+beforeAll(async () => { env = await startTestEnv(); }, 120_000);
+afterAll(async () => { await env?.stop(); }, 60_000);
+
+const owner = { id: "owner", name: "المالك", source: "owner-entered" };
+/** حساب قديم = اتسجّل وبعدين العمود اتفضّى صريح (حالة الإنتاج فعلًا) */
+const legacy = async (phone: string) => {
+  const u = await env.login(phone, "حساب قديم");
+  await env.ctx.db.user.update({ where: { id: u.user.id }, data: { birthDate: null } });
+  return u;
+};
+
+describe("تحديد تاريخ ميلاد لحساب قديم", () => {
+  it("بيكتب التاريخ **ويسجّل إنه بإدخال المالك** مش إقرارًا من المستخدم", async () => {
+    const u = await legacy("01099200001");
+    const r = await setBirthDateByContact(env.ctx, "01099200001", "1972-09-01", owner);
+    expect(r.ok).toBe(true);
+    const after = await env.ctx.db.user.findUnique({ where: { id: u.user.id } });
+    expect(after!.birthDate?.toISOString().slice(0, 10)).toBe("1972-09-01");
+    const log = await env.ctx.db.auditLog.findFirst({ where: { target: u.user.id, action: "حدّد تاريخ ميلاد حساب قديم" } });
+    expect(log, "مفيش أثر في سجل الإجراءات — مين أدخل التاريخ بقى مجهولًا").toBeTruthy();
+    expect(JSON.stringify(log!.meta)).toContain("owner-entered");
+  });
+
+  it("**مابيكتبش فوق تاريخ موجود** — إقرار المستخدم نفسه هو الأصل", async () => {
+    await env.login("01099200002", "حساب حديث"); // بيتسجّل بتاريخ افتراضي من الهيلبر
+    const r = await setBirthDateByContact(env.ctx, "01099200002", "1990-11-06", owner);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.code).toBe("already_set");
+  });
+
+  it("بيرفض الأقل من ١٨ وأي تاريخ غير صالح أو حساب مش موجود", async () => {
+    await legacy("01099200003");
+    const fixed = new Date("2026-10-14T09:00:00.000Z");
+    const under = await setBirthDateByContact(env.ctx, "01099200003", "2015-01-01", owner, fixed);
+    expect(under.ok === false && under.code).toBe("under_age");
+    const bad = await setBirthDateByContact(env.ctx, "01099200003", "1/9/1972", owner, fixed);
+    expect(bad.ok === false && bad.code).toBe("bad_format");
+    const future = await setBirthDateByContact(env.ctx, "01099200003", "2030-01-01", owner, fixed);
+    expect(future.ok === false && future.code).toBe("invalid_birth_date");
+    const none = await setBirthDateByContact(env.ctx, "01099299999", "1990-01-01", owner, fixed);
+    expect(none.ok === false && none.code).toBe("not_found");
+    // ومحدش اتكتبله حاجة بعد كل ده
+    const u = await env.ctx.db.user.findFirst({ where: { phone: "01099200003" } });
+    expect(u!.birthDate).toBeNull();
+  });
+
+  it("بيلاقي الحساب بالإيميل كمان، وبنفس تطبيع السيرفر", async () => {
+    // حساب قديم بإيميل — السيرفر بيخزّن الإيميل بحروف صغيرة
+    const u = await env.ctx.db.user.create({ data: { name: "بالإيميل", email: "x.user@example.com" } });
+    const r = await setBirthDateByContact(env.ctx, "  X.User@EXAMPLE.com  ", "1990-11-06", owner);
+    expect(r.ok, "التطبيع مختلف عن السيرفر — الحساب مش هيتلاقى").toBe(true);
+    const after = await env.ctx.db.user.findUnique({ where: { id: u.id } });
+    expect(after!.birthDate?.toISOString().slice(0, 10)).toBe("1990-11-06");
+  });
+});

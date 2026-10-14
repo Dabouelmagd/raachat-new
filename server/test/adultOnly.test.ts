@@ -197,7 +197,7 @@ describe("الحارس نفسه", () => {
  * يعني وعد للعميل بلا آلية تنفّذه.
  */
 describe("محو بيانات حساب من اللوحة", () => {
-  const erase = (auth: Record<string, string>, id: string, body: unknown = { reason: "تبيّن أنه دون ١٨ سنة", confirm: true }) =>
+  const erase = (auth: Record<string, string>, id: string, body: object = { reason: "تبيّن أنه دون ١٨ سنة", confirm: true }) =>
     request(env.app).post(`/admin/users/${id}/erase`).set(auth).send(body);
 
   it("بيمحو البيانات الشخصية فعلًا — مش بيوقف الحساب بس", async () => {
