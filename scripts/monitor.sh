@@ -163,17 +163,27 @@ else ok "backup:uploads" "$uname · $usize بايت · عمره $uage ساعة";
 if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRET=.+' .env.production 2>/dev/null; then
   tsec=$(grep -E '^TURN_SECRET=' .env.production | cut -d= -f2-)
   tcid=$(timeout 30 $DC ps -q turn 2>/dev/null | tr -d '\r')
+  # **العنوان من `TURN_URLS` نفسه، مش من `$DOMAIN`** — ده اللي بيتبعت للمتصفح.
+  # `$DOMAIN` (kenoz.org) مالوش سجل DNS أصلًا، فالفحص كان بيفشل دايمًا بـ
+  # ENOTFOUND على TURN شغّال: تنبيه كاذب، **وأعمى عن العطل الحقيقي**.
+  # shellcheck source=scripts/lib/turnhost.sh
+  . scripts/lib/turnhost.sh
+  thost=$(turn_host_of "$(cfg TURN_URLS)"); tport=$(turn_port_of "$(cfg TURN_URLS)")
   if [ -z "$tcid" ]; then
     fail "turn" "TURN متضبط في .env.production بس حاوية coturn مش شغّالة — المكالمات هتفشل لكل اللي ورا CGNAT"
+  elif [ -z "$thost" ]; then
+    fail "turn" "TURN_URLS موجود بس مش قادر أطلّع منه اسم مضيف — المتصفح هياخد مدخل ICE بايظ"
   else
-    # **Allocate حقيقي** على العنوان العام (نفس طريق المستخدم: DNS + جدار ناري)،
+    # **Allocate حقيقي** على العنوان المنشور (نفس طريق المستخدم: DNS + جدار ناري)،
     # بنفس حساب كلمة السر بتاع السيرفر. الفاحص مجرَّب على coturn حقيقي.
     if tout=$(timeout 40 $DC run --rm --no-deps -T \
-        -e TURN_HOST="$DOMAIN" -e TURN_PORT=3478 -e TURN_SECRET="$tsec" -e TURN_USER=monitor \
+        -e TURN_HOST="$thost" -e TURN_PORT="$tport" -e TURN_SECRET="$tsec" -e TURN_USER=monitor \
         api node < scripts/lib/turncheck.mjs 2>&1) && echo "$tout" | grep -q "allocate ok"; then
-      ok "turn" "Allocate ناجح على turn:$DOMAIN:3478"
+      ok "turn" "Allocate ناجح على turn:$thost:$tport"
+    elif echo "$tout" | grep -q "ENOTFOUND"; then
+      fail "turn" "«$thost» مالوش سجل DNS — المتصفح مش هيقدر يوصل لـ TURN أصلًا. صلّحي السجل أو شغّلي: bash scripts/set-turn.sh"
     else
-      fail "turn" "TURN مش بيرحّل من بره — المكالمات هتفشل للي ورا CGNAT. الناتج: $(echo "$tout" | tail -n 2)"
+      fail "turn" "TURN مش بيرحّل من بره على turn:$thost:$tport — المكالمات هتفشل للي ورا CGNAT. الناتج: $(echo "$tout" | tail -n 2)"
     fi
   fi
 fi

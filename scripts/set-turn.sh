@@ -40,8 +40,12 @@ fi
 #    مالوش DNS، كل متصفح بيحاول يحلّه ويفشل = تأخير في بداية كل مكالمة بلا فايدة.
 #    فبنشيله على طول قبل أي حاجة تانية.
 EXIST_URLS=$(grep -E '^TURN_URLS=.+' .env.production | cut -d= -f2- || true)
+# نفس استخراج المراقبة بالظبط — مصدر واحد، وإلا السكربت والمراقبة يفحصوا عنوانين
+# مختلفين ويبقى الحكمان متناقضين على نفس الإنتاج.
+# shellcheck source=scripts/lib/turnhost.sh
+. "$(dirname "$0")/lib/turnhost.sh"
 if [ -n "$EXIST_URLS" ]; then
-  EXIST_HOST=$(printf '%s' "$EXIST_URLS" | sed -E 's|^turn:||; s|[:?].*$||' | head -1)
+  EXIST_HOST=$(turn_host_of "$EXIST_URLS")
 fi
 
 # ١) السر: موجود؟ نستخدمه. مش موجود؟ نولّده (تغييره بيقطع المكالمات الجارية بس)

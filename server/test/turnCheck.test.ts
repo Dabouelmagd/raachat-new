@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
+
+const ROOT = path.resolve(import.meta.dirname, "../..");
 import { promisify } from "node:util";
 
 /**
@@ -90,5 +93,45 @@ describe("فاحص TURN على coturn حقيقي", () => {
     const expected = crypto.createHmac("sha1", SECRET).update(username).digest("base64");
     expect(expected).toMatch(/^[A-Za-z0-9+/]+=*$/);
     expect(Buffer.from(expected, "base64")).toHaveLength(20); // SHA-1 = ٢٠ بايت
+  });
+});
+
+/**
+ * عنوان TURN اللي المراقبة بتفحصه لازم يكون **المنشور فعلًا** (من `TURN_URLS`)
+ * مش `$DOMAIN`. العطل اتبلّغ بإيميل تنبيه حقيقي (١٤ أكتوبر ٢٠٢٦):
+ * `getaddrinfo ENOTFOUND kenoz.org` — الدومين المجرّد مالوش سجل DNS أصلًا،
+ * والمنشور `turn:api.kenoz.org:3478`. يعني تنبيه كاذب كل ١٠ دقايق على TURN
+ * شغّال، **وأعمى عن العطل الحقيقي** لأنه أحمر على طول.
+ */
+describe("عنوان TURN في المراقبة", () => {
+  const sh = (body: string) =>
+    execFileSync("bash", ["-c", `. ${path.join(ROOT, "scripts/lib/turnhost.sh")}; ${body}`], { encoding: "utf8" }).trim();
+
+  it("بيطلّع المضيف والمنفذ من TURN_URLS بكل أشكاله", () => {
+    const urls = "turn:api.kenoz.org:3478?transport=udp,turn:api.kenoz.org:3478?transport=tcp";
+    expect(sh(`turn_host_of "${urls}"`)).toBe("api.kenoz.org");
+    expect(sh(`turn_port_of "${urls}"`)).toBe("3478");
+    expect(sh(`turn_host_of "turn:1.2.3.4:3479"`)).toBe("1.2.3.4");
+    expect(sh(`turn_port_of "turn:1.2.3.4:3479"`)).toBe("3479");
+    expect(sh(`turn_host_of "turns:t.example.com"`)).toBe("t.example.com");
+    expect(sh(`turn_port_of "turns:t.example.com"`)).toBe("3478"); // الافتراضي
+    expect(sh(`turn_host_of ""`)).toBe("");
+  });
+
+  it("المراقبة بتفحص العنوان المنشور — مش $DOMAIN اللي مالوش DNS", () => {
+    const mon = fs.readFileSync(path.join(ROOT, "scripts/monitor.sh"), "utf8");
+    const i = mon.indexOf("turncheck.mjs");
+    const block = mon.slice(Math.max(0, i - 1500), i + 400);
+    expect(block, "المراقبة لسه بتفحص $DOMAIN — تنبيه كاذب دائم").not.toMatch(/TURN_HOST="\$DOMAIN"/);
+    expect(block).toMatch(/turn_host_of/);
+    // ولو الاسم مش بيتحلّ، الرسالة تقول السبب الحقيقي مش «TURN مش بيرحّل»
+    expect(mon).toMatch(/ENOTFOUND[\s\S]{0,200}سجل DNS/);
+  });
+
+  it("السكربت والمراقبة بيستخدموا **نفس** الاستخراج (مصدر واحد)", () => {
+    const st = fs.readFileSync(path.join(ROOT, "scripts/set-turn.sh"), "utf8");
+    expect(st).toMatch(/turn_host_of/);
+    expect(st, "استخراج تاني في set-turn = حكمان متناقضان على نفس الإنتاج")
+      .not.toMatch(/sed -E 's\|\^turn:\|\|/);
   });
 });
