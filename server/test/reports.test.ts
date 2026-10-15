@@ -105,5 +105,46 @@ describe("البلاغات", () => {
     let last = 201;
     for (const u of users) { last = (await api().post("/reports").set(spammer.auth).send({ kind: "user", targetId: u.user.id, reason: "spam" })).status; }
     expect(last).toBe(429);
+
+    // **والحد العادي لمّا يمتلي مايقفلش بلاغ سلامة الأطفال** — لو حد عمل ٢٠ بلاغ
+    // سبام النهاردة، مينفعش ده يكون السبب اللي يمنعه من الإبلاغ عن إيذاء طفل.
+    const kid = await env.login("01097000598", "هدف");
+    await api().post("/reports").set(spammer.auth).send({ kind: "user", targetId: kid.user.id, reason: "child_safety" }).expect(201);
+  });
+
+  /**
+   * **سبب `child_safety` ومساره** — بلاي بتطلب مسار إبلاغ صريح لـ CSAE،
+   * و`community.html` بيوعد بالإجراء «من أول بلاغ وبأقصى درجة». قبل ١٥ أكتوبر
+   * مكانش فيه غير «غير لائق» و«سبب آخر»، فالبلاغ كان بيقع في طابور السبام.
+   */
+  describe("بلاغات سلامة الأطفال", () => {
+    it("السبب مقبول ومتسجّل بالاسم", async () => {
+      const w = await world("6");
+      const rep = (await api().post("/reports").set(w.a.auth)
+        .send({ kind: "message", targetId: w.msg.id, reason: "child_safety", note: "محتوى يمسّ طفل" }).expect(201)).body;
+      const row = await env.ctx.db.report.findUnique({ where: { id: rep.id }, select: { reason: true } });
+      expect(row?.reason).toBe("child_safety");
+    });
+
+    it("**في أول طابور اللوحة** مهما كان فيه بلاغات أحدث منه", async () => {
+      const w = await world("7");
+      const viewer = await staff("01097000701", "moderator");
+      // بلاغ سلامة أطفال **الأول**، وبعده بلاغات أحدث منه
+      await api().post("/reports").set(w.a.auth).send({ kind: "message", targetId: w.msg.id, reason: "child_safety" }).expect(201);
+      for (let i = 0; i < 3; i++) {
+        const u = await env.login(`010977001${i}`, `ح${i}`);
+        await api().post("/reports").set(w.a.auth).send({ kind: "user", targetId: u.user.id, reason: "spam" }).expect(201);
+      }
+      const rows = (await api().get("/admin/reports").set(viewer.auth).expect(200)).body as { reason: string }[];
+      expect(rows.length).toBeGreaterThan(3);
+      // بالترتيب الزمني لوحده كان هيبقى رابعًا؛ دلوقتي أول واحد
+      expect(rows[0]!.reason).toBe("child_safety");
+    });
+
+    it("والحد الأقصى للطابور مابيتعدّاش بسببه", async () => {
+      const viewer = await staff("01097000702", "moderator");
+      const rows = (await api().get("/admin/reports?limit=2").set(viewer.auth).expect(200)).body as unknown[];
+      expect(rows.length).toBeLessThanOrEqual(2);
+    });
   });
 });

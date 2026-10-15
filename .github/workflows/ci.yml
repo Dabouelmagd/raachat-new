@@ -83,6 +83,66 @@ jobs:
             test/test-results
           retention-days: 7
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # وضع الـ API: الوظيفة الوحيدة اللي بتشغّل الواجهة **وهي بتكلّم سيرفر حقيقي**.
+  #
+  # ليه لوحدها: وظيفة `web` فوق بتشتغل على بناء الديمو اللي **مابيعملش ولا نداء
+  # شبكة** — فعطلان خطيرين مستحيل يتكشفوا فيها:
+  #   • نص الرسالة بيضيع لو الإرسال فشل، **ومفيش ولا رسالة خطأ** للمستخدم.
+  #   • الجروب العام اللي تنضم له يبان **فاضي** لحد ما تعملي تحديث للصفحة.
+  # الاتنين كانوا محميّين بسكربتين **يدويين** بس، يعني رجوعهم مابيتكشفش.
+  #
+  # ودرس من أول تشغيل في الـ CI (١٥ أكتوبر ٢٠٢٦): السكربتين كانوا **مكسّرين من
+  # ١٣ أكتوبر** — حارس الـ ١٨+ خلّى `/auth/otp/verify` يطلب `birthDate` لأي حساب
+  # جديد، فتسجيل الدخول جوّه السكربت بيفشل و`v.user` تبقى undefined. محدش خد
+  # باله لأنهم مكانوش بيتشغّلوا. **الحارس اللي مابيتشغّلش بيبوظ في سكوت.**
+  # و`send-failure.ts` كان بيطبع النتيجة للمراجعة البشرية و`exit(0)` دايمًا —
+  # بقى بيحكم ويرجّع ٢ عند الفشل، وإلا الوظيفة دي كانت هتبقى خضراء على أي عطل.
+  api-mode:
+    name: وضع الـ API (الإرسال الفاشل + كلام الجروب بعد الانضمام)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rachat
+          POSTGRES_PASSWORD: rachat
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rachat"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: تبعيات الواجهة
+        run: npm ci
+      - name: تبعيات السيرفر
+        working-directory: server
+        run: npm ci
+      - name: توليد Prisma Client
+        working-directory: server
+        run: npx prisma generate
+      # playwright متثبّت في `test/` لوحده (مش في تبعيات الإنتاج)، والسكربتين
+      # بيحمّلوه بمساره الصريح من هناك — فلازم ينزل هنا كمان.
+      - name: تبعيات الاختبارات + المتصفح
+        working-directory: test
+        run: npm ci && npx playwright install --with-deps chromium
+      # كل سكربت له منفذ API مختلف وقاعدة باسم مختلف، فالبناء بيتعمل مرتين.
+      - name: بناء الواجهة في وضع الـ API (الإرسال الفاشل)
+        run: VITE_API_URL=http://localhost:4111 npx vite build -c vite.single.config.ts
+      - name: الإرسال الفاشل مابيضيّعش نص المستخدم
+        working-directory: server
+        run: npx tsx test/manual/send-failure.ts
+      - name: بناء الواجهة في وضع الـ API (كلام الجروب)
+        run: VITE_API_URL=http://localhost:4112 npx vite build -c vite.single.config.ts
+      - name: كلام الجروب بيبان بعد الانضمام من غير تحديث
+        working-directory: server
+        run: npx tsx test/manual/join-history.ts
+
   admin:
     name: لوحة الإدارة (بناء)
     runs-on: ubuntu-latest

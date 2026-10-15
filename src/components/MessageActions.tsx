@@ -150,6 +150,14 @@ export function MessageActions(p: ActionsProps) {
         {reporting && (
           <div className="mx-2 mt-1 flex flex-wrap gap-1 rounded-xl bg-rachat-black p-2 text-xs">
             <span className="w-full pb-1 text-neutral-500">{t("سبب الإبلاغ:", "Report reason:")}</span>
+            {/* «إيذاء طفل» أول الأسباب وبشكل مميّز — قبل كده مكانش فيه غير
+                «غير لائق»، فبلاغ CSAE كان بيروح في نفس طابور السبام. */}
+            <button
+              onClick={() => void report("child_safety")}
+              className="w-full rounded-xl border border-rachat-red bg-rachat-red/20 px-2.5 py-1.5 text-start font-semibold text-rachat-red hover:bg-rachat-red hover:text-white"
+            >
+              {t("إيذاء طفل أو استغلاله", "Child abuse or exploitation")}
+            </button>
             {([["abuse", "إساءة", "Abuse"], ["spam", "مزعجة", "Spam"], ["inappropriate", "غير لائق", "Inappropriate"], ["scam", "احتيال", "Scam"]] as const).map(([k, ar, en]) => (
               <button key={k} onClick={() => void report(k)} className="rounded-full bg-rachat-maroon/60 px-2.5 py-1 text-neutral-200 hover:bg-rachat-red">{t(ar, en)}</button>
             ))}

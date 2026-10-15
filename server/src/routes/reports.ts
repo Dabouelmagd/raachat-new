@@ -4,8 +4,23 @@ import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, notFound, wrap } from "../lib/errors.js";
 
-export const REPORT_REASONS = ["abuse", "spam", "inappropriate", "impersonation", "scam", "other"] as const;
+/**
+ * **`child_safety` سبب منفصل عن قصد** (١٥ أكتوبر ٢٠٢٦): قبل كده اللي يشوف
+ * محتوى اعتداء على طفل مكان أمامه غير «غير لائق» أو «سبب آخر» — فالبلاغ يقع
+ * في نفس طابور السبام ومحدش يعرف إنه حالة طارئة. وبلاي بتطلب مسار إبلاغ
+ * **صريح** لـ CSAE من أي تطبيق اجتماعي، و`community.html` بيوعد بـ«الإجراء
+ * من أول بلاغ وبأقصى درجة» — ووعد بلا سبب مخصّص يبقى بلا طريق.
+ */
+export const REPORT_REASONS = ["child_safety", "abuse", "spam", "inappropriate", "impersonation", "scam", "other"] as const;
+
+/**
+ * الحد اليومي للبلاغات العادية. و**بلاغات سلامة الأطفال ليها حد لوحدها وأوسع**:
+ * لو حد عمل ٢٠ بلاغًا على سبام النهاردة، مينفعش يكون ده السبب اللي يمنعه من
+ * الإبلاغ عن اعتداء على طفل. ومش بلا حد خالص عشان مايبقاش طريقًا للإزعاج —
+ * والتكرار على نفس الهدف بيتجمّع في صف واحد بـ `upsert` أصلًا.
+ */
 const MAX_PER_DAY = 20;
+const MAX_CHILD_SAFETY_PER_DAY = 50;
 
 /** إبلاغ المستخدم عن رسالة/ستوري/غرفة/مستخدم/جروب. بيحفظ نسخة من النص وقت البلاغ. */
 export function reportRoutes(ctx: Ctx) {
@@ -21,7 +36,13 @@ export function reportRoutes(ctx: Ctx) {
     }).parse(req.body);
 
     const since = new Date(Date.now() - 24 * 3600_000);
-    if ((await db.report.count({ where: { reporterId: me, createdAt: { gte: since } } })) >= MAX_PER_DAY)
+    const child = b.reason === "child_safety";
+    // الحد بيتحسب **على نفس نوع البلاغ**: بلاغات سلامة الأطفال عندها عدّادها
+    // وحدها، فامتلاء الحد العادي مابيقفلش الطريق عليها (ولا العكس).
+    const used = await db.report.count({
+      where: { reporterId: me, createdAt: { gte: since }, ...(child ? { reason: "child_safety" } : { reason: { not: "child_safety" } }) },
+    });
+    if (used >= (child ? MAX_CHILD_SAFETY_PER_DAY : MAX_PER_DAY))
       throw new HttpError(429, "too_many", "وصلت للحد اليومي للبلاغات");
 
     let targetUserId: string | null = null, targetLabel = "", snippet = "", place = "";

@@ -4,7 +4,10 @@ import { api } from "./api.js";
 import { useMe, useLoad, useDo, Err, Confirm } from "./live.jsx";
 
 const KINDS = { message: "رسالة", story: "Story", room: "غرفة", user: "مستخدم", thread: "جروب" };
-const REASONS = { abuse: "إساءة لفظية", spam: "رسائل مزعجة (Spam)", inappropriate: "محتوى غير لائق", impersonation: "انتحال شخصية", scam: "احتيال / رابط مشبوه", other: "سبب آخر" };
+const REASONS = { child_safety: "إيذاء طفل أو استغلاله", abuse: "إساءة لفظية", spam: "رسائل مزعجة (Spam)", inappropriate: "محتوى غير لائق", impersonation: "انتحال شخصية", scam: "احتيال / رابط مشبوه", other: "سبب آخر" };
+/** بلاغات سلامة الأطفال بتيجي أول الطابور من السيرفر، وبتتعلّم بصريًا كمان
+ *  عشان مايضيعوش بين عشرين بلاغ سبام — الإجراء المنشور «من أول بلاغ». */
+const URGENT = "child_safety";
 const RES = { delete: "اتحذف المحتوى", delete_ban: "حذف + حظر", warn: "تحذير", dismiss: "تم التجاهل" };
 const fmt = (iso) => new Date(iso).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" });
 
@@ -28,9 +31,14 @@ export function LiveReports() {
         {(data || []).map((r) => (
           <div className="rep" key={r.id}>
             <div className="row" style={{ justifyContent: "space-between" }}>
-              <b>{REASONS[r.reason] || r.reason}</b>
+              <b style={r.reason === URGENT ? { color: "var(--danger, #e5484d)" } : undefined}>
+                {r.reason === URGENT && "🚨 "}{REASONS[r.reason] || r.reason}
+              </b>
               <span className="tag">{KINDS[r.kind] || r.kind} · {fmt(r.at)}</span>
             </div>
+            {r.reason === URGENT && r.status === "open" && (
+              <div className="pill p-bad">أولوية قصوى — حجب وإغلاق نهائي وتبليغ الجهات المختصة</div>
+            )}
             <div style={{ color: "var(--muted)", fontSize: 12 }}>
               المبلَّغ عنه: <b style={{ color: "var(--fg)" }}>{r.target}</b> · بواسطة {r.reporter} · {r.where}
               {r.count > 1 && <span className="pill p-warn" style={{ marginInlineStart: 6 }}>{n(r.count)} بلاغات</span>}

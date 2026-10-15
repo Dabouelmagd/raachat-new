@@ -626,7 +626,17 @@ export function adminRoutes(ctx: Ctx) {
 
   r.get("/admin/reports", need("content.view"), wrap(async (req, res) => {
     const q = z.object({ status: z.enum(["open", "resolved"]).default("open"), kind: z.enum(["message", "story", "room", "user", "thread"]).optional(), limit: z.coerce.number().int().min(1).max(200).default(100) }).parse(req.query);
-    const rows = await db.report.findMany({ where: { status: q.status, ...(q.kind ? { kind: q.kind } : {}) }, include: { reporter: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: q.limit });
+    // **بلاغات سلامة الأطفال في أول الطابور دايمًا** (١٥ أكتوبر ٢٠٢٦) — مش
+    // بترتيب الوقت زي الباقي. السبب: `community.html` بيوعد بالإجراء «من أول
+    // بلاغ وبأقصى درجة»، والترتيب الزمني لوحده بيحطّ بلاغ اعتداء على طفل ورا
+    // عشرين بلاغ سبام أحدث منه. استعلامان عن قصد — Prisma مافيهاش ترتيب بأولوية
+    // محسوبة، و`orderBy: reason` ترتيب أبجدي يتغيّر معناه لو اتسمّى سبب جديد.
+    const where = { status: q.status, ...(q.kind ? { kind: q.kind } : {}) };
+    const inc = { reporter: { select: { name: true } } };
+    const urgent = await db.report.findMany({ where: { ...where, reason: "child_safety" }, include: inc, orderBy: { createdAt: "desc" }, take: q.limit });
+    const rest = urgent.length >= q.limit ? [] :
+      await db.report.findMany({ where: { ...where, reason: { not: "child_safety" } }, include: inc, orderBy: { createdAt: "desc" }, take: q.limit - urgent.length });
+    const rows = [...urgent, ...rest];
     const counts = new Map<string, number>();
     if (rows.length) {
       const g = await db.report.groupBy({ by: ["kind", "targetId"], where: { OR: rows.map((x) => ({ kind: x.kind, targetId: x.targetId })), status: q.status }, _count: { _all: true } });

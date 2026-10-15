@@ -1,5 +1,5 @@
 /**
- * تحقّق **يدوي** (مش في الـ CI): لما تنضم لجروب عام، هل كلامه القديم بيبان؟
+ * تحقّق في **وضع الـ API** (بقى في الـ CI من ١٥ أكتوبر ٢٠٢٦): لما تنضم لجروب عام، هل كلامه القديم بيبان؟
  *
  * ليه يدوي: اختبارات `test/ui/` بتشتغل على بناء الديمو اللي **مابيعملش ولا نداء
  * شبكة**، والعطل ده بالتحديد في **تحميل البيانات من السيرفر**: الواجهة كانت
@@ -73,7 +73,11 @@ async function main() {
   const login = async (phone: string, name: string) => {
     await post("/auth/otp/request", { channel: "phone", target: phone });
     const code = codes.filter((x) => x.target === phone).at(-1)!.code;
-    const v = (await post("/auth/otp/verify", { channel: "phone", target: phone, code })).body as any;
+    // `birthDate` **مطلوب** لإنشاء أي حساب جديد من ١٣ أكتوبر (التطبيق ١٨+).
+    // ومن غيره المسار بيرجّع `birth_date_required` و`v.user` تبقى undefined —
+    // وده اللي كان مكسّر السكربتين دول في سكوت، لأنهم مكانوش في الـ CI.
+    const v = (await post("/auth/otp/verify", { channel: "phone", target: phone, code, birthDate: "1990-05-20" })).body as any;
+    if (!v?.user?.id) throw new Error(`تسجيل الدخول فشل لـ ${phone}: ${JSON.stringify(v)}`);
     await fetch(`http://localhost:${API}/me`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${v.accessToken}` }, body: JSON.stringify({ name }) });
     return v;
   };

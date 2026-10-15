@@ -1,5 +1,5 @@
 /**
- * تحقّق **يدوي** (مش في الـ CI): هل الواجهة بتضيّع نص المستخدم لو الإرسال فشل؟
+ * تحقّق في **وضع الـ API** (بقى في الـ CI من ١٥ أكتوبر ٢٠٢٦): هل الواجهة بتضيّع نص المستخدم لو الإرسال فشل؟
  *
  * ليه يدوي: اختبارات الواجهة في `test/ui/` بتشتغل على بناء الديمو (`dist-single`)
  * اللي مابيعملش ولا نداء شبكة — فمفيش فيه فشل إرسال أصلًا. التحقّق ده بيشغّل
@@ -75,7 +75,11 @@ async function main() {
   const login = async (phone: string, name: string) => {
     await post("/auth/otp/request", { channel: "phone", target: phone });
     const code = codes.filter((x) => x.target === phone).at(-1)!.code;
-    const v = (await post("/auth/otp/verify", { channel: "phone", target: phone, code })).body as any;
+    // `birthDate` **مطلوب** لإنشاء أي حساب جديد من ١٣ أكتوبر (التطبيق ١٨+).
+    // ومن غيره المسار بيرجّع `birth_date_required` و`v.user` تبقى undefined —
+    // وده اللي كان مكسّر السكربتين دول في سكوت، لأنهم مكانوش في الـ CI.
+    const v = (await post("/auth/otp/verify", { channel: "phone", target: phone, code, birthDate: "1990-05-20" })).body as any;
+    if (!v?.user?.id) throw new Error(`تسجيل الدخول فشل لـ ${phone}: ${JSON.stringify(v)}`);
     await fetch(`http://localhost:${API}/me`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${v.accessToken}` }, body: JSON.stringify({ name }) });
     return v;
   };
@@ -99,6 +103,7 @@ async function main() {
   const sess = JSON.stringify({ access: me.accessToken, refresh: me.refreshToken, meId: me.user.id });
   await page.addInitScript((s) => localStorage.setItem("rachat-session", s), sess);
   const out: string[] = [];
+  const fail: string[] = [];
   page.on("pageerror", (e) => out.push("PAGEERROR " + e.message));
 
   for (const mode of ["net", "400"] as const) {
@@ -137,16 +142,27 @@ async function main() {
     const txt = (await alert.allInnerTexts()).join(" | ");
     out.push(`[${mode}] alert=${JSON.stringify(txt)}`);
     out.push(`[${mode}] input-after-send=${JSON.stringify(await input.inputValue())}`);
+    // **الحكم، مش الطباعة بس.** النسخة الأولى كانت بتطبع الأسطر دي للمراجعة
+    // البشرية و`process.exit(0)` دايمًا — يعني لو العطل رجع، السكربت بيعدّي
+    // أخضر. ودي بالظبط الحالة اللي قاعدة الفحوص بتمنعها: «رقم بيتطبع للمراجعة
+    // بدل ما يتفحص». ولازم تبقى حكمًا عشان الـ CI يقدر يشغّله.
+    if (!/ما اتبعتتش|wasn't sent/.test(txt)) fail.push(`[${mode}] مفيش شريط «الرسالة ما اتبعتتش» — المستخدم مش شايف إن الإرسال فشل`);
     // زرار «رجّع النص للخانة»
     const back = page.getByRole("button", { name: /رجّع النص|Put the text back/ });
     if (await back.count()) {
       await back.click();
       await page.waitForTimeout(300);
-      out.push(`[${mode}] after-restore=${JSON.stringify(await input.inputValue())}`);
-    } else out.push(`[${mode}] after-restore=NO-BUTTON`);
+      const restored = await input.inputValue();
+      out.push(`[${mode}] after-restore=${JSON.stringify(restored)}`);
+      if (!restored.includes(TEXT)) fail.push(`[${mode}] «رجّع النص» ما رجّعش النص بالحرف — نص المستخدم ضاع`);
+    } else {
+      out.push(`[${mode}] after-restore=NO-BUTTON`);
+      fail.push(`[${mode}] مفيش زرار «رجّع النص للخانة» — مفيش طريقة يرجّع بيها كلامه`);
+    }
   }
 
   console.log(out.join("\n"));
+  console.log(fail.length ? "\n" + fail.map((f) => "❌ " + f).join("\n") : "\n✅ الشريط ظهر بالسبب الصح والنص رجع بالحرف في الحالتين");
   await browser.close();
   web.close();
   server.close();
@@ -155,5 +171,6 @@ async function main() {
   await a2.connect();
   await a2.query(`DROP DATABASE IF EXISTS "${NAME}" WITH (FORCE)`);
   await a2.end();
+  return fail.length > 0;
 }
-main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
+main().then((bad) => process.exit(bad ? 2 : 0), (e) => { console.error(e); process.exit(1); });
