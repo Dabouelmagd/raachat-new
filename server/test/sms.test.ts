@@ -197,3 +197,76 @@ describe("سكربت الضبط", () => {
     expect(sh.indexOf("smssend.mjs")).toBeGreaterThan(preflight);
   });
 });
+
+/**
+ * **جسم JSON متداخل + هيدرات** — الامتداد اللي بيخلّي واتساب (Meta Cloud API)
+ * وأي مزوّد مصادقته في الهيدر يشتغلوا بنفس المفتاح بلا كلاس لكل مزوّد.
+ *
+ * لزومه: `params` حقول **مسطّحة**، وجسم واتساب متداخل (template.components[].
+ * parameters[].text)، ومصادقته `Authorization: Bearer` في الهيدر — فالاتنين
+ * مستحيلين على الشكل القديم، ومافيش طريقة تكتشف ده غير إن الإرسال يفشل.
+ */
+describe("جسم متداخل وهيدرات (واتساب)", () => {
+  const WA = {
+    url: "https://graph.facebook.com/v21.0/123456/messages",
+    method: "POST" as const,
+    format: "json" as const,
+    params: {},
+    headers: { Authorization: "Bearer EAAG-secret-token-value" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: "{to20}",
+      type: "template",
+      template: {
+        name: "otp_ar",
+        language: { code: "ar" },
+        components: [{ type: "body", parameters: [{ type: "text", text: "{code}" }] }],
+      },
+    }),
+    ok: "wamid.",
+  };
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64");
+
+  it("بيبني جسم واتساب بالكود في مكانه الصح", () => {
+    const spec = parseSmsSpec(b64(WA))!;
+    const { url, init } = buildSmsRequest(spec, "01222139111", "123456");
+    expect(url).toBe(WA.url);
+    const sent = JSON.parse((init as { body: string }).body);
+    expect(sent.to).toBe("201222139111");
+    expect(sent.template.components[0].parameters[0].text).toBe("123456");
+    expect(sent.messaging_product).toBe("whatsapp");
+  });
+
+  it("الهيدر بيتبعت فعلًا — من غيره Meta بترجّع 401", () => {
+    const spec = parseSmsSpec(b64(WA))!;
+    const { init } = buildSmsRequest(spec, "01222139111", "123456");
+    const h = (init as { headers: Record<string, string> }).headers;
+    expect(h.Authorization).toBe("Bearer EAAG-secret-token-value");
+    expect(h["Content-Type"]).toBe("application/json");
+  });
+
+  it("التوكن بيتحجب من اللوج — بالبادئة وبدونها", () => {
+    const spec = parseSmsSpec(b64(WA))!;
+    const out = redactSmsSecrets(spec, 'error: "EAAG-secret-token-value" rejected');
+    expect(out).not.toContain("EAAG-secret-token-value");
+  });
+
+  it("قيمة فيها علامة تنصيص مابتكسرش الجسم (التهريب)", () => {
+    const spec = parseSmsSpec(b64({ ...WA, body: WA.body.replace("{code}", "{text}") }))!;
+    const { init } = buildSmsRequest(spec, "01222139111", "123456", 'كود "التحقق" \\ 123456');
+    const sent = JSON.parse((init as { body: string }).body); // لو مش مهرَّب الـparse بيرمي
+    expect(sent.template.components[0].parameters[0].text).toBe('كود "التحقق" \\ 123456');
+  });
+
+  it("بيرفض: جسم بلا format json · جسم JSON مكسور · هيدر فيه سطر جديد", () => {
+    expect(() => parseSmsSpec(b64({ ...WA, format: "form" }))).toThrow(/format/);
+    expect(() => parseSmsSpec(b64({ ...WA, body: '{"to":"{to20}","x":' }))).toThrow(/JSON سليم/);
+    expect(() => parseSmsSpec(b64({ ...WA, headers: { X: "a\r\nY: b" } }))).toThrow(/سطر جديد/);
+  });
+
+  it("الجسم الخام مابيعفيش من قالب الرقم ولا علامة النجاح", () => {
+    expect(() => parseSmsSpec(b64({ ...WA, body: '{"to":"0100"}' }))).toThrow(/قالب للرقم/);
+    const { ok, ...noOk } = WA;
+    expect(() => parseSmsSpec(b64(noOk))).toThrow(/ok مطلوب/);
+  });
+});
