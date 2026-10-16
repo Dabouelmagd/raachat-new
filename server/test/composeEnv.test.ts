@@ -42,9 +42,6 @@ const apiEnv = (() => {
  * أي مفتاح جديد خارج القايمة دي بيفشّل الاختبار.
  */
 const KNOWN_UNPASSED: Record<string, string> = {
-  // (ب) عطل معروف — محتاج سطر في compose
-  SMS_HTTP: "⏳ مستني موافقة داليا على سطر في compose (شغل SMS، ١٣ أكتوبر)",
-  SMS_DAILY_MAX: "⏳ مع SMS_HTTP — الافتراضي ٣٠٠ شغّال، والتغيير بس هو اللي محتاج السطر",
   // (أ) الافتراضي كافي في الإنتاج
   PORT: "الافتراضي 4000 مطابق لـ expose في compose",
   UPLOAD_DIR: "الافتراضي مطابق لـ volume uploads:/app/uploads",

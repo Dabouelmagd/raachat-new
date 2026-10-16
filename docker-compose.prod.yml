@@ -45,6 +45,15 @@ services:
       # حاجة في سكوت** — وفلترة المحتوى شرط في بند ١.٢ عند آبل وسياسة UGC عند بلاي،
       # وسياسة الخصوصية (بند ١١) بتوعد العميل بيها. الضبط: bash scripts/set-banned-words.sh
       BANNED_WORDS: ${BANNED_WORDS:-}
+      # مجمّع SMS مصري — مواصفة النداء كـ base64 لـ JSON (تفاصيلها في `server/src/lib/sms.ts`).
+      # من غير السطر ده المفتاح في `.env.production` **مابيوصلش للعملية خالص** فيفضل
+      # تسجيل الرقم متعطلًا وشكله متضبط (نفس درس RETENTION و BANNED_WORDS).
+      # الضبط: bash scripts/set-sms-keys.sh — بيبعت رسالة حقيقية ويستنى تأكيدك.
+      SMS_HTTP: ${SMS_HTTP:-}
+      # سقف الرسائل في اليوم (بتوقيت القاهرة) — حارس للفاتورة: حد `/auth/otp` هو
+      # ١٠/دقيقة لكل IP و٥/ساعة لكل رقم، فمهاجم بيلفّ على أرقام كان يطلع ٦٠٠ رسالة
+      # في الساعة بلا سقف.
+      SMS_DAILY_MAX: ${SMS_DAILY_MAX:-300}
     volumes: [uploads:/app/uploads]
     expose: ["4000"]
 
