@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import { io as client } from "socket.io-client";
 import { startTestEnv } from "./helpers.js";
 
 /**
@@ -13,7 +14,7 @@ afterAll(async () => { await env?.stop(); }, 60_000);
 const BAD = "كلمةممنوعة"; // من BANNED_WORDS في helpers
 
 type Auth = { auth: Record<string, string> };
-type PollMsg = { id: string; poll: { question: string; multi: boolean; closed: boolean; options: { id: string; text: string; voterIds: string[] }[] } };
+type PollMsg = { id: string; poll: { question: string; multi: boolean; closed: boolean; hideVoters: boolean; options: { id: string; text: string; count: number; voterIds: string[]; mine?: boolean }[] } };
 
 const group = async (a: Auth, name: string, ids: string[]) =>
   (await request(env.app).post("/threads").set(a.auth).send({ type: "group", name, memberIds: ids }).expect(201)).body;
@@ -123,4 +124,95 @@ describe("الاستطلاعات", () => {
     const after = (await request(env.app).get(`/threads/${g.id}/messages`).set(a.auth).expect(200)).body as PollMsg[];
     expect(after.at(-1)!.poll.options.every((o) => o.voterIds.length === 0)).toBe(true);
   });
+});
+
+/**
+ * **الأصوات المخفية** (قرار داليا ١٦ أكتوبر ٢٠٢٦): صاحب الاستطلاع يختار وقت
+ * الإنشاء إن الأعضاء يشوفوا مين صوّت ولا لأ.
+ *
+ * والفحوص دي **على الرد نفسه مش على الواجهة** عن قصد: إخفاء الأسماء في الواجهة
+ * بس كان بيبقى ستارة — `serialize.ts` كان بيبعت `voterIds` لكل عضو، فأي حد
+ * يفتح تبويب الشبكة يقرا مين صوّت. فالفحص الحقيقي هو إن **معرّف المصوّت مش
+ * موجود في نص الرد خالص**.
+ */
+describe("الأصوات المخفية", () => {
+  it("المخفي: مفيش ولا معرّف مصوّت في الرد، والعدّ و«صوتي» صح لكل واحد", async () => {
+    const a = await env.login("01097000020", "صاحب الاستطلاع");
+    const b = await env.login("01097000021", "مصوّت");
+    const c = await env.login("01097000022", "مصوّت تاني");
+    const g = await group(a, "جروب مخفي", [b.user.id, c.user.id]);
+    const msg = await makePoll(a, g.id, { question: "أونلاين ولا في المكتب؟", options: ["أونلاين", "المكتب"], hideVoters: true });
+    expect(msg.poll.hideVoters).toBe(true);
+    const [on, off] = msg.poll.options;
+
+    await vote(b, msg.id, [on!.id]);
+    await vote(c, msg.id, [on!.id]);
+
+    for (const who of [a, b, c]) {
+      const rows = (await request(env.app).get(`/threads/${g.id}/messages`).set(who.auth).expect(200)).body as PollMsg[];
+      const poll = rows.find((r) => r.id === msg.id)!.poll;
+      // الدليل: نص الرد كله مافيهوش معرّف أي مصوّت
+      const raw = JSON.stringify(poll);
+      expect(raw).not.toContain(b.user.id);
+      expect(raw).not.toContain(c.user.id);
+      for (const o of poll.options) expect(o.voterIds).toBeUndefined();
+      // والأرقام لازم تفضل صح
+      expect(poll.options.find((o) => o.id === on!.id)!.count).toBe(2);
+      expect(poll.options.find((o) => o.id === off!.id)!.count).toBe(0);
+    }
+
+    // و«صوتي أنا» بتوصل لصاحبها هي بس — ودي اللي بتضيع لو البث بردّ مشترك
+    const mineOf = async (who: typeof a) => {
+      const rows = (await request(env.app).get(`/threads/${g.id}/messages`).set(who.auth).expect(200)).body as PollMsg[];
+      return rows.find((r) => r.id === msg.id)!.poll.options.filter((o) => o.mine).map((o) => o.id);
+    };
+    expect(await mineOf(b)).toEqual([on!.id]); // لو viewer ما اتمرّرش، دي بترجع []
+    expect(await mineOf(c)).toEqual([on!.id]);
+    expect(await mineOf(a)).toEqual([]);
+  });
+
+  it("والعلني يفضل بيبعت المعرّفات زي ما هو", async () => {
+    const a = await env.login("01097000023", "صاحب");
+    const b = await env.login("01097000024", "مصوّت");
+    const g = await group(a, "جروب علني", [b.user.id]);
+    const msg = await makePoll(a, g.id, { question: "نفطر إيه؟", options: ["فول", "طعمية"] });
+    expect(msg.poll.hideVoters).toBe(false); // الافتراضي علني — الاستطلاعات القديمة زي ما هي
+    const r = (await vote(b, msg.id, [msg.poll.options[0]!.id])).body as PollMsg;
+    expect(r.poll.options[0]!.voterIds).toEqual([b.user.id]);
+    expect(r.poll.options[0]!.count).toBe(1);
+  });
+
+  it("والبث على السوكت كمان: مفيش معرّفات، و«صوتي» لصاحبها هي بس", async () => {
+    const a = await env.login("01097000025", "صاحب");
+    const b = await env.login("01097000026", "مصوّت");
+    const g = await group(a, "جروب البث", [b.user.id]);
+    const msg = await makePoll(a, g.id, { question: "نسافر؟", options: ["أيوه", "لأ"], hideVoters: true });
+    const yes = msg.poll.options[0]!.id;
+
+    const socks = await Promise.all([a, b].map(async (who) => {
+      const sk = client(`http://localhost:${env.port}`, { auth: { token: who.token } });
+      await new Promise<void>((r) => sk.on("connect", () => r()));
+      return sk;
+    }));
+    const got: Record<string, PollMsg[]> = { a: [], b: [] };
+    socks[0]!.on("message:updated", (p: PollMsg) => got.a.push(p));
+    socks[1]!.on("message:updated", (p: PollMsg) => got.b.push(p));
+
+    await vote(b, msg.id, [yes]);
+    // بنستنى الاتنين — ووصولهم هو نفسه دليل إن السوكتات حيّة
+    await new Promise<void>((r) => {
+      const t = setInterval(() => { if (got.a.some((p) => p.id === msg.id) && got.b.some((p) => p.id === msg.id)) { clearInterval(t); r(); } }, 20);
+    });
+    socks.forEach((sk) => sk.close());
+
+    for (const side of ["a", "b"] as const) {
+      const p = got[side]!.find((x) => x.id === msg.id)!;
+      expect(JSON.stringify(p.poll), `البث لـ${side} فيه معرّف المصوّت`).not.toContain(b.user.id);
+      for (const o of p.poll.options) expect(o.voterIds).toBeUndefined();
+      expect(p.poll.options.find((o) => o.id === yes)!.count).toBe(1);
+    }
+    // ب هو اللي صوّت، فهو بس اللي `mine` بتبقى عنده
+    expect(got.b.find((x) => x.id === msg.id)!.poll.options.find((o) => o.id === yes)!.mine).toBe(true);
+    expect(got.a.find((x) => x.id === msg.id)!.poll.options.find((o) => o.id === yes)!.mine).toBe(false);
+  }, 30_000);
 });

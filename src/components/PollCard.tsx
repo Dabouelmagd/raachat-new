@@ -8,8 +8,15 @@ import type { Message } from "../types";
  * الاستطلاع جوه فقاعة الرسالة: السؤال، والاختيارات كأشرطة بالنسبة المئوية،
  * وصوتي عليه علامة ✓.
  *
- * **الأصوات مش مجهولة** — اللي في المحادثة يقدر يفتح «مين صوّت» ويشوف الأسماء
- * (زي واتساب)، والقرار ده بيبان للمستخدم من الزرار نفسه مش مخفي.
+ * **الأصوات علنية أو مخفية حسب قرار صاحب الاستطلاع وقت الإنشاء** (قرار داليا
+ * ١٦ أكتوبر ٢٠٢٦). العلني: أي عضو يفتح «مين صوّت» ويشوف الأسماء (زي واتساب).
+ * المخفي: **السيرفر مابيبعتش `voterIds` خالص** — فالكارت مش «بيخبّي» حاجة
+ * عنده، هو مالوش منها أصلًا. والقاعدة بتتقال للمستخدم تحت السؤال **قبل** ما
+ * يصوّت، مش بعدين.
+ *
+ * والعدّ في المخفي: الاختيار الواحد → مجموع الأصوات = عدد الناس بالظبط. أما
+ * المتعدد → الواحد بيصوّت أكتر من مرة، فمفيش طريق نعرف منه عدد **الناس**،
+ * فالعرض بيقول «أصوات» مش «صوّتوا» بدل ما يكدب برقم.
  *
  * التصويت بيتفاءل في الواجهة وبيستنى رد السيرفر: لو رفض (الاستطلاع اتقفل ·
  * الجروب متقيّد · مفيش نت) بيظهر سبب الرفض ومابنسيبش الشكل يكدب على المستخدم.
@@ -23,10 +30,14 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
   const [showVoters, setShowVoters] = useState(false);
   const poll = message.poll!;
 
-  const mine = poll.options.filter((o) => o.voterIds.includes("me")).map((o) => o.id);
-  // عدد **الناس** اللي صوّتوا، مش عدد الأصوات (في المتعدد الواحد بيصوّت أكتر من مرة)
-  const voters = new Set(poll.options.flatMap((o) => o.voterIds));
-  const maxVotes = Math.max(1, ...poll.options.map((o) => o.voterIds.length));
+  const mine = poll.options.filter((o) => o.mine).map((o) => o.id);
+  const total = poll.options.reduce((sum, o) => sum + o.count, 0);
+  // عدد **الناس** اللي صوّتوا، مش عدد الأصوات. `null` = مش معروف (مخفي ومتعدد).
+  const people = poll.hideVoters
+    ? (poll.multi ? null : total)
+    : new Set(poll.options.flatMap((o) => o.voterIds ?? [])).size;
+  const base = people ?? total; // أساس النسبة المئوية
+  const maxVotes = Math.max(1, ...poll.options.map((o) => o.count));
   const nameOf = (id: string) => (id === "me" ? t("أنت", "You") : contacts.find((c) => c.id === id)?.name ?? t("مستخدم", "User"));
 
   const pick = async (optionId: string) => {
@@ -58,13 +69,17 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
       <p className="break-words text-sm font-extrabold" dir="auto">{poll.question}</p>
       <p className="text-[10px] font-bold opacity-70">
         {poll.multi ? t("أكتر من إجابة مسموحة", "Multiple answers") : t("إجابة واحدة", "One answer")}
+        {/* القاعدة بتبان **قبل** التصويت: المستخدم يعرف هل اسمه هيبان ولا لأ */}
+        <span className="ms-1">· {poll.hideVoters
+          ? t("الأصوات مخفية عن الأعضاء", "Votes hidden from members")
+          : t("الأعضاء يشوفوا مين صوّت", "Members can see who voted")}</span>
         {poll.closed && <span className="ms-1">· {t("اتقفل", "Closed")}</span>}
       </p>
 
       <div className="space-y-1.5">
         {poll.options.map((o) => {
-          const count = o.voterIds.length;
-          const pct = voters.size ? Math.round((count / voters.size) * 100) : 0;
+          const count = o.count;
+          const pct = base ? Math.round((count / base) * 100) : 0;
           const picked = mine.includes(o.id);
           return (
             <button
@@ -90,8 +105,12 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold opacity-70">
-        <span>{voters.size === 0 ? t("محدش صوّت لسه", "No votes yet") : t(`${n(voters.size)} صوّتوا`, `${voters.size} voted`)}</span>
-        {voters.size > 0 && (
+        <span>{total === 0
+          ? t("محدش صوّت لسه", "No votes yet")
+          : people != null
+            ? t(`${n(people)} صوّتوا`, `${people} voted`)
+            : t(`${n(total)} صوت`, `${total} votes`)}</span>
+        {!poll.hideVoters && total > 0 && (
           <button onClick={() => setShowVoters((v) => !v)} aria-expanded={showVoters} className="underline">
             {showVoters ? t("إخفاء الأصوات", "Hide votes") : t("مين صوّت", "See votes")}
           </button>
@@ -105,9 +124,9 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
 
       {showVoters && (
         <ul className="space-y-1 border-t border-white/15 pt-1.5 text-[11px]">
-          {poll.options.filter((o) => o.voterIds.length > 0).map((o) => (
+          {poll.options.filter((o) => (o.voterIds?.length ?? 0) > 0).map((o) => (
             <li key={o.id} className="break-words" dir="auto">
-              <span className="font-extrabold">{o.text}:</span> {o.voterIds.map(nameOf).join("، ")}
+              <span className="font-extrabold">{o.text}:</span> {(o.voterIds ?? []).map(nameOf).join("، ")}
             </li>
           ))}
         </ul>

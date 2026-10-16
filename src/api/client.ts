@@ -141,8 +141,8 @@ export async function setPinned(threadId: string, pinned: boolean) {
 }
 
 /** استطلاع جديد — السيرفر بيرجّع الرسالة كاملة بالاستطلاع جوّاها */
-export const createPollApi = (threadId: string, question: string, options: string[], multi: boolean) =>
-  api(`/threads/${threadId}/polls`, { body: { question, options, multi } });
+export const createPollApi = (threadId: string, question: string, options: string[], multi: boolean, hideVoters: boolean) =>
+  api(`/threads/${threadId}/polls`, { body: { question, options, multi, hideVoters } });
 export const votePollApi = (messageId: string, optionIds: string[]) =>
   api(`/messages/${messageId}/poll/vote`, { body: { optionIds } });
 export const closePollApi = (messageId: string) => api(`/messages/${messageId}/poll/close`, { method: "POST" });

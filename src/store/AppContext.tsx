@@ -47,7 +47,7 @@ type Action =
   | { type: "EDIT_MESSAGE"; messageId: string; text: string }
   | { type: "DELETE_MESSAGE"; messageId: string }
   | { type: "TOGGLE_REACTION"; messageId: string; emoji: string }
-  | { type: "CREATE_POLL"; threadId: string; question: string; options: string[]; multi: boolean }
+  | { type: "CREATE_POLL"; threadId: string; question: string; options: string[]; multi: boolean; hideVoters: boolean }
   | { type: "VOTE_POLL"; messageId: string; optionIds: string[] }
   | { type: "CLOSE_POLL"; messageId: string }
   | { type: "CREATE_CHANNEL"; id: string; name: string; about?: string }
@@ -148,8 +148,9 @@ function reducer(state: AppState, action: Action): AppState {
         id: uid("m"), threadId: action.threadId, authorId: "me", authorName: tr("أنت", "You"),
         text: "", time: nowLabel(), at: Date.now(), reactions: {},
         poll: {
-          question: action.question, multi: action.multi, closed: false,
-          options: action.options.map((text, i) => ({ id: `o${i}_${uid("p")}`, text, voterIds: [] })),
+          question: action.question, multi: action.multi, closed: false, hideVoters: action.hideVoters,
+          // المخفي مابيجيش فيه `voterIds` من السيرفر خالص، فالديمو بيقلّده
+          options: action.options.map((text, i) => ({ id: `o${i}_${uid("p")}`, text, count: 0, mine: false, ...(action.hideVoters ? {} : { voterIds: [] }) })),
         },
       };
       return { ...state, messages: [...state.messages, msg] };
@@ -159,13 +160,16 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         messages: state.messages.map((m) => {
           if (m.id !== action.messageId || !m.poll || m.poll.closed) return m;
-          const options = m.poll.options.map((o) => ({
-            ...o,
+          const options = m.poll.options.map((o) => {
+            const picked = action.optionIds.includes(o.id);
             // صوتي القديم بيتشال من كل الاختيارات الأول — الاختيار الواحد استبدال مش إضافة
-            voterIds: action.optionIds.includes(o.id)
-              ? [...o.voterIds.filter((v) => v !== "me"), "me"]
-              : o.voterIds.filter((v) => v !== "me"),
-          }));
+            if (o.voterIds) {
+              const voterIds = picked ? [...o.voterIds.filter((v) => v !== "me"), "me"] : o.voterIds.filter((v) => v !== "me");
+              return { ...o, voterIds, count: voterIds.length, mine: picked };
+            }
+            // المخفي: مفيش معرّفات نعدّ منها، فبنعدّل العدد بالفرق بس
+            return { ...o, mine: picked, count: Math.max(0, o.count + (picked ? 1 : 0) - (o.mine ? 1 : 0)) };
+          });
           return { ...m, poll: { ...m.poll, options } };
         }),
       };
@@ -417,8 +421,8 @@ function mockActions(dispatch: D) {
     listChannels: (): Promise<Thread[] | null> => Promise.resolve(null),
     subscribeChannel: (id: string): void | Promise<void> => dispatch({ type: "SUBSCRIBE_CHANNEL", id }),
     unsubscribeChannel: (id: string): void | Promise<void> => dispatch({ type: "LEAVE_THREAD", threadId: id }),
-    createPoll: (threadId: string, question: string, options: string[], multi: boolean): void | Promise<void> =>
-      dispatch({ type: "CREATE_POLL", threadId, question, options, multi }),
+    createPoll: (threadId: string, question: string, options: string[], multi: boolean, hideVoters: boolean): void | Promise<void> =>
+      dispatch({ type: "CREATE_POLL", threadId, question, options, multi, hideVoters }),
     votePoll: (messageId: string, optionIds: string[]): void | Promise<void> => dispatch({ type: "VOTE_POLL", messageId, optionIds }),
     closePoll: (messageId: string): void | Promise<void> => dispatch({ type: "CLOSE_POLL", messageId }),
     listPublicGroups: (): Promise<{ id: string; name: string; desc: string; members: number; initial: string; colorClass: string; joined: boolean; color?: string; icon?: string }[] | null> => Promise.resolve(null),
@@ -505,8 +509,8 @@ function apiActions(dispatch: D) {
       await unsubscribeChannelApi(id);
       dispatch({ type: "LEAVE_THREAD", threadId: id });
     },
-    createPoll: async (threadId: string, question: string, options: string[], multi: boolean) => {
-      dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await createPollApi(threadId, question, options, multi) as ApiMessage) });
+    createPoll: async (threadId: string, question: string, options: string[], multi: boolean, hideVoters: boolean) => {
+      dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await createPollApi(threadId, question, options, multi, hideVoters) as ApiMessage) });
     },
     votePoll: async (messageId: string, optionIds: string[]) => {
       dispatch({ type: "UPSERT_MESSAGE", message: mapMessage(await votePollApi(messageId, optionIds) as ApiMessage) });

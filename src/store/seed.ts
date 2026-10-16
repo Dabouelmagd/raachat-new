@@ -39,11 +39,11 @@ export const INITIAL_MESSAGES: Message[] = [
     id: "m10", threadId: "t2", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "", time: "9:25", reactions: {},
     poll: {
       get question() { return tr("نعمل اجتماع الفريق إمتى؟", "When should we hold the team meeting?"); },
-      multi: false, closed: false,
+      multi: false, closed: false, hideVoters: false,
       options: [
-        { id: "po1", get text() { return tr("الأحد الصبح", "Sunday morning"); }, voterIds: ["u4"] },
-        { id: "po2", get text() { return tr("الأحد بعد الضهر", "Sunday afternoon"); }, voterIds: [] },
-        { id: "po3", get text() { return tr("الاتنين الصبح", "Monday morning"); }, voterIds: ["u1", "u2"] },
+        { id: "po1", get text() { return tr("الأحد الصبح", "Sunday morning"); }, count: 1, mine: false, voterIds: ["u4"] },
+        { id: "po2", get text() { return tr("الأحد بعد الضهر", "Sunday afternoon"); }, count: 0, mine: false, voterIds: [] },
+        { id: "po3", get text() { return tr("الاتنين الصبح", "Monday morning"); }, count: 2, mine: false, voterIds: ["u1", "u2"] },
       ],
     },
   },
@@ -51,10 +51,26 @@ export const INITIAL_MESSAGES: Message[] = [
     id: "m11", threadId: "t2", authorId: "me", get authorName() { return tr("أنت", "You"); }, text: "", time: "9:30", reactions: {},
     poll: {
       get question() { return tr("إيه الأكل اللي نجيبه؟", "What food should we order?"); },
-      multi: true, closed: false,
+      multi: true, closed: false, hideVoters: false,
       options: [
-        { id: "po4", get text() { return tr("كشري", "Koshari"); }, voterIds: ["u1"] },
-        { id: "po5", get text() { return tr("فراخ مشوية", "Grilled chicken"); }, voterIds: [] },
+        { id: "po4", get text() { return tr("كشري", "Koshari"); }, count: 1, mine: false, voterIds: ["u1"] },
+        { id: "po5", get text() { return tr("فراخ مشوية", "Grilled chicken"); }, count: 0, mine: false, voterIds: [] },
+      ],
+    },
+  },
+  // واستطلاع **مخفي الأصوات** عن قصد (قرار داليا ١٦ أكتوبر): من غيره الحالة
+  // دي مابتظهرش في بناء الديمو ولا بتتجرّب — زي درس الستوريتين لنفس الحساب.
+  // `voterIds` **مش موجودة خالص** هنا، زي ما السيرفر بيعمل بالظبط: لو كانت
+  // فاضية أو ناقصة يبقى الإخفاء ستارة. وفيه اختيار صوتي أنا عليه عشان علامة ✓
+  // في المخفي تتجرّب كمان.
+  {
+    id: "m12", threadId: "t2", authorId: "u2", get authorName() { return tr("نور حسن", "Nour Hassan"); }, text: "", time: "9:35", reactions: {},
+    poll: {
+      get question() { return tr("تفضّلوا الاجتماع أونلاين ولا في المكتب؟", "Do you prefer the meeting online or at the office?"); },
+      multi: false, closed: false, hideVoters: true,
+      options: [
+        { id: "po6", get text() { return tr("أونلاين", "Online"); }, count: 4, mine: true },
+        { id: "po7", get text() { return tr("في المكتب", "At the office"); }, count: 1, mine: false },
       ],
     },
   },

@@ -19,6 +19,8 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
   const [multi, setMulti] = useState(false);
+  // الأصوات علنية افتراضيًا (زي واتساب، ونفس سلوك الاستطلاعات القديمة)
+  const [hideVoters, setHideVoters] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -32,7 +34,7 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
     setErr("");
     setBusy(true);
     try {
-      await createPoll(threadId, question.trim(), filled, multi);
+      await createPoll(threadId, question.trim(), filled, multi, hideVoters);
       onClose();
     } catch (e) {
       setErr((e as Error).message || t("الاستطلاع ما اتبعتش، حاول تاني", "Poll not sent, try again"));
@@ -97,6 +99,31 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
           >
             {t("يسمح بأكتر من إجابة", "Allow multiple answers")}
             <span className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 ${multi ? "justify-end bg-rachat-red" : "justify-start bg-neutral-700"}`}>
+              <span className="h-4 w-4 rounded-full bg-white" />
+            </span>
+          </button>
+
+          {/*
+            قرار الأصوات — **بيتاخد وقت الإنشاء وبس** (مابيتغيّرش بعدين، عشان
+            اللي صوّت وهو فاهم إن اسمه مخفي مايتكشفش بعد كده).
+            والكلمة «مخفية عن الأعضاء» مش «مجهولة» عن قصد: السيرفر بيخزّن مين
+            صوّت عشان يمنع التصويت مرتين — فمنوعدش بحاجة مابنعملهاش.
+          */}
+          <button
+            onClick={() => setHideVoters((h) => !h)}
+            role="switch"
+            aria-checked={hideVoters}
+            className="flex w-full items-center justify-between rounded-xl bg-rachat-black px-3 py-2.5 text-start text-xs font-bold text-rachat-papyrus"
+          >
+            <span className="min-w-0 pe-2">
+              {t("الأصوات مخفية عن الأعضاء", "Hide votes from members")}
+              <span className="block text-[10px] font-bold opacity-60">
+                {hideVoters
+                  ? t("الأعضاء يشوفوا الأرقام بس، مش الأسماء", "Members see counts only, not names")
+                  : t("الأعضاء يشوفوا مين صوّت بالأسماء", "Members can see who voted, by name")}
+              </span>
+            </span>
+            <span className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 ${hideVoters ? "justify-end bg-rachat-red" : "justify-start bg-neutral-700"}`}>
               <span className="h-4 w-4 rounded-full bg-white" />
             </span>
           </button>

@@ -98,3 +98,72 @@ test("إنشاء استطلاع: محتاج سؤال واختيارين، ومش
   await expect(page.getByRole("button", { name: /^الأقصر$/ })).toBeVisible();
   expectNoPageErrors(page);
 });
+
+/**
+ * **الأصوات المخفية** (قرار داليا ١٦ أكتوبر ٢٠٢٦): صاحب الاستطلاع يختار وقت
+ * الإنشاء. وبيانات الديمو فيها استطلاع مخفي (`m12`) **عن قصد** — من غيره
+ * الحالة دي مابتظهرش في بناء الديمو ولا بتتجرّب.
+ *
+ * ملحوظة على حدود الاختبار: الإخفاء الحقيقي في **السيرفر** (`voterIds`
+ * مابتخرجش خالص)، ومتفحوص في `server/test/poll.test.ts` على نص الرد. اللي
+ * هنا هو الوش التاني: إن الواجهة مابتعرضش أسماء ولا زرار «مين صوّت»، وإن
+ * القاعدة بتتقال للمستخدم **قبل** ما يصوّت.
+ */
+const HIDDEN = /تفضّلوا الاجتماع أونلاين|Do you prefer the meeting/;
+
+test("المخفي: أرقام بلا أسماء، ومفيش زرار «مين صوّت»", async ({ page }) => {
+  await openWork(page);
+  await expect(page.getByText(HIDDEN)).toBeVisible();
+  const card = poll(page, HIDDEN);
+  // ٥ أصوات (٤ + ١) واختيار واحد → العدد ده هو عدد الناس بالظبط
+  await expect(card.getByText(/٥ صوّتوا|5 voted/)).toBeVisible();
+  await expect(card.getByRole("button", { name: /^أونلاين$|^Online$/ })).toContainText(/٨٠|80/);
+  // مفيش طريق لأي أسماء
+  await expect(card.getByRole("button", { name: /مين صوّت|See votes/ })).toHaveCount(0);
+  expectNoPageErrors(page);
+});
+
+test("القاعدة بتتقال قبل التصويت في الحالتين", async ({ page }) => {
+  await openWork(page);
+  await expect(poll(page, HIDDEN).getByText(/الأصوات مخفية عن الأعضاء|Votes hidden from members/)).toBeVisible();
+  await expect(poll(page, /نعمل اجتماع الفريق إمتى؟|When should we hold/).getByText(/الأعضاء يشوفوا مين صوّت|Members can see who voted/)).toBeVisible();
+  expectNoPageErrors(page);
+});
+
+test("التصويت في المخفي بيزوّد العدد وبيحطّ ✓", async ({ page }) => {
+  await openWork(page);
+  const card = poll(page, HIDDEN);
+  const office = card.getByRole("button", { name: /^في المكتب$|^At the office$/ });
+  const online = card.getByRole("button", { name: /^أونلاين$|^Online$/ });
+  // صوتي الحالي على «أونلاين» (من بيانات الديمو) — بيبان من غير أي أسماء
+  await expect(online).toHaveAttribute("aria-pressed", "true");
+
+  await office.click();
+  await expect(office).toHaveAttribute("aria-pressed", "true");
+  await expect(online).toHaveAttribute("aria-pressed", "false");
+  // اختيار واحد = استبدال: العدد الكلي ما يزيدش
+  await expect(card.getByText(/٥ صوّتوا|5 voted/)).toBeVisible();
+  await expect(card.getByRole("button", { name: /مين صوّت|See votes/ })).toHaveCount(0);
+  expectNoPageErrors(page);
+});
+
+test("شيت الإنشاء فيه مفتاح إخفاء الأصوات، والافتراضي علني", async ({ page }) => {
+  await openWork(page);
+  await page.getByRole("button", { name: /إرفاق ملف|Attach/ }).click();
+  await page.getByRole("button", { name: /^استطلاع$|^Poll$/ }).click();
+  const sheet = page.getByRole("dialog", { name: /استطلاع جديد|New poll/ });
+  const sw = sheet.getByRole("switch", { name: /الأصوات مخفية عن الأعضاء|Hide votes from members/ });
+  await expect(sw).toHaveAttribute("aria-checked", "false"); // علني افتراضيًا زي القديم
+
+  await sheet.getByLabel(/^السؤال$|^Question$/).fill("نعمل الحفلة فين؟");
+  await sheet.getByLabel(/اختيار ١|Option 1/).fill("النادي");
+  await sheet.getByLabel(/اختيار ٢|Option 2/).fill("البيت");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await sheet.getByRole("button", { name: /ابعت الاستطلاع|Send poll/ }).click();
+
+  const made = poll(page, /نعمل الحفلة فين؟/);
+  await expect(made.getByText(/الأصوات مخفية عن الأعضاء|Votes hidden from members/)).toBeVisible();
+  await expect(made.getByText(/محدش صوّت لسه|No votes yet/)).toBeVisible();
+  expectNoPageErrors(page);
+});

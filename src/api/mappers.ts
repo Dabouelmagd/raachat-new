@@ -33,7 +33,8 @@ export interface ApiMessage {
   attachment?: { name: string; size: number; mime: string; url: string; text?: string; voice?: { duration: number; waveform: number[] } };
   starred?: boolean;
   delivered?: boolean;
-  poll?: { question: string; multi: boolean; closed: boolean; options: { id: string; text: string; voterIds: string[] }[] };
+  // `voterIds` موجودة في العلني بس، و`mine` في المخفي بس — شوف `serialize.ts`
+  poll?: { question: string; multi: boolean; closed: boolean; hideVoters: boolean; options: { id: string; text: string; count: number; voterIds?: string[]; mine?: boolean }[] };
 }
 export function mapMessage(m: ApiMessage): Message {
   const reactions: Record<string, string[]> = {};
@@ -43,8 +44,17 @@ export function mapMessage(m: ApiMessage): Message {
   return {
     id: m.id, threadId: m.threadId, authorId: asMe(m.authorId), authorName: m.authorName, text: m.text, time: fmtTime(m.time), at: new Date(m.time).getTime(),
     read: m.read, delivered: m.delivered, replyToId: m.replyToId, reactions, edited: m.edited, deleted: m.deleted, starred: m.starred, attachment,
-    // معرّفات المصوّتين بتتحوّل لـ "me" زي باقي المعرّفات عشان المقارنة تبقى واحدة
-    poll: m.poll ? { ...m.poll, options: m.poll.options.map((o) => ({ ...o, voterIds: o.voterIds.map(asMe) })) } : undefined,
+    // معرّفات المصوّتين بتتحوّل لـ "me" زي باقي المعرّفات عشان المقارنة تبقى واحدة.
+    // والاستطلاع المخفي مابيجيش فيه `voterIds` أصلًا، فـ`mine` بتجي من السيرفر.
+    poll: m.poll
+      ? {
+          ...m.poll,
+          options: m.poll.options.map((o) => {
+            const voterIds = o.voterIds?.map(asMe);
+            return { id: o.id, text: o.text, count: o.count, mine: voterIds ? voterIds.includes("me") : !!o.mine, voterIds };
+          }),
+        }
+      : undefined,
   };
 }
 

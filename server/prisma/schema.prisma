@@ -180,6 +180,11 @@ model Poll {
   multi     Boolean  @default(false)
   /// اتقفل من صاحبه — مفيش تصويت جديد
   closed    Boolean  @default(false)
+  /// الأصوات مخفية عن الأعضاء (قرار صاحب الاستطلاع وقت الإنشاء).
+  /// الافتراضي `false` = علني، فالاستطلاعات القديمة تفضل زي ما هي بالظبط.
+  /// **مخفية عن الأعضاء، مش مجهولة:** `PollVote.userId` لازم يفضل عشان نمنع
+  /// التصويت مرتين ونسمح بتغيير الصوت — فالسيرفر والمالك لسه يعرفوا.
+  hideVoters Boolean @default(false)
   createdAt DateTime @default(now())
 
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)

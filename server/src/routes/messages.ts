@@ -7,8 +7,31 @@ import { assertClean } from "../lib/contentFilter.js";
 import { assertNotBlocked, blockedByMe, blockersOf } from "../lib/blocks.js";
 import { emitToUsers } from "../realtime.js";
 import { notifyPush, offlineOf } from "../lib/push.js";
-import { messageInclude, messageView, threadView } from "../serialize.js";
+import { messageInclude, messageView, threadView, type MsgRow } from "../serialize.js";
 import { assertCanPost, assertMember, assertNotRestricted } from "./threads.js";
+
+/**
+ * **المكان الوحيد اللي بيبثّ رسالة** — وبيرجّع نسخة صاحب الطلب للرد.
+ *
+ * السبب إنها دالة واحدة: `io.to(rooms).emit` بيبعت **ردًّا واحدًا مشتركًا** لكل
+ * المستلمين، والاستطلاع المخفي محتاج `mine` (صوتي أنا) وهي بتختلف من واحد
+ * للتاني. فلو بُثّ بردّ مشترك، كل المستلمين بيشوفوا `mine: false` — يعني صوت
+ * المستخدم يختفي من عنده بعد ما يصوّت، في سكوت.
+ *
+ * فالاستطلاع المخفي بس بيتسلسل لكل متفرّج لوحده (عدد الإرسالات = عدد الأعضاء)،
+ * وأي حاجة تانية بتفضل على الإرسال المشترك الواحد زي ما كانت — فمفيش حمل زايد
+ * على المسار الشائع. ومفيش مسار بينادي `messageView` + `emitToUsers` مباشرة،
+ * عشان ما يبقاش فيه مسار بينسى الـ viewer.
+ */
+function emitMessage(ctx: Ctx, userIds: string[], event: string, m: MsgRow, me: string) {
+  const mine = messageView(m, false, false, me);
+  if (!m.poll?.hideVoters) {
+    emitToUsers(ctx, userIds, event, messageView(m));
+    return mine;
+  }
+  for (const uid of userIds) emitToUsers(ctx, [uid], event, uid === me ? mine : messageView(m, false, false, uid));
+  return mine;
+}
 
 const AttachmentIn = z.object({
   name: z.string().min(1).max(255),
@@ -81,7 +104,7 @@ export function messageRoutes(ctx: Ctx) {
     const starred = new Set(
       (await ctx.db.star.findMany({ where: { userId: me, messageId: { in: rows.map((m) => m.id) } }, select: { messageId: true } })).map((s) => s.messageId),
     );
-    res.json(rows.reverse().map((m) => ({ ...messageView(m, m.authorId === me && readBy(m.createdAt), m.authorId === me && deliveredTo(m.createdAt)), starred: starred.has(m.id) })));
+    res.json(rows.reverse().map((m) => ({ ...messageView(m, m.authorId === me && readBy(m.createdAt), m.authorId === me && deliveredTo(m.createdAt), me), starred: starred.has(m.id) })));
   }));
 
   r.post("/threads/:id/messages", wrap(async (req, res) => {
@@ -116,10 +139,9 @@ export function messageRoutes(ctx: Ctx) {
       },
       include: messageInclude,
     });
-    const view = messageView(created);
     const blockers = new Set(await blockersOf(ctx, me)); // اللي حاظريني ما يوصلهمش
     const members = (await memberIds(ctx, threadId)).map((m) => m.userId).filter((id) => id === me || !blockers.has(id));
-    emitToUsers(ctx, members, "message:new", view);
+    const view = emitMessage(ctx, members, "message:new", created, me);
     res.status(201).json(view);
     if (ctx.push) void pushNewMessage(ctx, threadId, me, members, created.attachment ? (created.attachment.voiceDuration != null ? "🎤" : "📎 " + created.attachment.name) : "", b.text.trim());
   }));
@@ -141,9 +163,7 @@ export function messageRoutes(ctx: Ctx) {
     assertClean(ctx, b.text);
     await assertNotRestricted(ctx, m.threadId);
     const u = await ctx.db.message.update({ where: { id: m.id }, data: { text: b.text, edited: true }, include: messageInclude });
-    const view = messageView(u);
-    emitToUsers(ctx, await audience(m.threadId, me), "message:updated", view);
-    res.json(view);
+    res.json(emitMessage(ctx, await audience(m.threadId, me), "message:updated", u, me));
   }));
 
   r.delete("/messages/:id", wrap(async (req, res) => {
@@ -188,7 +208,7 @@ export function messageRoutes(ctx: Ctx) {
     res.json(
       rows
         .filter((s) => !s.message.deleted && mine.has(s.message.threadId) && !hidden.has(s.message.authorId))
-        .map((s) => ({ ...messageView(s.message), starred: true, threadName: threadView(s.message.thread, me).name, starredAt: s.createdAt.toISOString() })),
+        .map((s) => ({ ...messageView(s.message, false, false, me), starred: true, threadName: threadView(s.message.thread, me).name, starredAt: s.createdAt.toISOString() })),
     );
   }));
 
@@ -209,6 +229,8 @@ export function messageRoutes(ctx: Ctx) {
       question: z.string().trim().min(1).max(300),
       options: z.array(z.string().trim().min(1).max(100)).min(2).max(12),
       multi: z.boolean().default(false),
+      // قرار صاحب الاستطلاع: الأعضاء يشوفوا مين صوّت ولا لأ. الافتراضي علني.
+      hideVoters: z.boolean().default(false),
     }).parse(req.body);
     await assertCanPost(ctx, threadId, me); // نفس حارس النشر — الاستطلاع رسالة
     const opts = b.options.map((o) => o.trim());
@@ -221,14 +243,13 @@ export function messageRoutes(ctx: Ctx) {
     const created = await ctx.db.message.create({
       data: {
         threadId, authorId: me, text: "",
-        poll: { create: { question: b.question, multi: b.multi, options: { create: opts.map((text, idx) => ({ text, idx })) } } },
+        poll: { create: { question: b.question, multi: b.multi, hideVoters: b.hideVoters, options: { create: opts.map((text, idx) => ({ text, idx })) } } },
       },
       include: messageInclude,
     });
-    const view = messageView(created);
     const blockers = new Set(await blockersOf(ctx, me));
     const members = (await memberIds(ctx, threadId)).map((m) => m.userId).filter((id) => id === me || !blockers.has(id));
-    emitToUsers(ctx, members, "message:new", view);
+    const view = emitMessage(ctx, members, "message:new", created, me);
     res.status(201).json(view);
     if (ctx.push) void pushNewMessage(ctx, threadId, me, members, "📊 " + b.question, "");
   }));
@@ -253,9 +274,7 @@ export function messageRoutes(ctx: Ctx) {
       ...ids.map((optionId) => ctx.db.pollVote.create({ data: { optionId, userId: me } })),
     ]);
     const u = await ctx.db.message.findUniqueOrThrow({ where: { id: m.id }, include: messageInclude });
-    const view = messageView(u);
-    emitToUsers(ctx, await audience(m.threadId, m.authorId), "message:updated", view);
-    res.json(view);
+    res.json(emitMessage(ctx, await audience(m.threadId, m.authorId), "message:updated", u, me));
   }));
 
   /** القفل لصاحب الاستطلاع بس — بعده مفيش تصويت ولا سحب صوت. */
@@ -267,9 +286,7 @@ export function messageRoutes(ctx: Ctx) {
     if (!poll) throw notFound();
     await ctx.db.poll.update({ where: { id: poll.id }, data: { closed: true } });
     const u = await ctx.db.message.findUniqueOrThrow({ where: { id: m.id }, include: messageInclude });
-    const view = messageView(u);
-    emitToUsers(ctx, await audience(m.threadId, me), "message:updated", view);
-    res.json(view);
+    res.json(emitMessage(ctx, await audience(m.threadId, me), "message:updated", u, me));
   }));
 
   // تبديل تفاعل
@@ -286,9 +303,7 @@ export function messageRoutes(ctx: Ctx) {
     if (ex) await ctx.db.reaction.delete({ where: key });
     else await ctx.db.reaction.create({ data: { messageId: m.id, userId: me, emoji } });
     const u = await ctx.db.message.findUniqueOrThrow({ where: { id: m.id }, include: messageInclude });
-    const view = messageView(u);
-    emitToUsers(ctx, await audience(m.threadId, me), "message:updated", view);
-    res.json(view);
+    res.json(emitMessage(ctx, await audience(m.threadId, me), "message:updated", u, me));
   }));
 
   return r;
