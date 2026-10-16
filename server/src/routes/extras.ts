@@ -3,6 +3,7 @@ import { blockedByMe } from "../lib/blocks.js";
 import { assertClean } from "../lib/contentFilter.js";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
+import { isAdult } from "../lib/age.js";
 import { todayCairo } from "../lib/cairo.js";
 import type { Ctx } from "../context.js";
 import { HttpError, notFound, wrap } from "../lib/errors.js";
@@ -18,6 +19,14 @@ const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
  * **الكاش مابيستهلكش من السقف** — النص المتكرر مش بيروح للمزوّد أصلًا.
  */
 const chars = { day: "", total: 0, per: new Map<string, number>() };
+
+/**
+ * الحسابات اللي سنّها اتأكّد (في الذاكرة) — عشان مانعملش قراءة للقاعدة مع كل
+ * نداء ترجمة. بيتصفّر كل يوم قاهرة، **وبنكاشّ النجاح بس**: الرفض بيتأكّد من
+ * القاعدة في كل نداء، فالحساب اللي بيتحدّد تاريخ ميلاده (أو بيكمّل ١٨) بياخد
+ * الترجمة فورًا مش بعد يوم.
+ */
+const adults = { day: "", ids: new Set<string>() };
 
 /** كاش الترجمة: سقف للفاتورة مش تحسين سرعة (المزوّد بيحاسب بالحرف) */
 const TR_MAX = 2000;
@@ -92,6 +101,32 @@ export function extraRoutes(ctx: Ctx) {
     const b = z.object({ text: z.string().min(1).max(5000), to: z.string().min(2).max(10), from: z.string().min(2).max(10).optional() }).parse(req.body);
     const key = ctx.config.GOOGLE_TRANSLATE_KEY;
     if (!key) throw new HttpError(501, "translate_not_configured", "محرك الترجمة غير مُفعّل (GOOGLE_TRANSLATE_KEY)");
+
+    /**
+     * ⚠️ حارس السن **قبل الكاش وقبل أي نداء للمزوّد**: نصّ الرسالة نفسه بيطلع
+     * لجوجل (طرف تالت)، وبيانات الأطفال «بيانات حساسة» في القانون ١٥١/٢٠٢٠.
+     * فالحسابات **غير محدَّدة السن** (المنشأة قبل ١٣ أكتوبر ٢٠٢٦) بتفضل على
+     * القاموس المحلي — زي ما `ads.ts` بيعاملها بـ `!isAdult(birthDate)`.
+     *
+     * و**501 مقصود مش 403**: الواجهة بتفهم 501 على إنه «الترجمة المدفوعة مش
+     * مفعّلة» فبتبطّل تنادي وترجع للقاموس لوحدها — يعني **مفيش تغيير ولا نشر
+     * واجهة**، نفس نمط `ready()` + `/auth/channels` في الـ SMS.
+     *
+     * وقبل الكاش عن قصد: ضربة الكاش مش بتبعت حاجة لجوجل فعلًا، بس لو سمحناها
+     * الواجهة تاخد ٢٠٠ مرة و501 مرة — رسالتين متضاربتين، وبتبطّل تنادي عند أول
+     * ضربة فاشلة أصلًا. فالرفض من أول نداء أوضح وأصدق.
+     */
+    const me = (req as AuthedRequest).userId;
+    const day = todayCairo();
+    if (adults.day !== day) { adults.day = day; adults.ids.clear(); }
+    if (!adults.ids.has(me)) {
+      const u = await ctx.db.user.findUnique({ where: { id: me }, select: { birthDate: true } });
+      if (!isAdult(u?.birthDate ?? null)) {
+        throw new HttpError(501, "translate_age_restricted", "الترجمة عبر المزوّد متاحة للحسابات المحدَّدة السن (١٨+) — الترجمة المحلية شغّالة");
+      }
+      adults.ids.add(me);
+    }
+
     const ck = `${b.to}|${b.from ?? ""}|${b.text}`;
     const hit = trCache.get(ck);
     if (hit && hit.at > Date.now() - TR_TTL) {
@@ -100,9 +135,7 @@ export function extraRoutes(ctx: Ctx) {
       return;
     }
     // السقوف: بتتحسب على النص اللي **هيروح للمزوّد فعلًا** (بعد الكاش)
-    const today = todayCairo();
-    if (chars.day !== today) { chars.day = today; chars.total = 0; chars.per.clear(); }
-    const me = (req as AuthedRequest).userId;
+    if (chars.day !== day) { chars.day = day; chars.total = 0; chars.per.clear(); }
     const n = b.text.length;
     const cap = ctx.config.TRANSLATE_DAILY_CHARS;
     const ucap = ctx.config.TRANSLATE_USER_DAILY_CHARS;
