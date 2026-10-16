@@ -206,3 +206,41 @@ describe("السكربت جوه الحاوية", () => {
     await expect(fs.stat(path.join(dir, "keep-me.jpg")), "المشاور عليه ما يتلمسش").resolves.toBeTruthy();
   });
 });
+
+/**
+ * **تأكيد المسح: الحكم على سلوكه مش على شكل نصّه.** بناخد كتلة `case` من
+ * السكربت نفسه ونشغّلها بـ`sh` بإجابات حقيقية — زي ما `backupLoop.test.ts`
+ * بياخد جسم الحلقة من compose.
+ *
+ * والسبب عطل حقيقي حصل في أول تشغيل: السؤال بالعربي («متأكدة؟») والسكربت
+ * كان بيقبل `yes` بس، فداليا كتبت «نعم» والمسح اتلغى. طلب كلمة إنجليزية في
+ * سؤال عربي **عيب مش حرص**.
+ */
+describe("تأكيد المسح", () => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const block = () => {
+    const src = fsSync.readFileSync(path.join(ROOT, "scripts/orphan-files.sh"), "utf8");
+    const a = src.indexOf("# --- confirm-case ---");
+    const b = src.indexOf("# --- end confirm-case ---");
+    expect(a, "كتلة التأكيد مش موجودة في السكربت").toBeGreaterThan(0);
+    expect(b).toBeGreaterThan(a);
+    return src.slice(a, b);
+  };
+  const answer = (ans: string) =>
+    new Promise<boolean>((resolve) => {
+      execFile("sh", ["-c", `OK='${ans}'\n${block()}\necho PROCEED`.replace(/\\n/g, "\n")],
+        { encoding: "utf8" }, (_e, so) => resolve(so.includes("PROCEED")));
+    });
+
+  it("بيقبل «نعم» و«أيوه» زي ما بيقبل yes", async () => {
+    for (const ok of ["yes", "YES", "نعم", "أيوه", "ايوه"]) {
+      expect(await answer(ok), `المفروض يقبل «${ok}»`).toBe(true);
+    }
+  });
+
+  it("بيرفض الفاضي وأي إجابة تانية — والحذف مابيرجعش", async () => {
+    for (const no of ["", "no", "لأ", "y", "ok"]) {
+      expect(await answer(no), `المفروض يرفض «${no}»`).toBe(false);
+    }
+  });
+});
