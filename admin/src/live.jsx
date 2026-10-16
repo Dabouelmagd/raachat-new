@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Card, Kpi, Table, Pill, Switch, n, egp, useAdmin } from "./ui.jsx";
 import { api } from "./api.js";
+import { holdUpdate, reloadNow } from "./update.js";
 
 /* ---------- سياق المستخدم الحالي وصلاحياته ---------- */
 const MeCtx = createContext(null);
@@ -14,21 +15,51 @@ const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ar-EG", { dateStyle: "
 const SERVICES = { elec: "كهرباء", water: "مياه", gas: "غاز", net: "إنترنت", topup: "شحن رصيد", mobile: "فاتورة موبايل", landline: "تليفون أرضي", insurance: "تأمين", tv: "تلفزيون", other: "أخرى" };
 const svc = (k) => SERVICES[k] || k || "—";
 
-/** تحميل بيانات + إعادة تحميل. الأخطاء بتظهر كرسالة واضحة. */
+/**
+ * فواصل إعادة المحاولة التلقائية للأخطاء **العابرة** بس.
+ * النشرة بتوقف الـ api ثواني (بصمتها في `docker compose ps`: الـ api والـ caddy
+ * بيعيدوا التشغيل والقاعدة لأ)، وفي النافذة دي أي طلب بيروح بلا رد فتظهر
+ * «تعذّر الاتصال بالسيرفر». التلات فواصل دي بتعدّي النافذة من غير ما المستخدم
+ * يعمل أي حاجة. والرد الحقيقي (401/403/404) إعادة المحاولة فيه بلا معنى.
+ */
+export const RETRY_MS = [3000, 8000, 20_000];
+export const transient = (e) => e.code === "network" || e.status >= 500;
+
+/** تحميل بيانات + إعادة تحميل. الأخطاء بتظهر كرسالة واضحة ومعاها «حاول تاني». */
 export function useLoad(path, deps = []) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
+    let timer;
     setErr("");
-    api(path).then((d) => live && setData(d)).catch((e) => live && setErr(e.message));
-    return () => { live = false; };
+    const attempt = (i) => {
+      api(path).then((d) => { if (live) { setErr(""); setData(d); } }).catch((e) => {
+        if (!live) return;
+        setErr(e.message);
+        if (transient(e) && i < RETRY_MS.length) timer = setTimeout(() => attempt(i + 1), RETRY_MS[i]);
+      });
+    };
+    attempt(0);
+    return () => { live = false; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, tick, ...deps]);
   return { data, err, reload: useCallback(() => setTick((t) => t + 1), []) };
 }
-export const Err = ({ msg }) => (msg ? <div role="alert" className="empty" style={{ color: "var(--bad)" }}>{msg}</div> : null);
+
+/**
+ * رسالة خطأ **ومعاها مخرج دايمًا**. قبل كده كانت نصًّا وخلاص: أي فشل عابر
+ * (نشرة شغّالة، نت قطع) يسيب الصفحة واقفة على الرسالة والمستخدم مالوش طريق
+ * غير إنه يعمل تحديث بإيده — وده اللي اتبلّغ فعلًا على صفحة الصلاحيات.
+ * الافتراضي إعادة تحميل الصفحة، و`onRetry` بتعيد الطلب لوحده بدل الصفحة كلها.
+ */
+export const Err = ({ msg, onRetry }) => (msg ? (
+  <div role="alert" className="empty" style={{ color: "var(--bad)", display: "grid", gap: 8, justifyItems: "center" }}>
+    <span>{msg}</span>
+    <button className="btn sm" onClick={onRetry || reloadNow}>حاول تاني</button>
+  </div>
+) : null);
 
 /** زرار بخطوتين (ضغطة ثم تأكيد) للإجراءات الحساسة بدل نافذة confirm */
 export function Confirm({ children, onYes, danger, label = "تأكيد؟", disabled }) {
@@ -43,8 +74,10 @@ export function Confirm({ children, onYes, danger, label = "تأكيد؟", disab
 export function useDo() {
   const { act } = useAdmin();
   return useCallback(async (fn, okMsg) => {
+    const release = holdUpdate(); // مايحصلش reload للنسخة الجديدة ونحن في وسط حفظ
     try { const r = await fn(); if (okMsg) act(okMsg); return r ?? true; }
     catch (e) { act("تعذّر الإجراء", e.message); return false; }
+    finally { release(); }
   }, [act]);
 }
 
@@ -240,7 +273,7 @@ export function LiveTeam() {
   return (
     <>
       <Card title="أعضاء الفريق">
-        <Err msg={staff.err} />
+        <Err msg={staff.err} onRetry={reloadAll} />
         <Table head={["العضو", "الدور", "الصلاحيات", "مفعّل", ""]}>
           {(staff.data || []).flatMap((s) => {
             const locked = !mgr || s.isOwner || s.userId === me.user.id;
@@ -279,7 +312,7 @@ export function LiveTeam() {
             <input className="inp" aria-label="اسم الدور الجديد" placeholder="دور جديد…" value={newRole} onChange={(e) => setNewRole(e.target.value)} />
             <button className="btn" type="submit" disabled={newRole.trim().length < 2}>إضافة دور</button>
           </form>)}>
-          <Err msg={roles.err} />
+          <Err msg={roles.err} onRetry={roles.reload} />
           <Table head={["الصلاحية", ...rl.map((r) => `${r.name} (${n(r.members)})`)]}>
             {groups.flatMap((g) => [
               <tr key={g}><td colSpan={rl.length + 1} style={{ color: "var(--gold)", fontWeight: 800, fontSize: 12 }}>{g}</td></tr>,

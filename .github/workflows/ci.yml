@@ -64,6 +64,13 @@ jobs:
       - name: بناء لوحة الإدارة (لاختبارها)
         working-directory: admin
         run: npm ci && npx vite build
+      # وبناء تاني للوحة **في وضع الـ API**: بناء الديمو فوق مابيعملش ولا نداء
+      # شبكة، فاختبار «اللوحة لما السيرفر مايردّش» (admin-retry.spec.ts) مالوش
+      # هدف يشتغل عليه فيه وبيتخطّى في سكوت. المنفذ هنا لازم يطابق اللي في
+      # الاختبار عشان الطلبات تبقى نفس الأصل (مفيش CORS يخلط النتيجة).
+      - name: بناء اللوحة في وضع الـ API (لاختبار إعادة المحاولة)
+        working-directory: admin
+        run: VITE_API_URL=http://127.0.0.1:4121/api npx vite build --outDir dist-api
       - name: تنزيل تبعيات الاختبارات
         working-directory: test
         run: npm ci

@@ -12,7 +12,8 @@ import { REPORTS, TX, CAMPAIGNS, AUDIT_SEED } from "./data.js";
 import { API_ON, api, logout, useSession, hasHandoff, consumeHandoff } from "./api.js";
 import { LiveAds } from "./liveAds.jsx";
 import { Login } from "./Login.jsx";
-import { MeProvider, LiveUsers, LivePayments, LiveOffers, LiveTeam } from "./live.jsx";
+import { MeProvider, LiveUsers, LivePayments, LiveOffers, LiveTeam, RETRY_MS, transient } from "./live.jsx";
+import { onUpdateFound, reloadNow } from "./update.js";
 
 // الصلاحية المطلوبة لكل قسم (وضع الباك إند). overview مفتوح لأي عضو.
 const NEED = { users: "users.view", spaces: "content.view", reports: "content.view", content: "content.view", payments: "finance.view", offers: "finance.view", ads: "ads.view", notifications: "notifications.send", team: "team.view", settings: "settings.manage" };
@@ -36,12 +37,33 @@ export default function App() {
   return session ? <Gate /> : <Login notice={hErr} />;
 }
 
-/** وضع الباك إند: يجيب هوية الموظف وصلاحياته قبل ما يعرض أي حاجة */
+/**
+ * وضع الباك إند: يجيب هوية الموظف وصلاحياته قبل ما يعرض أي حاجة.
+ *
+ * ولو الطلب ده فشل، دي كانت **مصيدة**: الشاشة كانت بتعرض الخطأ ومعاه زرار
+ * «تسجيل الخروج» وبس — فلو الـ api بيعيد التشغيل (نشرة) المخرج الوحيد إنك
+ * تخرجي من حسابك أو تعملي تحديث بإيدك. دلوقتي بتعيد المحاولة لوحدها للأخطاء
+ * العابرة، ومعاها زرار «حاول تاني».
+ */
 function Gate() {
   const [me, setMe] = useState(null);
   const [err, setErr] = useState("");
-  useEffect(() => { api("/admin/me").then(setMe).catch((e) => { if (e.status === 401) return; setErr(e.status === 403 ? "الحساب ده مش من فريق الإدارة. اطلبي من المالك يضيفك." : e.message); }); }, []);
-  if (err) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}><div className="card" style={{ maxWidth: 380, display: "grid", gap: 12 }}><div role="alert" style={{ color: "var(--bad)" }}>{err}</div><button className="btn" onClick={logout}>تسجيل الخروج</button></div></div>;
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let live = true;
+    let timer;
+    setErr("");
+    const attempt = (i) => {
+      api("/admin/me").then((m) => { if (live) setMe(m); }).catch((e) => {
+        if (!live || e.status === 401) return; // 401 بيرجّعها لشاشة الدخول لوحده
+        setErr(e.status === 403 ? "الحساب ده مش من فريق الإدارة. اطلبي من المالك يضيفك." : e.message);
+        if (transient(e) && i < RETRY_MS.length) timer = setTimeout(() => attempt(i + 1), RETRY_MS[i]);
+      });
+    };
+    attempt(0);
+    return () => { live = false; clearTimeout(timer); };
+  }, [tick]);
+  if (err) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}><div className="card" style={{ maxWidth: 380, display: "grid", gap: 12 }}><div role="alert" style={{ color: "var(--bad)" }}>{err}</div><div className="row"><button className="btn pri" onClick={() => setTick((t) => t + 1)}>حاول تاني</button><button className="btn" onClick={logout}>تسجيل الخروج</button></div></div></div>;
   if (!me) return <div className="empty" style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>جاري التحميل…</div>;
   return <MeProvider me={me}><Dashboard me={me} /></MeProvider>;
 }
@@ -52,6 +74,9 @@ function Dashboard({ demo, me }) {
   const [tx, setTx] = useState(TX);
   const [campaigns, setCampaigns] = useState(CAMPAIGNS);
   const [theme, setTheme] = useState("");
+  // نشرة جديدة واللوحة قدام المستخدم: شريط وهو يقرر. ولو التاب مخفي بتتحدّث لوحدها.
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => onUpdateFound(() => setFresh(true)), []);
   useEffect(() => { try { history.replaceState(null, "", "#" + page); } catch {} window.scrollTo(0, 0); }, [page]);
   useEffect(() => { if (theme) document.documentElement.setAttribute("data-theme", theme); }, [theme]);
 
@@ -77,7 +102,12 @@ function Dashboard({ demo, me }) {
               <button className="btn" aria-label="تبديل المظهر" onClick={() => setTheme((t) => (t === "light" || (!t && matchMedia("(prefers-color-scheme: light)").matches) ? "dark" : "light"))}><Sun size={15} /> / <Moon size={15} /></button>
             </div>
           </div>
-          {!demo && DEMO_SECTIONS.has(page) && <div role="note" className="card" style={{ marginBottom: 14, borderColor: "var(--warn)", color: "var(--warn)" }}>القسم ده لسه ببيانات تجريبية، ومش متوصّل بالسيرفر بعد.</div>}
+          {fresh && <div role="status" className="card" style={{ marginBottom: 14, borderColor: "var(--gold)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span>فيه نسخة جديدة من اللوحة.</span>
+            <button className="btn sm pri" onClick={reloadNow}>حدّثي الآن</button>
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>أو هتتحدّث لوحدها أول ما تسيبي التبويب.</span>
+          </div>}
+          {!demo && DEMO_SECTIONS.has(page) &&<div role="note" className="card" style={{ marginBottom: 14, borderColor: "var(--warn)", color: "var(--warn)" }}>القسم ده لسه ببيانات تجريبية، ومش متوصّل بالسيرفر بعد.</div>}
           {!allowed(page) ? <div className="empty">مالكش صلاحية للقسم ده</div> : <>
           {page === "overview" && (!demo ? <LiveOverview go={setPage} /> : <Overview reports={reports} campaigns={campaigns} tx={tx} go={setPage} />)}
           {page === "users" && (demo ? <Users /> : <LiveUsers />)}

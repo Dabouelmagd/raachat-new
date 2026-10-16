@@ -21,10 +21,19 @@ const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
 /** سطور الأوامر بس — التعليقات بتذكر أسماء السكربتين فبتخدع أي فحص نصّي */
 const code = ci.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
 
+/** كتلة وظيفة واحدة بحدودها (من عنوانها لعنوان اللي بعدها) — مش نافذة بايتات */
+function job(name: string) {
+  const start = code.search(new RegExp(`^ {2}${name}:`, "m"));
+  if (start < 0) return "";
+  const rest = code.slice(start + 1);
+  const next = rest.search(/^ {2}[a-z][\w-]*:$/m);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
 describe("وظيفة وضع الـ API في الـ CI", () => {
   it("الوظيفة موجودة ومعاها postgres", () => {
     expect(code, "وظيفة api-mode اتشالت من الـ CI").toMatch(/^ {2}api-mode:/m);
-    const block = code.slice(code.search(/^ {2}api-mode:/m));
+    const block = job("api-mode");
     expect(block, "محتاجة postgres حقيقي — السكربتين بيعملوا قاعدة ويمسحوها")
       .toMatch(/image: postgres:/);
   });
@@ -38,7 +47,10 @@ describe("وظيفة وضع الـ API في الـ CI", () => {
   it("وبتبني الواجهة في **وضع الـ API** مش بناء الديمو", () => {
     // من غير VITE_API_URL البناء بيبقى ديمو مابيعملش نداء شبكة — والسكربتان
     // يعدّيان على لا شيء: أخضر بلا معنى.
-    expect((code.match(/VITE_API_URL=/g) ?? []).length, "بناء وضع الـ API ناقص")
+    // والعدّ **جوه كتلة الوظيفة** مش في الملف كله: وظيفة الواجهة بقى فيها
+    // VITE_API_URL كمان (بناء اللوحة بوضع الـ API)، فالعدّ على الملف كله كان
+    // بيخلّي الفحص يعدّي حتى لو بناءات api-mode اتشالوا.
+    expect((job("api-mode").match(/VITE_API_URL=/g) ?? []).length, "بناء وضع الـ API ناقص")
       .toBeGreaterThanOrEqual(2);
   });
 
@@ -57,6 +69,36 @@ describe("وظيفة وضع الـ API في الـ CI", () => {
     for (const s of ["send-failure.ts", "join-history.ts"]) {
       const src = fs.readFileSync(path.join(ROOT, "server/test/manual", s), "utf8");
       expect(src, `${s} مش بيبعت birthDate — إنشاء الحساب هيترفض`).toMatch(/birthDate:/);
+    }
+  });
+});
+
+/**
+ * ونفس الدرس على اختبارات اللوحة: الاتنين بيتخطّوا لوحدهم لو ناتج البناء مش
+ * موجود (`test.skip`)، فلو الـ CI مابناهوش، الاختبار يبقى موجود في الريبو
+ * ومابيشتغلش — وهو بالظبط «الحارس اللي مابيتشغّلش بيبوظ في سكوت».
+ */
+describe("اختبارات لوحة الإدارة في الـ CI", () => {
+  const web = job("web");
+
+  it("بتبني اللوحة مرتين: ديمو + وضع الـ API", () => {
+    expect(web, "بناء الديمو بتاع اللوحة اتشال — admin.spec.ts هيتخطّى").toMatch(/working-directory: admin/);
+    expect(web, "بناء اللوحة بوضع الـ API اتشال — admin-retry.spec.ts هيتخطّى في سكوت")
+      .toMatch(/VITE_API_URL=http:\/\/127\.0\.0\.1:4121\/api[\s\S]*--outDir dist-api/);
+  });
+
+  it("والمنفذ في البناء هو نفسه اللي الاختبار بيسمع عليه", () => {
+    // لو اتفرقوا: البناء بيشاور على منفذ محدش سامع عليه، فالطلب بيفشل بخطأ
+    // شبكة **لأي سبب** — والاختبار يبقى أخضر على كود مكسور.
+    const spec = fs.readFileSync(path.join(ROOT, "test/ui/admin-retry.spec.ts"), "utf8");
+    const port = /const PORT = (\d+)/.exec(spec)?.[1];
+    expect(port, "مش لاقي المنفذ في الاختبار").toBeTruthy();
+    expect(web, `البناء مش على المنفذ ${port}`).toContain(`127.0.0.1:${port}/api`);
+  });
+
+  it("والاختبارين موجودين فعلًا", () => {
+    for (const s of ["admin-retry.spec.ts", "admin-update.spec.ts"]) {
+      expect(fs.existsSync(path.join(ROOT, "test/ui", s)), `${s} مش موجود`).toBe(true);
     }
   });
 });
