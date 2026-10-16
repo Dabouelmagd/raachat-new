@@ -70,6 +70,81 @@ test("الكود اللي بيتحط في خانة واحدة برمجيًا (au
   expectNoPageErrors(page);
 });
 
+/**
+ * **الخانات الستة بتتملا في نفس اللحظة** — مدير كلمات سر أو كيبورد موبايل
+ * بيحطّ الكود موزّعًا على الحقول الستة في نفس الـ task، ومحدش بيستنى React
+ * يعيد الرسم بين حقل وحقل.
+ *
+ * **حارس مش دليل — بيعدّي على الكود القديم كمان.** كانت فرضيتي الأولى لسبب
+ * التذبذب إن `setDigit`/`fillFrom` بيبنوا المصفوفة من `digits` بتاعة الـ render
+ * (`const next = [...digits]`)، فالنداءات المتلاحقة تشوف نفس الحالة القديمة
+ * واللي يكتب الأخير يمسح اللي قبله. **والفرضية طلعت غلط:** React 18 بيفرّغ
+ * أحداث `input` (discrete) **بالتزامن** بعد كل حدث، فكل معالج بيشوف حالة
+ * جديدة ومفيش رقم بيضيع. السبب الحقيقي كان حاجة تانية خالص (شوف الاختبار اللي
+ * بعده).
+ *
+ * فالاختبار فاضل لأنه بيثبّت السلوك ده: لو حد غيّر الحالة لتحديث مؤجّل
+ * (`startTransition` أو تجميع يدوي) الأرقام تبدأ تضيع فعلًا وده بيكشفه.
+ */
+test("ملء الخانات الستة في نفس اللحظة مابيضيّعش ولا رقم", async ({ page }) => {
+  await open(page);
+  const b = boxes(page);
+  await page.evaluate(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    const els = [...document.querySelectorAll<HTMLInputElement>('input[autocomplete="one-time-code"]')];
+    [..."135790"].forEach((d, i) => {
+      setter.call(els[i]!, d);
+      els[i]!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
+  for (const [i, v] of [..."135790"].entries()) await expect(b[i]!).toHaveValue(v);
+  expectNoPageErrors(page);
+});
+
+/**
+ * **مفيش مؤقّت بيسرق التركيز بعد ما خطوة الكود تفتح.**
+ *
+ * `sendCode` كان بيعمل `setTimeout(() => refs.current[0]?.focus(), 50)` عشان
+ * الخانة لسه ما اترسمتش وقت النداء. وتحت أي بطء المؤقّت بيولع **بعد** ما
+ * المستخدم يبدأ يكتب، فالرقم ينزل في الخانة الأولى ويمسح اللي فيها — في سكوت.
+ *
+ * ودي كانت سبب تذبذب اختبارين (`اللصق من نص خانة` هنا و«نسيت كلمة السر» في
+ * `auth.spec.ts`) لأيام من غير ما نعرف السبب. اتعاد إنتاجها ١ من ١٢٠ تشغيلة
+ * تحت حمل، والصورة طلعت **«خانة ١ فيها رقم خانة ٢»** وخانة ٢ فاضية ومركَّز
+ * عليها — يعني الكتابة نزلت في خانة تانية خالص.
+ *
+ * **وإزاي بنفحصها حتميًا: بنجمّد الوقت ونقلب السؤال.** محاولة «نسابق المؤقّت
+ * ونشوف هو سرق التركيز ولا لأ» كشفت العطل **٢ من ١٠** بس — لأن اللي بيحدد
+ * النتيجة هو هل الضغطة لحقت قبل الـ ٥٠ms ولا بعدها. فبدل كده: مع ساعة مجمّدة
+ * (`page.clock.install` بلا `fastForward`) أي تركيز **بمؤقّت مستحيل يحصل
+ * خالص**، أما التركيز بـ `useEffect` فبيحصل مع الـ commit. فالتأكيد إن الخانة
+ * الأولى مركَّزة والوقت واقف = إثبات إن التركيز مش معلّق على مؤقّت. والسقوط
+ * على الكود القديم **١٠٠٪** (اتأكد على ١٠ تشغيلات).
+ */
+test("خانة الكود الأولى بتتركّز من غير أي مؤقّت", async ({ page }) => {
+  requireBuild();
+  // بنسجّل الأخطاء بنفسنا: `expectNoPageErrors` بتقرا `rcErrors` اللي `open()`
+  // بتحطّها، ومن غير التسجيل ده الفحص بيعدّي على قايمة فاضية بلا معنى.
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  (page as typeof page & { rcErrors?: string[] }).rcErrors = errors;
+  // **`install()` لوحدها مش بتجمّد الوقت** — بتزيّف المؤقّتات وهي لسه ماشية،
+  // فالمؤقّت بيولع جوه الـ ١٠ ثواني اللي التأكيد بيستناها والفحص يعدّي على كود
+  // مكسور (حصل فعلًا). `pauseAt` هي اللي بتوقّف الوقت فعلًا.
+  const T = new Date("2026-10-16T12:00:00Z");
+  await page.clock.install({ time: T });
+  await page.clock.pauseAt(T);
+  await page.goto("file://" + DIST);
+  await page.getByRole("button", { name: /^نسيت كلمة السر؟$|^Forgot password\?$/ }).click();
+  await page.getByLabel(/^الإيميل$|^Email$/, { exact: false }).first().fill("dalia@example.com");
+  await page.getByRole("button", { name: /^ابعتلي الكود$|^Send me the code$/ }).click();
+
+  const b = boxes(page);
+  await expect(b[0]!).toBeVisible();
+  await expect(b[0]!, "الخانة الأولى مش مركَّزة والوقت واقف — يعني التركيز معلّق على مؤقّت، والمؤقّت ده بيسرق التركيز من المستخدم لو ولع وهو بيكتب").toBeFocused();
+  expectNoPageErrors(page);
+});
+
 test("اللصق من نص خانة بيكمّل اللي بعدها بس", async ({ page }) => {
   await open(page);
   const b = boxes(page);
