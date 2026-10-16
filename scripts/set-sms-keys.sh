@@ -71,16 +71,33 @@ while IFS= read -rp "> " line; do
 done
 [ ${#PAIRS[@]} -gt 0 ] || { echo "❌ مفيش حقول"; exit 1; }
 
+# الهيدرات: لازمة لأي مزوّد مصادقته في الهيدر مش في الحقول — Twilio وPlivo
+# (`Basic …`) وواتساب (`Bearer …`). من غير السؤال ده المزوّدين دول مايقدروش
+# يعدّوا من المسار الآمن ده خالص (الرسالة الحقيقية + تأكيد الوصول).
+echo
+echo "هيدرات (لو مصادقة مزوّدك في الهيدر) — نفس الشكل اسم=قيمة، وسطر فاضي للتخطّي:"
+echo "  مثال Twilio:  Authorization=Basic <الناتج من base64 لـ SID:TOKEN>"
+HEADS=()
+while IFS= read -rp "h> " line; do
+  [ -z "$line" ] && break
+  case "$line" in *=*) HEADS+=("$line");; *) echo "   ⚠️ لازم شكل اسم=قيمة";; esac
+done
+
 # JSON + base64 (base64 عشان كلمة السر لو فيها $ أو # ماتتكسرش في .env/compose)
-SPEC=$(python3 - "$URL" "$METHOD" "$FORMAT" "$OK" "${PAIRS[@]}" <<'PY'
+SPEC=$(python3 - "$URL" "$METHOD" "$FORMAT" "$OK" "${#PAIRS[@]}" "${PAIRS[@]}" "${HEADS[@]}" <<'PY'
 import base64,json,sys
-url,method,fmt,ok,*pairs = sys.argv[1:]
-params={}
-for p in pairs:
-    k,_,v = p.partition("=")
-    k=k.strip()
-    if k: params[k]=v.strip()
+url,method,fmt,ok,npairs,*rest = sys.argv[1:]
+n=int(npairs)
+def kv(items):
+    out={}
+    for p in items:
+        k,_,v = p.partition("=")
+        k=k.strip()
+        if k: out[k]=v.strip()
+    return out
+params=kv(rest[:n]); headers=kv(rest[n:])
 spec={"url":url,"method":method.upper(),"format":fmt,"params":params,"ok":ok}
+if headers: spec["headers"]=headers
 print(base64.b64encode(json.dumps(spec,ensure_ascii=False).encode()).decode())
 PY
 )

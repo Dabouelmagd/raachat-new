@@ -270,3 +270,32 @@ describe("جسم متداخل وهيدرات (واتساب)", () => {
     expect(() => parseSmsSpec(b64(noOk))).toThrow(/ok مطلوب/);
   });
 });
+
+/**
+ * **السكربت لازم يسأل على الهيدرات** — من غير ده أي مزوّد مصادقته في الهيدر
+ * (Twilio وPlivo بـ`Basic` · واتساب بـ`Bearer`) **مايقدرش يعدّي من المسار
+ * الآمن** (رسالة حقيقية + تأكيد وصول قبل أي كتابة)، فيضطر حد يكتب `SMS_HTTP`
+ * بإيده في `.env.production` بلا أي فحص — وده بالظبط اللي السكربت موجود يمنعه.
+ */
+describe("السكربت بيبني الهيدرات", () => {
+  const sh = fs.readFileSync(path.join(import.meta.dirname, "../../scripts/set-sms-keys.sh"), "utf8");
+
+  it("بيسأل على الهيدرات **قبل** بناء المواصفة", () => {
+    const ask = sh.indexOf("HEADS=()");
+    const build = sh.indexOf("SPEC=$(python3");
+    expect(ask).toBeGreaterThan(0);
+    expect(build).toBeGreaterThan(ask);
+    expect(sh).toMatch(/Authorization=Basic/); // مثال Twilio مكتوب للمستخدم
+  });
+
+  it("بيفصل الحقول عن الهيدرات بعدّاد مش بتخمين", () => {
+    // الاتنين بيتمرّروا كمصفوفة واحدة، فمن غير العدّاد الهيدر الأول بيتحسب حقلًا
+    expect(sh).toMatch(/"\$\{#PAIRS\[@\]\}"/);
+    expect(sh).toMatch(/n=int\(npairs\)/);
+    expect(sh).toMatch(/params=kv\(rest\[:n\]\); headers=kv\(rest\[n:\]\)/);
+  });
+
+  it("ومابيحطّش headers فاضية في المواصفة", () => {
+    expect(sh).toMatch(/if headers: spec\["headers"\]=headers/);
+  });
+});
