@@ -44,3 +44,62 @@ test("العارض بيعرض ستوريز الحساب ده بس وبيقفل �
   await expect(viewer).toBeHidden();
   expectNoPageErrors(page);
 });
+
+/**
+ * **البلاغ على ستوري بسبب حقيقي** (١٦ أكتوبر ٢٠٢٦).
+ *
+ * قبل كده `StoryViewer` كان بيبعت `reason: "inappropriate"` **مثبّتًا** بلا أي
+ * منتقي — فبعد ما ضفنا سبب «إيذاء طفل» وطابور أولوية في اللوحة (١٥ أكتوبر)،
+ * البلاغ على **ستوري** فضل بيروح في طابور السبام. ونفس القايمة بقت مصدرًا
+ * واحدًا (`ReportReasons`) مشتركًا مع قايمة خيارات الرسالة.
+ */
+const viewerOf = (page: import("@playwright/test").Page) =>
+  page.locator("div.fixed.inset-0").filter({ hasText: /إبلاغ|Report/ });
+
+const openStory = async (page: import("@playwright/test").Page) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /مريم عبد الله — 2|Mariam Abdallah — 2/ }).click();
+  const v = viewerOf(page);
+  await expect(v).toBeVisible();
+  return v;
+};
+
+test("الإبلاغ على ستوري بيفتح منتقي أسباب فيه «إيذاء طفل»", async ({ page }) => {
+  const v = await openStory(page);
+  const btn = v.getByRole("button", { name: /^إبلاغ$|^Report$/ });
+  await expect(btn).toHaveAttribute("aria-expanded", "false");
+
+  await btn.click();
+  await expect(v.getByText(/سبب الإبلاغ:|Report reason:/)).toBeVisible();
+  // السبب ده لازم يبقى موجود ومميّز — بلاي بتطلب مسار CSAE صريح
+  await expect(v.getByRole("button", { name: /إيذاء طفل أو استغلاله|Child abuse or exploitation/ })).toBeVisible();
+  for (const r of [/^إساءة$|^Abuse$/, /^مزعجة$|^Spam$/, /^غير لائق$|^Inappropriate$/, /^احتيال$|^Scam$/]) {
+    await expect(v.getByRole("button", { name: r })).toBeVisible();
+  }
+  expectNoPageErrors(page);
+});
+
+test("اختيار السبب بيسجّل البلاغ ويقفل المنتقي", async ({ page }) => {
+  const v = await openStory(page);
+  await v.getByRole("button", { name: /^إبلاغ$|^Report$/ }).click();
+  await v.getByRole("button", { name: /إيذاء طفل أو استغلاله|Child abuse or exploitation/ }).click();
+
+  await expect(v.getByText(/سبب الإبلاغ:|Report reason:/)).toHaveCount(0);
+  await expect(v.getByRole("button", { name: /تم الإبلاغ|Reported/ })).toBeDisabled();
+  expectNoPageErrors(page);
+});
+
+test("مؤقّت الستوري بيتوقف وانتِ بتختاري السبب", async ({ page }) => {
+  // الستوري ٤ ثواني. من غير التوقّف، المنتقي يتفتح والعارض يتقدّم أو يتقفل
+  // من تحت إيد المستخدم والبلاغ يضيع (أو ينزل على ستوري تانية).
+  const v = await openStory(page);
+  await expect(v.getByText("مريم عبد الله")).toBeVisible();
+  await v.getByRole("button", { name: /^إبلاغ$|^Report$/ }).click();
+  await expect(v.getByText(/سبب الإبلاغ:|Report reason:/)).toBeVisible();
+
+  await page.waitForTimeout(6000); // أطول من مدة الستوري ومن الاتنين مع بعض
+  await expect(v, "العارض اتقفل والمنتقي مفتوح").toBeVisible();
+  await expect(v.getByText(/سبب الإبلاغ:|Report reason:/), "المنتقي اختفى").toBeVisible();
+  await expect(v.getByText("مريم عبد الله"), "الستوري اتقدّمت وانتِ بتختاري").toBeVisible();
+  expectNoPageErrors(page);
+});

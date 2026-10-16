@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import fs from "node:fs";
+import path from "node:path";
 import { startTestEnv } from "./helpers.js";
+import { REPORT_REASONS } from "../src/routes/reports.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 let owner: Awaited<ReturnType<typeof env.login>>;
@@ -146,5 +149,32 @@ describe("البلاغات", () => {
       const rows = (await api().get("/admin/reports?limit=2").set(viewer.auth).expect(200)).body as unknown[];
       expect(rows.length).toBeLessThanOrEqual(2);
     });
+  });
+});
+
+/**
+ * **حارس: أسباب الواجهة لازم تبقى جوّه أسباب السيرفر.**
+ *
+ * القايمة اللي المستخدم بيختار منها في `src/components/ReportReasons.tsx`،
+ * والسيرفر بيتحقق بـ`z.enum(REPORT_REASONS)`. فأي غلطة إملائية أو سبب اتضاف
+ * في الواجهة وبس → **٤٠٠ والمستخدم يشوف فشلًا بلا سبب**. والعكس (سبب على
+ * السيرفر مش في الواجهة) مقبول — في القايمة `impersonation` و`other` مش
+ * معروضين عن قصد.
+ */
+describe("أسباب البلاغ: الواجهة والسيرفر", () => {
+  const ui = fs.readFileSync(path.resolve(import.meta.dirname, "../../src/components/ReportReasons.tsx"), "utf8");
+  const list = /UI_REPORT_REASONS = \[([^\]]+)\]/.exec(ui)?.[1];
+
+  it("القايمة موجودة وكل سبب فيها معروف للسيرفر", () => {
+    expect(list, "مش لاقي UI_REPORT_REASONS في الواجهة").toBeTruthy();
+    const reasons = [...list!.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]!);
+    expect(reasons.length).toBeGreaterThanOrEqual(5);
+    for (const r of reasons) expect(REPORT_REASONS as readonly string[], `السبب ${r} مش في enum السيرفر`).toContain(r);
+  });
+
+  it("و«إيذاء طفل» أول القايمة في الواجهة زي السيرفر", () => {
+    const reasons = [...list!.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]!);
+    expect(reasons[0]).toBe("child_safety");
+    expect(REPORT_REASONS[0]).toBe("child_safety");
   });
 });

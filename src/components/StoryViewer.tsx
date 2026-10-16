@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useT } from "../i18n";
 import { api, API_ON } from "../api/client";
 import { useAppState, useAppActions } from "../store/AppContext";
+import { ReportReasons, type ReportReason } from "./ReportReasons";
 
 const DURATION_MS = 4000;
 
@@ -24,12 +25,19 @@ export function StoryViewer({ authorId, onClose }: { authorId: string; onClose: 
   });
   const [progress, setProgress] = useState(0);
   const [flagged, setFlagged] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   const story = mine[index];
 
-  const report = async () => {
+  /**
+   * البلاغ **بسبب يختاره المستخدم**. قبل كده كان `reason: "inappropriate"`
+   * مثبّتًا بلا أي منتقي — يعني بعد ما بقى فيه سبب «إيذاء طفل» وطابور أولوية
+   * في اللوحة (١٥ أكتوبر)، البلاغ على ستوري فضل بيروح في طابور السبام.
+   */
+  const report = async (reason: ReportReason) => {
+    setReporting(false);
     setFlagged(true);
-    try { if (API_ON && story) await api("/reports", { method: "POST", body: { kind: "story", targetId: story.id, reason: "inappropriate" } }); } catch { /* ignore */ }
+    try { if (API_ON && story) await api("/reports", { method: "POST", body: { kind: "story", targetId: story.id, reason } }); } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -38,6 +46,11 @@ export function StoryViewer({ authorId, onClose }: { authorId: string; onClose: 
       return;
     }
     markStorySeen(story.id);
+    // **المؤقّت بيتوقف وانتِ بتختاري سبب البلاغ.** من غير كده الستوري بتتقدّم
+    // أو العارض يتقفل خلال ٤ ثواني والمنتقي مفتوح — فالبلاغ يضيع أو ينزل على
+    // ستوري تانية. ولما المنتقي يتقفل العدّ بيبدأ من الأول (أحسن من إننا
+    // نضيّع الستوري من تحت إيد المستخدم).
+    if (reporting) return;
     setProgress(0);
     const start = Date.now();
     const tick = setInterval(() => {
@@ -51,7 +64,7 @@ export function StoryViewer({ authorId, onClose }: { authorId: string; onClose: 
     }, 60);
     return () => clearInterval(tick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, story?.id]);
+  }, [index, story?.id, reporting]);
 
   if (!story) return null;
 
@@ -91,6 +104,12 @@ export function StoryViewer({ authorId, onClose }: { authorId: string; onClose: 
 
         <div className="text-center text-xl font-extrabold text-white drop-shadow">{story.caption}</div>
 
+        {reporting && (
+          <div className="mx-auto w-full max-w-[340px]">
+            <ReportReasons onPick={(r) => void report(r)} />
+          </div>
+        )}
+
         <div className="flex justify-between text-white/70">
           <button
             className="px-4 py-2 text-xs"
@@ -98,7 +117,7 @@ export function StoryViewer({ authorId, onClose }: { authorId: string; onClose: 
           >
             {t("السابقة", "Previous")}
           </button>
-          <button className="px-4 py-2 text-xs" onClick={report} disabled={flagged}>
+          <button className="px-4 py-2 text-xs" onClick={() => setReporting((v) => !v)} disabled={flagged} aria-expanded={reporting}>
             {flagged ? t("تم الإبلاغ", "Reported") : t("إبلاغ", "Report")}
           </button>
           <button
