@@ -299,3 +299,74 @@ describe("السكربت بيبني الهيدرات", () => {
     expect(sh).toMatch(/if headers: spec\["headers"\]=headers/);
   });
 });
+
+/**
+ * **وضع `--twilio`** — المواصفة بتتبنى في السكربت مش بإيد المستخدم.
+ *
+ * ليه موجود: تجميعها بالإيد فشل مرتين فعلًا (نصّ عربي جوه أمر شِل اتلصق
+ * مبهدلًا، وبعدها `read` جوه لصق متعدد السطور بلع إجاباته فطلعت القيم فاضية).
+ * والشكل ثابت ومعروف لـ Twilio، فمحلّه الكود.
+ *
+ * والتفاصيل اللي بتغلط بالإيد ومحتاجة تثبيت: `{to+}` (صيغة E.164 — `{to}`
+ * بيرجّع 21211 من Twilio) · المصادقة `Basic` في الهيدر مش في الحقول ·
+ * وعلامة النجاح `queued`.
+ */
+describe("وضع --twilio في السكربت", () => {
+  const sh = fs.readFileSync(path.join(import.meta.dirname, "../../scripts/set-sms-keys.sh"), "utf8");
+  const tw = sh.slice(sh.indexOf('"--twilio"'), sh.indexOf("TWILIO_MODE=1"));
+
+  it("بيثبّت الشكل الصح لـ Twilio", () => {
+    expect(tw).toContain("To={to+}"); // مش {to} — Twilio بتطلب +20…
+    expect(tw).toContain("Body={text}");
+    expect(tw).toMatch(/OK=queued/);
+    expect(tw).toMatch(/Authorization=Basic \$\(printf '%s:%s'/);
+    expect(tw).toContain("api.twilio.com/2010-04-01/Accounts/$TW_SID/Messages.json");
+  });
+
+  it("بيرفض أسماء المرسل المحجوبة عند أورنج مصر", () => {
+    for (const bad of ["OTP", "otp", "Verify", "verify", "NOTICE", "notice"]) expect(tw).toContain(`*${bad}*`);
+  });
+
+  it("التوكن مابيتطبعش ومابيفضلش في البيئة", () => {
+    expect(tw).toMatch(/read -rsp "Twilio Auth Token/); // -s = مخفي
+    expect(tw).toMatch(/unset TW_TOK/);
+  });
+
+  it("ومابيتخطّاش الرسالة الحقيقية ولا تأكيد الوصول", () => {
+    // وضع Twilio بيتخطّى **الأسئلة** بس — الحكم لسه وصول الرسالة
+    const mode = sh.indexOf('"--twilio"');
+    // لازم نتأكد إن الوضع موجود الأول: فهرس مفقود = -1 وأي رقم أكبر منه،
+    // فالمقارنة لوحدها كانت **بتعدّي وهو مش موجود** (نفس فخّ expectNoPageErrors).
+    expect(mode, "وضع --twilio مش موجود في السكربت").toBeGreaterThan(0);
+    expect(sh.indexOf("smssend.mjs")).toBeGreaterThan(mode);
+    expect(sh.indexOf("وصلتك الرسالة")).toBeGreaterThan(mode);
+  });
+
+  it("والمواصفة اللي بيبنيها تطلّع طلب Twilio صحيح فعلًا", () => {
+    // نفس القيم اللي السكربت بيحطّها، بتمرّ على الفاحص والبنّاء الحقيقيين
+    const spec = parseSmsSpec(
+      Buffer.from(
+        JSON.stringify({
+          url: "https://api.twilio.com/2010-04-01/Accounts/ACfake/Messages.json",
+          method: "POST",
+          format: "form",
+          params: { To: "{to+}", From: "RaaChat", Body: "{text}" },
+          headers: { Authorization: "Basic " + Buffer.from("ACfake:tok").toString("base64") },
+          ok: "queued",
+        }),
+      ).toString("base64"),
+    )!;
+    const { url, init } = buildSmsRequest(spec, "01222139111", "123456");
+    expect(url).toContain("/Accounts/ACfake/Messages.json");
+    const i = init as { body: string; headers: Record<string, string> };
+    const form = new URLSearchParams(i.body);
+    expect(form.get("To")).toBe("+201222139111"); // E.164
+    expect(form.get("From")).toBe("RaaChat");
+    expect(form.get("Body")).toContain("123456");
+    expect(i.headers.Authorization).toBe("Basic " + Buffer.from("ACfake:tok").toString("base64"));
+    expect(i.headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
+    // ردّ Twilio الحقيقي بيحتوي "status": "queued"
+    expect(smsSucceeded(spec, 201, '{"sid":"SM1","status":"queued","error_code":null}')).toBe(true);
+    expect(smsSucceeded(spec, 400, '{"code":21612,"message":"not reachable"}')).toBe(false);
+  });
+});

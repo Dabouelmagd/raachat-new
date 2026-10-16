@@ -42,6 +42,33 @@ if ! $DC config 2>/dev/null | grep -q "SMS_HTTP"; then
   exit 1
 fi
 
+# ───────── وضع Twilio: المواصفة بتتبنى هنا مش بإيد المستخدم ─────────
+# ليه: تجميع المواصفة بإيدينا في المحادثة فشل مرتين (نصّ عربي جوه أمر اتلصق
+# مبهدلًا، وبعدها `read` في لصق متعدد السطور بلع إجاباته فطلعت فاضية). والشكل
+# ده **ثابت ومعروف** لـ Twilio، فمحلّه الكود مش رسالة المستخدم: صيغة E.164
+# (`{to+}` مش `{to}`) · المصادقة Basic في الهيدر · وعلامة النجاح `queued`.
+if [ "${1:-}" = "--twilio" ]; then
+  echo "Twilio: مصر بسعر ~٢٠ جنيه للرسالة، وده للتجربة مش للتشغيل الدائم."
+  echo
+  read -rp "Twilio Account SID: " TW_SID
+  [ -n "$TW_SID" ] || { echo "❌ لازم SID"; exit 1; }
+  read -rsp "Twilio Auth Token (مش هيظهر): " TW_TOK; echo
+  [ -n "$TW_TOK" ] || { echo "❌ لازم Token"; exit 1; }
+  read -rp "اسم المرسل [RaaChat]: " TW_FROM; TW_FROM=${TW_FROM:-RaaChat}
+  # أسماء محجوبة عند أورنج مصر — الرسالة بتتفلتر وشكلها إننا بعتنا
+  case "$TW_FROM" in
+    *OTP*|*otp*|*Verify*|*verify*|*NOTICE*|*notice*)
+      echo "❌ «$TW_FROM» من الأسماء المحجوبة عند أورنج مصر — اختاري اسمًا تجاريًا زي RaaChat"; exit 1;;
+  esac
+  URL="https://api.twilio.com/2010-04-01/Accounts/$TW_SID/Messages.json"
+  METHOD=POST; FORMAT=form; OK=queued
+  PAIRS=("To={to+}" "From=$TW_FROM" "Body={text}")
+  HEADS=("Authorization=Basic $(printf '%s:%s' "$TW_SID" "$TW_TOK" | base64 -w0)")
+  unset TW_TOK
+  TWILIO_MODE=1
+fi
+
+if [ "${TWILIO_MODE:-0}" != "1" ]; then
 cat <<'INFO'
 محتاجة من لوحة المزوّد (SMS Misr · OSSN · Digital Planets · E3melBusiness · Infobip…):
   1) عنوان الـ API (https://…)
@@ -82,6 +109,7 @@ while IFS= read -rp "h> " line; do
   [ -z "$line" ] && break
   case "$line" in *=*) HEADS+=("$line");; *) echo "   ⚠️ لازم شكل اسم=قيمة";; esac
 done
+fi  # نهاية الأسئلة اليدوية (وضع Twilio بيتخطّاها كلها)
 
 # JSON + base64 (base64 عشان كلمة السر لو فيها $ أو # ماتتكسرش في .env/compose)
 SPEC=$(python3 - "$URL" "$METHOD" "$FORMAT" "$OK" "${#PAIRS[@]}" "${PAIRS[@]}" "${HEADS[@]}" <<'PY'
