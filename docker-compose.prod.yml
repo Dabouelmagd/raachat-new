@@ -82,17 +82,30 @@ services:
           ts=$$(date +%Y%m%d-%H%M%S)
           # ٢) نكتب في ملف مؤقت، وما ناخدش الاسم النهائي إلا لو نجح وحجمه مش صفر —
           #    فالنسخة الفاشلة ما تتحسبش نسخة ولا تزحزح نسخة سليمة من الـ ١٤
+          ok=1
           if pg_dump -h db -U rachat -Fc rachat > /backups/.db-$$ts.part 2>/tmp/err && [ -s /backups/.db-$$ts.part ]; then
             mv /backups/.db-$$ts.part /backups/db-$$ts.dump
-            tar -czf /backups/uploads-$$ts.tgz -C /uploads . && echo "backup $$ts ok" || echo "backup $$ts uploads FAILED"
-            ls -1t /backups/db-*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
-            ls -1t /backups/uploads-*.tgz 2>/dev/null | tail -n +15 | xargs -r rm -f
-            sleep 86400
           else
-            rm -f /backups/.db-$$ts.part
-            echo "backup $$ts FAILED: $$(tail -1 /tmp/err 2>/dev/null)"
-            sleep 900   # ٣) يحاول تاني بعد ربع ساعة بدل ما ينام يوم كامل على فشل
+            ok=0; rm -f /backups/.db-$$ts.part
+            echo "backup $$ts db FAILED: $$(tail -1 /tmp/err 2>/dev/null)"
           fi
+          # ٣) المرفوعات **بنفس المعاملة**. كانت بتتكتب على الاسم النهائي مباشرة
+          #    وفشلها بيتبلع بـ`|| echo` — فأرشيف فاضي أو ناقص يتحسب نسخة سليمة
+          #    ويزحزح نسخة صح من الـ ١٤، والحلقة تنام يوم كامل على الفشل. ودي
+          #    نفس علّة نصّ القاعدة اللي كلّفتنا نسخًا فاضية لأيام (١٢ أكتوبر).
+          #    والحكم على **الأرشيف نفسه** (موجود ومقروء) مش على كود خروج tar:
+          #    ملف بيتغيّر وإحنا بنقراه بيخلّي tar يرجّع غير صفر والأرشيف سليم.
+          tar -czf /backups/.up-$$ts.part -C /uploads . 2>/tmp/uerr
+          if [ -s /backups/.up-$$ts.part ] && tar -tzf /backups/.up-$$ts.part >/dev/null 2>&1; then
+            mv /backups/.up-$$ts.part /backups/uploads-$$ts.tgz
+          else
+            ok=0; rm -f /backups/.up-$$ts.part
+            echo "backup $$ts uploads FAILED: $$(tail -1 /tmp/uerr 2>/dev/null)"
+          fi
+          ls -1t /backups/db-*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
+          ls -1t /backups/uploads-*.tgz 2>/dev/null | tail -n +15 | xargs -r rm -f
+          # ٤) أي فشل = إعادة محاولة بعد ربع ساعة بدل ما ينام يوم كامل عليه
+          if [ $$ok -eq 1 ]; then echo "backup $$ts ok"; sleep 86400; else sleep 900; fi
         done
 
   # TURN للمكالمات: docker compose -f docker-compose.prod.yml --profile turn up -d
