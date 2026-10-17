@@ -16,3 +16,11 @@ test-results/
 playwright-report/
 .playwright/
 .monitor-state
+
+# نواتج بناء أندرويد (مشروع Capacitor نفسه بيتحفظ في git)
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/src/main/assets/public/
+mobile/android/app/src/main/res/xml/config.xml

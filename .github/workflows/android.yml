@@ -1,0 +1,79 @@
+# بناء APK للتجربة على جهاز حقيقي.
+#
+# ليه على GitHub مش عند Claude: بناء أندرويد محتاج Android SDK من
+# `dl.google.com` ومكتبات من `maven.google.com` — والاتنين **محجوبين** في
+# allowlist الشبكة بتاعة بيئة Claude (403 على CONNECT). وrunners بتاعة جيت هب
+# فيها الـ SDK مثبَّت أصلًا.
+#
+# التنزيل: صفحة Actions ← آخر تشغيل لـ «APK للموبايل» ← Artifacts ← raachat-apk
+#
+# ⚠️ ده **debug APK** موقَّع بمفتاح التصحيح — للتجربة بس، ومش صالح للمتجر
+# (الرفع محتاج مفتاح إصدار حقيقي، وده سرّ يتحفظ في Secrets).
+name: APK للموبايل
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "عنوان الـ API اللي التطبيق هيكلّمه"
+        default: "https://api.kenoz.org/api"
+        required: true
+  push:
+    branches: [main]
+    # بس لما حاجة تخصّ التطبيق تتغيّر — مش على كل commit توثيق
+    paths: ["src/**", "public/**", "mobile/**", "index.html", "package.json", ".github/workflows/android.yml"]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # الواجهة **بوضع الـ API** — لازم عنوان حقيقي، وإلا الـ APK يطلع
+      # بناء الديمو اللي مابيعملش ولا نداء شبكة (نفس درس api-mode في CI).
+      - name: بناء الواجهة
+        env:
+          VITE_API_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://api.kenoz.org/api' }}
+        run: |
+          test -n "$VITE_API_URL"
+          npm ci
+          npx vite build
+          test -f dist/index.html
+
+      - name: نسخ الواجهة جوه مشروع أندرويد
+        working-directory: mobile
+        run: |
+          npm ci
+          npx cap sync android
+          test -f android/app/src/main/assets/public/index.html
+
+      - name: بناء الـ APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      # فحص إيجابي: الملف موجود وحجمه معقول (أقل من ميجا = بناء فاضي)
+      - name: فحص الناتج
+        run: |
+          APK=mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          SIZE=$(stat -c%s "$APK")
+          echo "حجم الـ APK: $((SIZE/1048576)) ميجا"
+          test "$SIZE" -gt 1000000
+          unzip -l "$APK" | grep -q "assets/public/index.html"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raachat-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

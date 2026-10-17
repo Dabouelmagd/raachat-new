@@ -28,6 +28,26 @@ describe("إيميل كود التحقق", () => {
     expect(m.html).not.toContain('"onerror="');
   });
 
+  /**
+   * 🔴 **الفخّ اللي الـ APK فتحه.** تطبيق Capacitor أصله `https://localhost`
+   * فلازم يتضاف لـ `CORS_ORIGIN`. و`APP_URL` الفاضي بياخد أصلًا من القايمة —
+   * فلو حد ضافه في **أول** القايمة، كل إيميل تحقق يبقى رابطه `https://localhost`
+   * **لكل المستخدمين**، واللوجو مايظهرش والروابط ميتة. والعطل صامت: الإيميل
+   * بيوصل عادي. فالاختيار بقى «أول أصل غير محلّي».
+   */
+  it("أصل الـ APK المحلي في أول CORS_ORIGIN مابيكسرش رابط الإيميل", async () => {
+    const config = loadConfig({ ...base, RESEND_KEY: "re_k", EMAIL_FROM: "a@b.c", CORS_ORIGIN: "https://localhost,https://app.kenoz.org" });
+    let sent: { body: Record<string, string> } | null = null;
+    const fake = (async (_u: unknown, init: { body: string }) => {
+      sent = { body: JSON.parse(init.body) };
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await providerSender(config, fake).send("email", "dalia@example.com", "445566");
+    expect(sent!.body.html, "الرابط مابيروحش لـ localhost").not.toContain("localhost");
+    expect(sent!.body.html).toContain("https://app.kenoz.org/icon.png");
+  });
+
   it("المرسِل بيبعت html + text + subject لـ Resend، والرابط بيرجع لـ CORS_ORIGIN", async () => {
     const config = loadConfig({ ...base, RESEND_KEY: "re_k", EMAIL_FROM: "Raa Chat <no-reply@kenoz.org>", CORS_ORIGIN: "https://app.kenoz.org,https://admin.kenoz.org" });
     let sent: { url: string; body: Record<string, string> } | null = null;

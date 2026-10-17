@@ -1,8 +1,9 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// appId: غيّره لاسم نطاقك المعكوس قبل أول رفع — مينفعش يتغير بعد النشر على المتجر.
+// ⚠️ appId مشتق من دومين الشركة (datalifeai.com). **مينفعش يتغيّر بعد أول رفع للمتجر**
+// — فلو عايزة اسمًا تانيًا، ده وقته. والـ APK التجريبي مايتأثرش بالتغيير.
 const config: CapacitorConfig = {
-  appId: "com.YOURCOMPANY.raachat",
+  appId: "com.datalifeai.raachat",
   appName: "رع شات",
   webDir: "../dist",
   server: { androidScheme: "https" },

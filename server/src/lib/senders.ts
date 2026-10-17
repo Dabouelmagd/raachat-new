@@ -3,6 +3,13 @@ import { otpEmail } from "./otp-email.js";
 import { buildSmsRequest, parseSmsSpec, redactSmsSecrets, smsOtpText, smsSucceeded, type SmsSpec } from "./sms.js";
 
 /** مُرسِل رمز التحقق — بدّليه بأي مزود SMS/Email */
+/** أول أصل في `CORS_ORIGIN` مش localhost/127.0.0.1 — شوفي سبب الاستثناء تحت */
+export function firstPublicOrigin(list: string): string {
+  const parts = list.split(",").map((x) => x.trim()).filter(Boolean);
+  const isLocal = (u: string) => /^[a-z]+:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(u);
+  return parts.find((u) => !isLocal(u)) ?? parts[0] ?? "";
+}
+
 export interface OtpSender {
   send(channel: "phone" | "email", target: string, code: string): Promise<void>;
   /**
@@ -67,7 +74,11 @@ export function providerSender(c: Config, f: typeof fetch = fetch): OtpSender {
         if (!r.ok) throw new Error("sms_failed");
       } else {
         if (!c.RESEND_KEY || !c.EMAIL_FROM) throw new Error("email_not_configured");
-        const appUrl = (c.APP_URL || c.CORS_ORIGIN.split(",")[0] || "").trim();
+        // ⚠️ أول أصل **غير محلّي**: الـ APK بتاع Capacitor أصله `https://localhost`،
+        // ولازم يتضاف لـ CORS_ORIGIN — فلو اتضاف في أول القايمة وأخدناه هنا، كل
+        // إيميل تحقق يبقى رابطه `https://localhost` **لكل المستخدمين**. فبدل ما
+        // نعتمد على ترتيب القايمة، بنعدّي المحلي.
+        const appUrl = (c.APP_URL || firstPublicOrigin(c.CORS_ORIGIN) || "").trim();
         const mail = otpEmail({ code, appUrl, minutes: 5 });
         const r = await f("https://api.resend.com/emails", {
           method: "POST",

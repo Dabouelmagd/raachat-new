@@ -19,6 +19,7 @@ const OUR_DOMAINS = ["kenoz.org"];
 /** كود التطبيق بس — الاختبارات والتوثيق بيستخدموا الدومين كمثال عن قصد. */
 const APP_DIRS = ["server/src", "src", "admin/src", "public", "mobile"];
 const EXT = /\.(ts|tsx|js|jsx|mjs|cjs|html|css|json)$/;
+const BUILD_DIRS = ["node_modules", "dist", "generated", "build", ".git", ".gradle"];
 
 function walk(dir: string): string[] {
   const abs = path.join(ROOT, dir);
@@ -27,7 +28,12 @@ function walk(dir: string): string[] {
   for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (["node_modules", "dist", "generated", "build", ".git"].includes(e.name)) continue;
+      if (BUILD_DIRS.includes(e.name)) continue;
+      // `cap sync` بينسخ بناء الواجهة (اللي فيه عنوان الـ API) جوه مشروع
+      // أندرويد — ناتج بناء متجاهل في git، فلو ما اتعدّاش الحارس يسقط على
+      // ناتج بناء بدل ما يسقط على كود مكتوب بالإيد. و`public/` بتاعة الريبو
+      // نفسها **لازم** تتفحص، فالاستثناء على اللي جوه `assets` بس.
+      if (e.name === "public" && dir.includes(path.join("main", "assets"))) continue;
       out.push(...walk(rel));
     } else if (EXT.test(e.name)) out.push(rel);
   }
