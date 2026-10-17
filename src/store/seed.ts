@@ -78,7 +78,7 @@ export const INITIAL_MESSAGES: Message[] = [
   { id: "cm2", threadId: "ch1", authorId: "u6", get authorName() { return tr("فريق رع شات", "Raa Chat team"); }, get text() { return tr("وكمان الرد بالصوت وسرعة التشغيل", "And voice replies with playback speed"); }, time: "8:12", reactions: {} },
   // رسايل الحالات الصعبة (t5) — رابط طويل وكلمة بلا مسافات: لو الفقاعة مش
   // بتكسر الكلمة، النص بيوسّع الصفحة كلها والرسايل تتقص على الموبايل.
-  { id: "m7", threadId: "t5", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "https://app.kenoz.org/legal/privacy.html?utm_source=raachat&utm_campaign=very-long-link-for-layout-testing-1234567890", time: "7:07", reactions: {} },
+  { id: "m7", threadId: "t5", authorId: "u1", get authorName() { return tr("مريم عبد الله", "Mariam Abdallah"); }, text: "https://app.example.com/legal/privacy.html?utm_source=raachat&utm_campaign=very-long-link-for-layout-testing-1234567890", time: "7:07", reactions: {} },
   { id: "m8", threadId: "t5", authorId: "me", get authorName() { return tr("أنت", "You"); }, text: "Supercalifragilisticexpialidocious_pneumonoultramicroscopicsilicovolcanoconiosis", time: "7:08", reactions: {} },
   { id: "m9", threadId: "t5", authorId: "u2", get authorName() { return tr("يوسف كامل", "Youssef Kamel"); }, get text() { return tr("هي دي الحاجه الوحيده اللي محدش ليه أكسس عليها علشان تملكين الدومين", "This is the only thing nobody else has access to, so you own the domain"); }, time: "7:08", reactions: {} },
 ];

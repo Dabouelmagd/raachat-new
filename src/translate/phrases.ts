@@ -8,9 +8,9 @@ import type { TLang } from "./engine";
 export interface Phrase { ar: string[]; en: string; zh: string; fr: string }
 
 export const PHRASES: Phrase[] = [
-  { ar: ["مرحبا", "أهلا", "أهلا وسهلا"], en: "Hello", zh: "你好", fr: "Bonjour" },
+  { ar: ["مرحبا", "أهلا", "أهلا وسهلا"], en: "Hello", zh: "你好", fr: "Salut" },
   { ar: ["السلام عليكم"], en: "Peace be upon you", zh: "愿你平安", fr: "Que la paix soit sur vous" },
-  { ar: ["صباح الخير"], en: "Good morning", zh: "早上好", fr: "Bonne matinée" },
+  { ar: ["صباح الخير"], en: "Good morning", zh: "早上好", fr: "Bonjour" },
   { ar: ["مساء الخير"], en: "Good evening", zh: "晚上好", fr: "Bonsoir" },
   { ar: ["تصبح على خير"], en: "Good night", zh: "晚安", fr: "Bonne nuit" },
   { ar: ["عامل إيه؟", "عامل ايه", "كيف حالك؟", "كيف الحال؟"], en: "How are you?", zh: "你好吗？", fr: "Comment ça va ?" },

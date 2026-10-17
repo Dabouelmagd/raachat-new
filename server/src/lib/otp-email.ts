@@ -15,7 +15,7 @@ const C = {
 
 export interface OtpEmailOptions {
   code: string;
-  /** رابط التطبيق، مثال: https://app.kenoz.org */
+  /** رابط التطبيق، مثال: https://app.example.com */
   appUrl: string;
   /** مدة صلاحية الكود بالدقايق */
   minutes: number;
