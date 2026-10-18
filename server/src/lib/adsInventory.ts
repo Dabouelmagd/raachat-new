@@ -67,7 +67,10 @@ export interface Occupancy { held: number; booked: number; blocked: boolean }
 export async function occupancy(ctx: Ctx, placementIds: string[], from: string, to: string, excludeCampaignId?: string) {
   const [bookings, blocks] = await Promise.all([
     ctx.db.adBooking.findMany({
-      where: { placementId: { in: placementIds }, campaign: { status: { in: [...HOLD] }, startDate: { lte: to }, endDate: { gte: from }, ...(excludeCampaignId ? { id: { not: excludeCampaignId } } : {}) } },
+      // 🔴 `isHouse: false` مقصود: الإعلان بدون حملة بلا حجز ولا سعر، فلو
+      // اتحسب في الإشغال كان **منع معلنًا دافعًا** برسالة «مفيش مكان فاضي»
+      // على موضع فاضي فعلًا — ومفيش أي خطأ يبان، البيع بس بيقف.
+      where: { placementId: { in: placementIds }, campaign: { isHouse: false, status: { in: [...HOLD] }, startDate: { lte: to }, endDate: { gte: from }, ...(excludeCampaignId ? { id: { not: excludeCampaignId } } : {}) } },
       select: { placementId: true, campaign: { select: { id: true, status: true, startDate: true, endDate: true } } },
     }),
     ctx.db.adBlock.findMany({ where: { placementId: { in: placementIds }, fromDate: { lte: to }, toDate: { gte: from } } }),
@@ -121,3 +124,32 @@ export async function withAdsLock<T>(ctx: Ctx, fn: () => Promise<T>): Promise<T>
 
 export const priceOf = (ps: { pricePerDay: unknown }[], from: string, to: string) =>
   +(ps.reduce((a, p) => a + Number(p.pricePerDay), 0) * dayCount(from, to)).toFixed(2);
+
+/**
+ * **تفصيل سعر الحملة — مصدر واحد.**
+ *
+ * الترتيب مقصود: كود الهدية بيغطي أيامًا بالكامل، والعرض بنسبته بيتحسب على
+ * **المتبقي بعده** — خصم ٢٥٪ على أيام مجانية أصلًا مابيوفّرش ولا جنيه،
+ * والمعلن يشوف نسبة مكتوبة وفاتورة ماتأثرتش فيفقد الثقة في الاتنين.
+ *
+ * و`discount` الراجع هو **الهدية + العرض** مع بعض، عشان الفرضية اللي عرض
+ * الحملة والطابور معتمدين عليها تفضل صحيحة: `الإجمالي = المطلوب + الخصم`.
+ */
+export function priceBreakdown(gross: number, giftDiscount: number, offerPct: number) {
+  const pct = Math.min(100, Math.max(0, Math.round(offerPct || 0)));
+  const gift = +Math.min(gross, Math.max(0, giftDiscount || 0)).toFixed(2);
+  const afterGift = +(gross - gift).toFixed(2);
+  const offer = +(afterGift * pct / 100).toFixed(2);
+  return {
+    gross: +gross.toFixed(2), gift, offerPct: pct, offer,
+    discount: +(gift + offer).toFixed(2),
+    total: +(afterGift - offer).toFixed(2),
+  };
+}
+
+/**
+ * نهاية الإعلان بدون حملة — بعيدة عن قصد عشان يفضل ظاهرًا بلا تواريخ.
+ * الصفّ نفسه حملة في القاعدة (فبياخد نفس حوارس الكتالوج والمراجعة)،
+ * إنما `isHouse` بيستثنيه من الإشغال والسعر والتعارض.
+ */
+export const HOUSE_END = "2099-12-31";

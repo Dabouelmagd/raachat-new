@@ -5,7 +5,7 @@ import { z } from "zod";
 import { newSession, normalizeTarget, requireAuth, type AuthedRequest, validTarget } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, forbidden, notFound, wrap } from "../lib/errors.js";
-import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
+import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, priceBreakdown, HOUSE_END, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
 import { randomToken, sha256 } from "../lib/tokens.js";
 import { emitToUsers } from "../realtime.js";
 import { getSettings, saveSettings } from "../lib/settings.js";
@@ -335,6 +335,7 @@ export function adminRoutes(ctx: Ctx) {
     shown: tot?.get(c.id)?.shown ?? 0, clicked: tot?.get(c.id)?.clicked ?? 0,
     id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, audience: c.audience,
     priority: c.priority, dailyCap: c.dailyCap, start: c.startDate, end: c.endDate, status: c.status, phase: phaseOf(c), total: Number(c.total), discount: Number(c.discount), gross: +(Number(c.total) + Number(c.discount)).toFixed(2), giftCode: c.giftCode, note: c.note,
+    offerPct: c.offerPct, isHouse: c.isHouse,
     days: dayCount(c.startDate, c.endDate), placements: c.bookings.map((b) => ({ key: b.placement.key, name: b.placement.name, pricePerDay: Number(b.pricePerDay) })), createdAt: c.createdAt.toISOString(),
     // صورة كل موضع بمفتاحه — الواجهة بتعرضها وبتحذّر لو نسبتها مختلفة عن مقاس الموضع
     images: Object.fromEntries(c.bookings.filter((b) => b.imageUrl).map((b) => [b.placement.key, b.imageUrl!])) as Record<string, string>,
@@ -352,6 +353,8 @@ export function adminRoutes(ctx: Ctx) {
     const days = Math.min(dayCount(start, end), gift.days);
     return { gift, discount: +(covered.reduce((a, p) => a + Number(p.pricePerDay), 0) * days).toFixed(2), coveredDays: days };
   }
+  /** نسبة العرض — صحيحة من ٠ لـ ١٠٠، و١٠٠ معناها إعلان مجاني بحملة (مقصود ومسموح) */
+  const Pct = z.number().int().min(0).max(100);
   const Content = z.object({
     advertiser: z.string().trim().min(2).max(60), headline: z.string().trim().min(2).max(50), body: z.string().trim().max(110).default(""), cta: z.string().trim().max(16).default("اعرف أكتر"),
     link: z.string().trim().max(300).regex(/^https:\/\/\S+$/, "الرابط لازم يبدأ بـ https://"), grad: z.number().int().min(0).max(5).default(0), audience: z.string().trim().max(60).default("كل المستخدمين"),
@@ -440,7 +443,7 @@ export function adminRoutes(ctx: Ctx) {
   }));
 
   r.post("/admin/ads/quote", need("ads.view"), wrap(async (req, res) => {
-    const b = z.object({ placements: z.array(Key).min(1).max(10), excludeId: z.string().optional(), giftCode: z.string().trim().max(30).optional() }).and(Range).parse(req.body);
+    const b = z.object({ placements: z.array(Key).min(1).max(10), excludeId: z.string().optional(), giftCode: z.string().trim().max(30).optional(), offerPct: Pct.optional() }).and(Range).parse(req.body);
     const ps = await placementsByKeys(b.placements);
     const conflicts = await findConflicts(ctx, ps, b.start, b.end, b.excludeId);
     const n = dayCount(b.start, b.end);
@@ -450,8 +453,10 @@ export function adminRoutes(ctx: Ctx) {
       try { const g = await giftDiscount(b.giftCode, ps, b.start, b.end, b.excludeId); discount = g.discount; giftDays = g.coveredDays; }
       catch (e) { if (e instanceof HttpError) giftError = e.message; else throw e; }
     }
+    const br = priceBreakdown(gross, discount, b.offerPct ?? 0);
     res.json({
-      days: n, gross, discount, giftDays, giftError, total: +(gross - discount).toFixed(2), ok: conflicts.length === 0, conflicts,
+      days: n, gross, discount: br.discount, gift: br.gift, offer: br.offer, offerPct: br.offerPct,
+      giftDays, giftError, total: br.total, ok: conflicts.length === 0, conflicts,
       lines: ps.map((p) => ({ key: p.key, name: p.name, pricePerDay: Number(p.pricePerDay), days: n, subtotal: +(Number(p.pricePerDay) * n).toFixed(2) })),
     });
   }));
@@ -475,19 +480,33 @@ export function adminRoutes(ctx: Ctx) {
 
   r.post("/admin/ads/campaigns", need("ads.manage"), wrap(async (req, res) => {
     const s = S(req);
-    const b = Content.and(Range).and(z.object({ placements: z.array(Key).min(1).max(10), approve: z.boolean().default(false), giftCode: z.string().trim().max(30).optional() })).parse(req.body);
-    if (b.start < todayCairo()) throw bad("past_start", "تاريخ البداية فات");
+    const b = Content.and(z.object({ start: Day.optional(), end: Day.optional() })).and(z.object({ placements: z.array(Key).min(1).max(10), approve: z.boolean().default(false), giftCode: z.string().trim().max(30).optional(), offerPct: Pct.default(0), house: z.boolean().default(false) })).parse(req.body);
+    /**
+     * **إعلان بدون حملة** (بطلب داليا: «ينزل إعلان واحد أو اتنين مش لازم
+     * المجموعة كلها»): بلا تواريخ ولا سعر ولا حجز. الصفّ حملة في القاعدة
+     * عشان ياخد نفس حوارس الكتالوج، إنما `isHouse` بيخرجه من الإشغال —
+     * وبيظهر في **الأماكن الفاضية بس** فمابياخدش نصيب معلن دافع.
+     */
+    const start = b.house ? todayCairo() : b.start, end = b.house ? HOUSE_END : b.end;
+    if (!start || !end) throw bad("bad_range", "لازم تاريخ بداية ونهاية");
+    if (end < start) throw bad("bad_range", "تاريخ النهاية قبل البداية");
+    if (!b.house && dayCount(start, end) > MAX_CAMPAIGN_DAYS) throw bad("bad_range", "أقصى مدة سنة");
+    if (b.house && b.giftCode) throw bad("house_gift", "الإعلان بدون حملة مجاني أصلًا — مفيش كود هدية");
+    if (!b.house && start < todayCairo()) throw bad("past_start", "تاريخ البداية فات");
     const ps = await placementsByKeys(b.placements);
     const id = await withAdsLock(ctx, async () => {
-      const c = await findConflicts(ctx, ps, b.start, b.end);
-      if (c.length) throw conflictError(c);
-      const gross = priceOf(ps, b.start, b.end);
-      const g = b.giftCode ? await giftDiscount(b.giftCode, ps, b.start, b.end) : null;
+      // الإعلان بدون حملة مابيحجزش، فمفيش تعارض يتفحص
+      if (!b.house) { const c = await findConflicts(ctx, ps, start, end); if (c.length) throw conflictError(c); }
+      const gross = b.house ? 0 : priceOf(ps, start, end);
+      const g = b.giftCode ? await giftDiscount(b.giftCode, ps, start, end) : null;
+      const br = priceBreakdown(gross, g?.discount ?? 0, b.house ? 0 : b.offerPct);
       const row = await db.adCampaign.create({
         data: {
           advertiser: b.advertiser, headline: b.headline, body: b.body, cta: b.cta, link: b.link, imageUrl: b.imageUrl ?? null, grad: b.grad, audience: b.audience, priority: b.priority, dailyCap: b.dailyCap, note: b.note,
-          startDate: b.start, endDate: b.end, status: b.approve ? "approved" : "pending", total: (gross - (g?.discount ?? 0)).toFixed(2), discount: (g?.discount ?? 0).toFixed(2), giftCode: g?.gift.code ?? null, createdById: s.userId,
-          bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerDay: p.pricePerDay, imageUrl: b.images?.[p.key] ?? null })) },
+          startDate: start, endDate: end, status: b.approve || b.house ? "approved" : "pending",
+          total: br.total.toFixed(2), discount: br.discount.toFixed(2), offerPct: br.offerPct, isHouse: b.house,
+          giftCode: g?.gift.code ?? null, createdById: s.userId,
+          bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerDay: b.house ? "0" : p.pricePerDay, imageUrl: b.images?.[p.key] ?? null })) },
         },
       });
       if (g) {
@@ -497,13 +516,13 @@ export function adminRoutes(ctx: Ctx) {
       return row.id;
     });
     const c = (await loadCampaign(id))!;
-    await audit(s, b.approve ? "أنشأ واعتمد حملة" : "أنشأ حملة (بانتظار الموافقة)", c.advertiser, { id, start: b.start, end: b.end, total: Number(c.total), placements: b.placements });
+    await audit(s, b.house ? "أنشأ إعلانًا بدون حملة" : b.approve ? "أنشأ واعتمد حملة" : "أنشأ حملة (بانتظار الموافقة)", c.advertiser, { id, start, end, total: Number(c.total), placements: b.placements, ...(b.offerPct ? { offerPct: b.offerPct } : {}) });
     res.status(201).json(campView(c));
   }));
 
   r.patch("/admin/ads/campaigns/:id", need("ads.manage"), wrap(async (req, res) => {
     const s = S(req); const id = String(req.params.id);
-    const b = Content.partial().and(z.object({ start: Day.optional(), end: Day.optional(), placements: z.array(Key).min(1).max(10).optional(), giftCode: z.string().trim().max(30).optional() })).parse(req.body);
+    const b = Content.partial().and(z.object({ start: Day.optional(), end: Day.optional(), placements: z.array(Key).min(1).max(10).optional(), giftCode: z.string().trim().max(30).optional(), offerPct: Pct.optional() })).parse(req.body);
     const out = await withAdsLock(ctx, async () => {
       const cur = await loadCampaign(id);
       if (!cur) throw notFound();
@@ -519,13 +538,21 @@ export function adminRoutes(ctx: Ctx) {
       }
       const ps = await placementsByKeys(keys);
       if (slotsChanged) { const c = await findConflicts(ctx, ps, start, end, id); if (c.length) throw conflictError(c); }
-      const { start: _s, end: _e, placements: _p, images: _i, giftCode: newCode, ...fields } = b;
+      const { start: _s, end: _e, placements: _p, images: _i, giftCode: newCode, offerPct: newPct, ...fields } = b;
       void _s; void _e; void _p; void _i;
       const code = cur.giftCode ?? newCode;
-      const priceChanged = slotsChanged || (!!newCode && !cur.giftCode);
+      const pctChanged = newPct !== undefined && newPct !== cur.offerPct;
+      // تغيير النسبة لوحدها لازم يعيد الحساب كمان — من غير كده الرقم بيتخزن
+      // والفاتورة تفضل القديمة، والمعلن يشوف نسبة مكتوبة بلا أثر
+      const priceChanged = slotsChanged || (!!newCode && !cur.giftCode) || pctChanged;
       const g = code && priceChanged ? await giftDiscount(code, ps, start, end, id) : null;
-      const gross = priceOf(ps, start, end);
-      await db.adCampaign.update({ where: { id }, data: { ...fields, startDate: start, endDate: end, ...(priceChanged ? { total: (gross - (g?.discount ?? 0)).toFixed(2), discount: (g?.discount ?? 0).toFixed(2), giftCode: g?.gift.code ?? cur.giftCode } : {}) } });
+      const pct = newPct ?? cur.offerPct;
+      // الهدية بتتحسب من الكود نفسه مش من العمود المخزّن: `discount` فيه
+      // الهدية **والعرض** مع بعض، وفصلهما بالعكس بيقسم على (١ − النسبة)
+      // فـ١٠٠٪ بتقسم على صفر. و`g` مضمونة هنا طول ما فيه كود والسعر بيتغيّر.
+      const gift = g ? g.discount : 0;
+      const br = priceBreakdown(cur.isHouse ? 0 : priceOf(ps, start, end), cur.isHouse ? 0 : gift, cur.isHouse ? 0 : pct);
+      await db.adCampaign.update({ where: { id }, data: { ...fields, startDate: start, endDate: end, ...(priceChanged ? { total: br.total.toFixed(2), discount: br.discount.toFixed(2), offerPct: br.offerPct, giftCode: g?.gift.code ?? cur.giftCode } : {}) } });
       if (g && !cur.giftCode) {
         const u = await db.adGift.updateMany({ where: { id: g.gift.id, usedByCampaignId: null }, data: { usedAt: new Date(), usedByCampaignId: id } });
         if (u.count !== 1) throw bad("gift_used", "كود الهدية ده اتستخدم قبل كده");
@@ -575,7 +602,10 @@ export function adminRoutes(ctx: Ctx) {
       // الرفض أو إلغاء حملة لسه ما بدأتش بيرجّع كود الهدية يتستخدم تاني
       if (cur.giftCode && (act.to === "rejected" || (act.to === "cancelled" && cur.startDate > todayCairo()))) {
         await db.adGift.updateMany({ where: { usedByCampaignId: id }, data: { usedAt: null, usedByCampaignId: null } });
-        await db.adCampaign.update({ where: { id }, data: { total: (Number(cur.total) + Number(cur.discount)).toFixed(2), discount: "0", giftCode: null } });
+        // 🔴 كان بيصفّر الخصم كله — فسحب الهدية كان **بيشيل العرض كمان**
+        // في سكوت، والعميل اللي متفق على ٢٠٪ يلاقي الفاتورة بالكامل.
+        const br = priceBreakdown(+(Number(cur.total) + Number(cur.discount)).toFixed(2), 0, cur.offerPct);
+        await db.adCampaign.update({ where: { id }, data: { total: br.total.toFixed(2), discount: br.discount.toFixed(2), giftCode: null } });
       }
       return (await loadCampaign(id))!;
     });

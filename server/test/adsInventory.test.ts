@@ -408,3 +408,121 @@ describe("خريطة الأماكن المتاحة", () => {
     expect(hard, "مفاتيح مواضع مكتوبة بالإيد جوه الخريطة").toEqual([]);
   });
 });
+
+/**
+ * **الخصم اليدوي (العرض)** — بطلب داليا ١٨ أكتوبر ٢٠٢٦: «يُكتب حسب كل حملة
+ * وكل عميل، وممكن إضافة اختيارات للخصم».
+ *
+ * الترتيب هو اللي بيفرّق: النسبة بتتحسب على **المتبقي بعد كود الهدية**.
+ * لو اتحسبت على الإجمالي، حملة الهدية بتغطيها بالكامل كان ممكن يطلع فيها
+ * «خصم» بالسالب أو خصم على أيام مجانية أصلًا — رقم بلا معنى في فاتورة.
+ */
+describe("الخصم اليدوي على الحملة", () => {
+  it("🔴 العرض بيتحسب على المتبقي بعد الهدية، و`الإجمالي = المطلوب + الخصم` تفضل صحيحة", async () => {
+    // بانر ١٥٠/يوم × ١٠ أيام = ١٥٠٠
+    const q0 = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(49) }).expect(200)).body;
+    expect(q0.total).toBe(1500);
+
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(49), offerPct: 20 }).expect(200)).body;
+    expect(q.gross).toBe(1500);
+    expect(q.offer).toBe(300);          // ٢٠٪ من ١٥٠٠
+    expect(q.total).toBe(1200);
+    expect(+(q.total + q.discount).toFixed(2)).toBe(q.gross);
+
+    // هدية شهر (٣٠ يوم = ٤٥٠٠) على حملة ٤٠ يوم (٦٠٠٠) + عرض ٢٠٪
+    // → ٢٠٪ من المتبقي (١٥٠٠) = ٣٠٠، والمطلوب ١٢٠٠
+    const [gift] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1, placements: ["banner"] }).expect(201)).body as { code: string }[];
+    const qg = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(79), giftCode: gift.code, offerPct: 20 }).expect(200)).body;
+    expect(qg.gross).toBe(6000);
+    expect(qg.gift).toBe(4500);
+    expect(qg.offer).toBe(300);
+    expect(qg.total).toBe(1200);
+    expect(+(qg.total + qg.discount).toFixed(2)).toBe(qg.gross);
+  });
+
+  it("الحملة بتتخزن بالعرض، وتغيير النسبة لوحدها بيعيد حساب الفاتورة", async () => {
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(60), end: d(69), offerPct: 10 })).expect(201)).body;
+    expect(c.offerPct).toBe(10);
+    expect(c.total).toBe(1350); // ١٥٠٠ − ١٠٪
+
+    // 🔴 النسبة لوحدها لازم تعيد الحساب — من غير كده الرقم بيتخزن
+    // والفاتورة تفضل القديمة، والعميل يشوف نسبة متفق عليها بلا أثر
+    const up = (await api().patch(`/admin/ads/campaigns/${c.id}`).set(owner.auth).send({ offerPct: 25 }).expect(200)).body;
+    expect(up.offerPct).toBe(25);
+    expect(up.total).toBe(1125);
+    expect(up.discount).toBe(375);
+  });
+
+  it("🔴 سحب الهدية عند الرفض مابيشيلش العرض معاها", async () => {
+    const [gift] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1, placements: ["banner"] }).expect(201)).body as { code: string }[];
+    // حملة ٤٠ يوم (٦٠٠٠)، هدية ٣٠ يوم (٤٥٠٠)، عرض ٢٠٪ على المتبقي (١٥٠٠) = ٣٠٠
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(120), end: d(159), giftCode: gift.code, offerPct: 20 })).expect(201)).body;
+    expect(c.total).toBe(1200);
+
+    const r = (await api().post(`/admin/ads/campaigns/${c.id}/reject`).set(owner.auth).send({ reason: "مش مناسب" }).expect(200)).body;
+    // الهدية رجعت، **والعرض لسه مطبَّق**: ٦٠٠٠ − ٢٠٪ = ٤٨٠٠
+    expect(r.giftCode).toBe(null);
+    expect(r.offerPct).toBe(20);
+    expect(r.total).toBe(4800);
+    expect(r.discount).toBe(1200);
+  });
+
+  it("النسبة محدودة ٠–١٠٠ ومفيش قيم غريبة", async () => {
+    await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(41), offerPct: 101 }).expect(400);
+    await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(41), offerPct: -5 }).expect(400);
+    const full = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(41), offerPct: 100 }).expect(200)).body;
+    expect(full.total).toBe(0); // ١٠٠٪ = مجاني بحملة — مسموح عن قصد
+  });
+});
+
+/**
+ * **إعلان بدون حملة** — بطلب داليا: «ينزل إعلان واحد أو اتنين مش لازم
+ * المجموعة كلها». بلا تواريخ ولا سعر ولا حجز.
+ *
+ * 🔴 والخطر الحقيقي فيه إنه **يمنع معلنًا دافعًا**: لو الحجز بتاعه اتحسب في
+ * الإشغال، الموضع الفاضي يرجّع «مفيش مكان فاضي» لأول واحد يحاول يشتريه —
+ * ومفيش أي خطأ يبان، البيع بس بيقف. والاختبار بيشتري فعلًا بعد ما ننزل
+ * إعلانًا بيتنا على نفس الموضع.
+ */
+describe("إعلان بدون حملة", () => {
+  it("🔴 مابياخدش مكانًا مبيوعًا — المعلن الدافع لسه يقدر يشتري الموضع كله", async () => {
+    await api().put("/admin/ads/placements/rooms").set(owner.auth).send({ name: "بانر الغرف الصوتية", kind: "room", width: 1200, height: 300, slots: 1, pricePerDay: 100, active: true }).expect(200);
+    const h = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "رع شات", placements: ["rooms"], house: true })).expect(201)).body;
+    expect(h.isHouse).toBe(true);
+    expect(h.status).toBe("approved"); // بلا مراجعة — إعلاننا إحنا
+    expect(h.total).toBe(0);
+
+    // المكان الوحيد لسه متاح للبيع
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["rooms"], start: d(100), end: d(102) }).expect(200)).body;
+    expect(q.ok).toBe(true);
+    const paid = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "معلن دافع", placements: ["rooms"], start: d(100), end: d(102), approve: true })).expect(201)).body;
+    expect(paid.total).toBe(300);
+  });
+
+  it("🔴 بيظهر في الكتالوج لما يكون فيه مكان فاضي، وبيختفي لما المدفوع يملا الموضع", async () => {
+    await api().put("/admin/ads/placements/adsfeed").set(owner.auth).send({ name: "قائمة العروض", kind: "banner", width: 1200, height: 300, slots: 1, pricePerDay: 80, active: true }).expect(200);
+    const h = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "إعلان بيتنا", placements: ["adsfeed"], house: true })).expect(201)).body;
+
+    const inFeed = () => api().get("/ads/catalog").set(owner.auth).expect(200)
+      .then((r) => r.body.filter((a: { placements: string[] }) => a.placements.includes("adsfeed")).map((a: { id: string }) => a.id));
+    expect(await inFeed()).toContain(h.id);
+
+    // معلن دافع بياخد المكان الوحيد النهارده → إعلاننا يفضي له
+    const paid = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "دافع", placements: ["adsfeed"], start: todayCairo(), end: d(2), approve: true })).expect(201)).body;
+    const now = await inFeed();
+    expect(now).toContain(paid.id);
+    expect(now).not.toContain(h.id);
+  });
+
+  it("مفيش كود هدية على إعلان بدون حملة، والتواريخ مش مطلوبة", async () => {
+    const [gift] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1 }).expect(201)).body as { code: string }[];
+    expect(gift.code).toBeTruthy(); // لو الرد اتغيّر، الاختبار يقول كده بدل ما يعدّي بكود فاضي
+    await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send({ advertiser: "رع شات", headline: "جرّب الغرف", link: "https://example.com/h", placements: ["banner"], house: true, giftCode: gift.code }).expect(400);
+    // بلا `start`/`end` خالص
+    const ok = (await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send({ advertiser: "رع شات", headline: "جرّب الغرف", link: "https://example.com/h", placements: ["banner"], house: true }).expect(201)).body;
+    expect(ok.isHouse).toBe(true);
+    expect(ok.start).toBe(todayCairo());
+  });
+});

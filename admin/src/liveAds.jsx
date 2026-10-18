@@ -23,10 +23,15 @@ const Size = ({ p }) => {
  * والفترة **شاملة الطرفين**، فالنهاية = البداية + الأيام − ١.
  */
 const DURATIONS = [[30, "شهر"], [90, "٣ شهور"], [180, "٦ شهور"], [365, "سنة"]];
+/**
+ * نسب العرض الجاهزة — **اختيارات بس، والرقم بيتكتب بالإيد** لأن الخصم
+ * بيتفق عليه لكل حملة وكل عميل على حدة (قرار داليا ١٨ أكتوبر ٢٠٢٦).
+ */
+const OFFERS = [0, 5, 10, 15, 20, 25, 30, 50];
 
 /** صورة الصفّ في الطابور: أول صورة موضع موجودة، وإلا صورة الحملة (القديمة). */
 const rowImage = (c) => Object.values(c.images || {})[0] || c.imageUrl || "";
-const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: addDays(start, 6), placements: [], approve: false, giftCode: "", imageUrl: "", images: {} });
+const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: addDays(start, 6), placements: [], approve: false, giftCode: "", imageUrl: "", images: {}, offerPct: 0, house: false });
 
 /* ---------- خريطة المخزون ---------- */
 function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }) {
@@ -102,19 +107,20 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
   const toggle = (k) => set("placements", c.placements.includes(k) ? c.placements.filter((x) => x !== k) : [...c.placements, k]);
   useEffect(() => {
     if (!c.placements.length || !c.start || !c.end || c.end < c.start) { setQ(null); return; }
+    if (c.house) { setQ(null); return; } // بلا حملة = بلا سعر، فمفيش تسعيرة تتجاب
     let live = true;
-    const t = setTimeout(() => api("/admin/ads/quote", { method: "POST", body: { placements: c.placements, start: c.start, end: c.end, excludeId: c.id || undefined, giftCode: c.giftCode || undefined } }).then((r) => live && setQ(r)).catch((e) => live && setQ({ error: e.message })), 250);
+    const t = setTimeout(() => api("/admin/ads/quote", { method: "POST", body: { placements: c.placements, start: c.start, end: c.end, excludeId: c.id || undefined, giftCode: c.giftCode || undefined, offerPct: +c.offerPct || 0 } }).then((r) => live && setQ(r)).catch((e) => live && setQ({ error: e.message })), 250);
     return () => { live = false; clearTimeout(t); };
-  }, [c.placements, c.start, c.end, c.id, c.giftCode]);
+  }, [c.placements, c.start, c.end, c.id, c.giftCode, c.offerPct, c.house]);
   const submit = async (e) => {
     e.preventDefault();
     if (!c.placements.length) return setErr("اختار موضع واحد على الأقل");
-    if (c.end < c.start) return setErr("تاريخ النهاية قبل تاريخ البداية");
+    if (!c.house && c.end < c.start) return setErr("تاريخ النهاية قبل تاريخ البداية");
     setErr("");
-    const body = { advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: +c.grad, audience: c.audience, priority: +c.priority, dailyCap: +c.dailyCap, note: c.note || undefined, start: c.start, end: c.end, placements: c.placements, giftCode: c.giftCode || undefined, imageUrl: c.imageUrl || null,
+    const body = { advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: +c.grad, audience: c.audience, priority: +c.priority, dailyCap: +c.dailyCap, note: c.note || undefined, start: c.start, end: c.end, placements: c.placements, giftCode: c.giftCode || undefined, imageUrl: c.imageUrl || null, offerPct: +c.offerPct || 0,
       // المواضع اللي اتشالت من الحملة مش بيتبعت لها صورة — السيرفر بيرفض موضع مش منها
       images: Object.fromEntries(c.placements.map((k) => [k, c.images?.[k] ?? null])) };
-    const r = await run(() => isNew ? api("/admin/ads/campaigns", { method: "POST", body: { ...body, approve: c.approve } }) : api(`/admin/ads/campaigns/${c.id}`, { method: "PATCH", body }), isNew ? `تم حجز حملة ${c.advertiser}` : `تم تعديل حملة ${c.advertiser}`);
+    const r = await run(() => isNew ? api("/admin/ads/campaigns", { method: "POST", body: { ...body, approve: c.approve, house: !!c.house, ...(c.house ? { start: undefined, end: undefined, giftCode: undefined, offerPct: 0 } : {}) } }) : api(`/admin/ads/campaigns/${c.id}`, { method: "PATCH", body }), isNew ? `تم حجز حملة ${c.advertiser}` : `تم تعديل حملة ${c.advertiser}`);
     if (r) onDone();
   };
   return (
@@ -142,8 +148,22 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
                   <Size p={p} /><span><b>{p.name}</b><span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}><span dir="ltr">{n(p.width)}×{n(p.height)}</span> · {egp(p.pricePerDay)}/يوم{!p.active ? " · متوقف" : ""}</span></span>
                 </button>))}
             </div></div>
-          <div className="form">
-            <label className="f">تاريخ البداية<input className="inp" type="date" required value={c.start} onChange={(e) => set("start", e.target.value)} /></label>
+          {isNew && (
+            <div className="li" style={{ border: 0, padding: 0 }}>
+              <div>
+                <div className="t">إعلان بدون حملة</div>
+                {/*
+                  بطلب داليا: «ينزل إعلان واحد أو اتنين مش لازم المجموعة كلها».
+                  بلا تواريخ ولا سعر ولا حجز — وبيظهر في **الأماكن الفاضية بس**،
+                  فمابياخدش من نصيب معلن دافع (الموضع مبيوع بعدد أماكن).
+                */}
+                <div className="s">بلا تواريخ ولا فاتورة. يظهر في الأماكن الفاضية بس، فمابياخدش من نصيب معلن دافع — ويتوقف في أي وقت من الطابور.</div>
+              </div>
+              <Switch on={!!c.house} label="إعلان بدون حملة" onChange={(v) => set("house", v)} />
+            </div>
+          )}
+          <div className="form" style={c.house ? { display: "none" } : undefined}>
+            <label className="f">تاريخ البداية<input className="inp" type="date" required={!c.house} value={c.start} onChange={(e) => set("start", e.target.value)} /></label>
             <label className="f">تاريخ النهاية<input className="inp" type="date" required value={c.end} min={c.start} onChange={(e) => set("end", e.target.value)} /></label>
             <div className="f">مدة جاهزة
               <div className="row">
@@ -158,7 +178,22 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
             <label className="f">الأولوية<select className="inp" value={c.priority} onChange={(e) => set("priority", e.target.value)}><option value="1">منخفضة</option><option value="2">عادية</option><option value="3">عالية</option></select></label>
             <label className="f">أقصى ظهور للمستخدم يوميًا<input className="inp" type="number" min="1" max="10" value={c.dailyCap} onChange={(e) => set("dailyCap", e.target.value)} /></label>
           </div>
-          <label className="f">كود هدية (اختياري)<input className="inp" dir="ltr" placeholder="RA-XXXX-XXXX" value={c.giftCode || ""} onChange={(e) => set("giftCode", e.target.value.toUpperCase())} disabled={!isNew && !!draft.giftCode} />{q?.giftError && <span role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>{q.giftError}</span>}</label>
+          {!c.house && (
+            <div className="f">خصم / عرض
+              <div className="row">
+                <input className="inp" type="number" min="0" max="100" style={{ maxWidth: 110 }} value={c.offerPct} onChange={(e) => set("offerPct", e.target.value)} aria-label="نسبة الخصم" />
+                <span style={{ fontWeight: 700 }}>٪</span>
+                {OFFERS.map((p) => <button type="button" key={p} className="tab" aria-pressed={+c.offerPct === p} onClick={() => set("offerPct", p)}>{p === 0 ? "بدون" : `${n(p)}٪`}</button>)}
+              </div>
+              {/*
+                الترتيب مقصود ومكتوب للمستخدم: الهدية بتغطي أيامًا بالكامل،
+                والنسبة بتتحسب على **المتبقي بعدها** — خصم على أيام مجانية
+                أصلًا مابيوفّرش ولا جنيه، والمعلن كان هيشوف نسبة بلا أثر.
+              */}
+              <span style={{ color: "var(--muted)", fontSize: 11 }}>بيتحدّد لكل حملة وكل عميل. بيتحسب على المتبقي بعد كود الهدية.</span>
+            </div>
+          )}
+          {!c.house && <label className="f">كود هدية (اختياري)<input className="inp" dir="ltr" placeholder="RA-XXXX-XXXX" value={c.giftCode || ""} onChange={(e) => set("giftCode", e.target.value.toUpperCase())} disabled={!isNew && !!draft.giftCode} />{q?.giftError && <span role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>{q.giftError}</span>}</label>}
           <label className="f">ملاحظات داخلية<input className="inp" maxLength={300} value={c.note || ""} onChange={(e) => set("note", e.target.value)} /></label>
           {isNew && <div className="li" style={{ border: 0, padding: 0 }}><div><div className="t">اعتماد فوري</div><div className="s">من غير مراجعة (لو سبته مقفول الحملة بتستنى الموافقة وتحجز المكان مؤقتًا)</div></div><Switch on={c.approve} label="اعتماد فوري" onChange={(v) => set("approve", v)} /></div>}
           {err && <div role="alert" style={{ color: "var(--bad)", fontWeight: 700 }}>{err}</div>}
@@ -174,14 +209,15 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
               <Table head={["الموضع", "سعر اليوم", "الأيام", "الإجمالي"]}>
                 {q.lines.map((l) => <tr key={l.key}><td><b>{l.name}</b></td><td>{egp(l.pricePerDay)}</td><td>{n(l.days)}</td><td>{egp(l.subtotal)}</td></tr>)}
               </Table>
-              {q.discount > 0 && <div className="li"><div><div className="t">هدية (تغطي {n(q.giftDays)} يوم)</div><div className="s">قبل الخصم {egp(q.gross)}</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.discount)}</div></div>}
+              {q.gift > 0 && <div className="li"><div><div className="t">هدية (تغطي {n(q.giftDays)} يوم)</div><div className="s">قبل الخصم {egp(q.gross)}</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.gift)}</div></div>}
+              {q.offer > 0 && <div className="li"><div><div className="t">عرض {n(q.offerPct)}٪</div><div className="s">على المتبقي بعد الهدية</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.offer)}</div></div>}
               {/*
                 الهدية بتغطي عدد أيام ثابت (٣٦٥ للسنة)، والفترة بتتحسب **شاملة
                 الطرفين** — فـ١٨/١٠/٢٠٢٦ لـ١٨/١٠/٢٠٢٧ = ٣٦٦ يوم، يعني يوم واحد
                 بفلوس والباقي مجاني. الرقم صح بس **مفاجئ**، فالسطر ده بيسمّي
                 الفرق ويصلّحه بضغطة بدل ما تدوّري على سبب المبلغ المتبقي.
               */}
-              {q.discount > 0 && q.giftDays < q.lines[0]?.days && (
+              {q.gift > 0 && q.giftDays < q.lines[0]?.days && (
                 <div className="li" style={{ alignItems: "center" }}>
                   <div>
                     <div className="t" style={{ color: "var(--bad)" }}>{n(q.lines[0].days - q.giftDays)} يوم برّه الهدية — دي سبب المبلغ المتبقي</div>
@@ -238,7 +274,7 @@ function Campaigns({ onEdit, onNew, onRepublish, can, reloadMap, mapKey }) {
                 : <span style={{ width: 10, height: 34, borderRadius: 4, background: GRADS[c.grad]?.[1], flex: "none" }} />}<div><b>{c.advertiser}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.headline}</div></div></div></td>
               <td>{c.placements.map((p) => <span key={p.key} className="tag" style={{ marginInlineEnd: 4 }}>{p.name}</span>)}</td>
               <td style={{ fontSize: 12 }}>{fdate(c.start)}<br />{fdate(c.end)}<div style={{ color: "var(--muted)" }}>{n(c.days)} يوم</div></td>
-              <td>{egp(c.total)}{c.giftCode && <div className="tag" dir="ltr" style={{ marginTop: 4 }} title={`خصم ${egp(c.discount)}`}>🎁 {c.giftCode}</div>}</td>
+              <td>{c.isHouse ? <span className="tag">بدون حملة</span> : <>{egp(c.total)}{c.giftCode && <div className="tag" dir="ltr" style={{ marginTop: 4 }} title={`خصم ${egp(c.discount)}`}>🎁 {c.giftCode}</div>}{c.offerPct > 0 && <div className="tag" style={{ marginTop: 4 }} title={`خصم ${egp(c.discount)}`}>عرض {n(c.offerPct)}٪</div>}</>}</td>
               <td>{n(c.shown)}<div style={{ color: "var(--muted)", fontSize: 12 }}>{n(c.clicked)} نقرة · {n(c.shown ? (c.clicked / c.shown) * 100 : 0, 1)}٪</div></td>
               <td><Pill s={c.status} />{c.status === "approved" && <div style={{ marginTop: 4 }}><Pill s={c.phase} /></div>}</td>
               <td>{can("ads.manage") && <div className="row">
@@ -466,7 +502,7 @@ export function LiveAds() {
       )}
       {tab === "campaigns" && <Campaigns can={can} mapKey={tick} reloadMap={bump} onNew={() => setForm(blank(start))}
         onRepublish={(c) => { const len = c.days - 1; const st = c.end >= start && ["approved", "paused"].includes(c.status) ? addDays(c.end, 1) : start; setForm({ ...blank(st), advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", end: addDays(st, len), placements: c.placements.map((p) => p.key), imageUrl: c.imageUrl || "", images: { ...(c.images || {}) } }); act(`اتجهّزت نسخة جديدة من حملة ${c.advertiser} — راجعي التواريخ وأكدي الحجز`); }}
-        onEdit={(c) => setForm({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", start: c.start, end: c.end, placements: c.placements.map((p) => p.key), giftCode: c.giftCode || "", imageUrl: c.imageUrl || "", images: { ...(c.images || {}) } })} />}
+        onEdit={(c) => setForm({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", start: c.start, end: c.end, placements: c.placements.map((p) => p.key), giftCode: c.giftCode || "", imageUrl: c.imageUrl || "", images: { ...(c.images || {}) }, offerPct: c.offerPct || 0, house: !!c.isHouse })} />}
       {tab === "gifts" && <Gifts placements={data.placements} can={can} />}
       {tab === "placements" && <Placements data={data} can={can} reload={bump} today={today} />}
     </>

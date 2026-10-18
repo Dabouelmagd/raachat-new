@@ -42,8 +42,32 @@ export function adRoutes(ctx: Ctx) {
    */
   r.get("/ads/catalog", wrap(async (_req, res) => {
     const t = todayCairo();
-    const rows = await ctx.db.adCampaign.findMany({ where: { status: "approved", startDate: { lte: t }, endDate: { gte: t } }, include: { bookings: { include: { placement: { select: { key: true, active: true } } } } }, orderBy: [{ priority: "desc" }, { startDate: "asc" }] });
-    res.json(rows.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, priority: c.priority, dailyCap: c.dailyCap, placements: c.bookings.filter((b) => b.placement.active).map((b) => b.placement.key),
+    const rows = await ctx.db.adCampaign.findMany({ where: { status: "approved", startDate: { lte: t }, endDate: { gte: t } }, include: { bookings: { include: { placement: { select: { key: true, active: true, slots: true } } } } }, orderBy: [{ priority: "desc" }, { startDate: "asc" }] });
+
+    /**
+     * **الإعلان بدون حملة بيملا الفاضي بس.**
+     *
+     * الموضع بيتباع بعدد أماكن (`slots`) — ده الوعد للمعلن: إعلانه واحد من
+     * ٣ في الدوران مثلًا. فلو حطّينا إعلاناتنا المجانية جنبه بلا حساب،
+     * نصيبه ينزل من ⅓ لـ ⅕ **وهو دافع**، ومفيش حاجة تقول له.
+     * فبنحسب المدفوع في كل موضع، والباقي من الأماكن هو اللي بيتملا.
+     */
+    const paid = new Map<string, number>();
+    for (const c of rows) if (!c.isHouse) for (const b of c.bookings) if (b.placement.active) paid.set(b.placement.key, (paid.get(b.placement.key) ?? 0) + 1);
+    const room = new Map<string, number>();
+    for (const c of rows) for (const b of c.bookings) if (b.placement.active) room.set(b.placement.key, Math.max(0, b.placement.slots - (paid.get(b.placement.key) ?? 0)));
+    const keysFor = (c: (typeof rows)[number]) => c.bookings.filter((b) => b.placement.active).filter((b) => {
+      if (!c.isHouse) return true;
+      const left = room.get(b.placement.key) ?? 0;
+      if (left <= 0) return false;
+      room.set(b.placement.key, left - 1); // كل إعلان بيتنا بياخد مكانًا من الفاضي
+      return true;
+    }).map((b) => b.placement.key);
+
+    // المدفوع الأول عشان الفاضي يتحسب صح، وإعلاناتنا بتاخد اللي باقي
+    const ordered = [...rows.filter((c) => !c.isHouse), ...rows.filter((c) => c.isHouse)];
+    const shown = new Map(ordered.map((c) => [c.id, keysFor(c)]));
+    res.json(ordered.filter((c) => shown.get(c.id)!.length).map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, priority: c.priority, dailyCap: c.dailyCap, isHouse: c.isHouse, placements: shown.get(c.id)!,
       // صورة كل موضع بمقاسه. الموضع اللي مالوش صورة بياخد صورة الحملة
       // (`imageUrl` فوق) — ده اللي بيخلّي الحملات القديمة تفضل شغّالة.
       images: Object.fromEntries(c.bookings.filter((b) => b.placement.active && b.imageUrl).map((b) => [b.placement.key, b.imageUrl!])),
