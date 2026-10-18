@@ -351,3 +351,60 @@ describe("تتبّع الظهور شغّال لكل موضع", () => {
     }
   });
 });
+
+/**
+ * 🔴 **المدد الجاهزة لازم تطابق أيام أكواد الهدايا.**
+ *
+ * داليا طلبت (١٨ أكتوبر ٢٠٢٦) اختيار «شهر · ٣ شهور · ٦ شهور · سنة» وقت إنشاء
+ * الحملة، وأكواد الهدايا عندها نفس المدد. والفترة بتتحسب **شاملة الطرفين**،
+ * فلو «سنة» في النموذج ٣٦٦ يوم وهدية السنة ٣٦٥، كل حملة سنة بهدية بتسيب
+ * **يومًا بفلوس** والمعلن مايفهمش منين — وده حصل فعلًا (٩٢٠ ج.م في عرض سعر).
+ *
+ * الحارس بيقرا الرقمين من الملفين ويقارنهم، فأي تعديل في واحد لوحده بيسقط.
+ */
+describe("المدد الجاهزة = أيام أكواد الهدايا", () => {
+  it("🔴 أيام «شهر/٣/٦/سنة» في اللوحة نفس GIFT_MONTHS على السيرفر", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(import.meta.dirname, "../..");
+    const src = fs.readFileSync(path.join(root, "admin/src/liveAds.jsx"), "utf8");
+
+    const line = /const DURATIONS = (\[.*?\]);/s.exec(src);
+    expect(line, "مالقاش DURATIONS في liveAds.jsx").toBeTruthy();
+    const days = [...line![1].matchAll(/\[\s*(\d+)\s*,/g)].map((m) => +m[1]);
+    expect(days.length, "المدد الجاهزة مش موجودة").toBe(4);
+
+    const { GIFT_MONTHS } = await import("../src/lib/adsInventory.js");
+    expect(days, "المدد الجاهزة اتفرقت عن أيام الهدايا — كل حملة بهدية هتسيب أيامًا بفلوس")
+      .toEqual([1, 3, 6, 12].map((m) => GIFT_MONTHS[m]));
+  });
+});
+
+/**
+ * **خريطة الأماكن المتاحة في اللوحة** (بطلب داليا: «خريطة لكل الاعلانات
+ * المتاحة علي الابلكشن وتكون واضحة»).
+ *
+ * الخريطة بتقول للمعلن **المكان فين في التطبيق** من حقل `note`، فموضع بلا
+ * `note` بيطلع في الخريطة باسمه ومقاسه بس — ومحدش يعرف هو بيظهر فين.
+ * والخريطة بتتبني من `data.placements` اللي جايّة من السيرفر، فأي قايمة
+ * مكتوبة بالإيد في اللوحة كانت هتفضل ناقصة موضعًا في سكوت.
+ */
+describe("خريطة الأماكن المتاحة", () => {
+  it("كل موضع في المخزون له وصف مكانه في التطبيق", () => {
+    const bare = DEFAULT_PLACEMENTS.filter((p) => !p.note || !p.note.trim());
+    expect(bare.map((p) => p.key), "مواضع بلا وصف مكان — الخريطة مش هتقول هي فين").toEqual([]);
+  });
+
+  it("🔴 الخريطة بتتبني من مواضع السيرفر مش من قايمة مكتوبة بالإيد", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(import.meta.dirname, "../..");
+    const src = fs.readFileSync(path.join(root, "admin/src/liveAds.jsx"), "utf8");
+
+    expect(src, "الخريطة مش معروضة في تبويب المواضع").toContain("<PlacementMap placements={data.placements} />");
+    const map = /function PlacementMap[\s\S]*?\n}\n/.exec(src);
+    expect(map, "مالقاش PlacementMap").toBeTruthy();
+    const hard = DEFAULT_PLACEMENTS.map((p) => p.key).filter((k) => map![0].includes(`"${k}"`));
+    expect(hard, "مفاتيح مواضع مكتوبة بالإيد جوه الخريطة").toEqual([]);
+  });
+});

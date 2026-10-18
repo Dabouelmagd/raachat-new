@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom";
 import { useT } from "../i18n";
 
 // الدردشات، الجروبات، الغرف، الخدمات، الحساب
-const items = [
+export const TABS = [
   { to: "/", label: ["الدردشات", "Chats"], icon: Cartouche, end: true },
   { to: "/groups", label: ["الجروبات", "Groups"], icon: Pyramids, end: false },
   { to: "/rooms", label: ["الغرف", "Rooms"], icon: Lotus, end: false },
@@ -13,11 +13,18 @@ const items = [
   { to: "/account", label: ["الحساب", "Account"], icon: Ankh, end: false },
 ];
 
+/**
+ * شاشات الشريط السفلي — **ومصدر واحد** لزرار الرجوع في أندرويد:
+ * الرجوع من شاشة منهم بيصغّر التطبيق، ومن أي شاشة تانية بيرجع خطوة.
+ * لو التبويبات اتكتبت مرتين، تبويب جديد بيتصرّف غلط في سكوت.
+ */
+export const TAB_PATHS = TABS.map((t) => t.to);
+
 export function BottomNav() {
   const t = useT();
   return (
     <div className="flex border-t border-rachat-maroon/40 bg-rachat-black px-1.5 pb-3 pt-2">
-      {items.map((item) => (
+      {TABS.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}

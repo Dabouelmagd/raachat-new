@@ -16,6 +16,14 @@ const Size = ({ p }) => {
   const k = 22 / Math.max(p.width, p.height);
   return <span className="ratio" style={{ width: Math.max(6, p.width * k), height: Math.max(6, p.height * k) }} aria-hidden="true" />;
 };
+/**
+ * المدد الجاهزة — **نفس أيام أكواد الهدايا** (`GIFT_MONTHS` على السيرفر).
+ * لازم يفضلوا متطابقين: لو «سنة» هنا ٣٦٦ يوم وهدية السنة ٣٦٥، كل حملة سنة
+ * بهدية بتسيب يومًا بفلوس والسبب مش واضح — ده اللي حصل فعلًا (٩٢٠ ج.م).
+ * والفترة **شاملة الطرفين**، فالنهاية = البداية + الأيام − ١.
+ */
+const DURATIONS = [[30, "شهر"], [90, "٣ شهور"], [180, "٦ شهور"], [365, "سنة"]];
+
 /** صورة الصفّ في الطابور: أول صورة موضع موجودة، وإلا صورة الحملة (القديمة). */
 const rowImage = (c) => Object.values(c.images || {})[0] || c.imageUrl || "";
 const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: addDays(start, 6), placements: [], approve: false, giftCode: "", imageUrl: "", images: {} });
@@ -137,6 +145,15 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
           <div className="form">
             <label className="f">تاريخ البداية<input className="inp" type="date" required value={c.start} onChange={(e) => set("start", e.target.value)} /></label>
             <label className="f">تاريخ النهاية<input className="inp" type="date" required value={c.end} min={c.start} onChange={(e) => set("end", e.target.value)} /></label>
+            <div className="f">مدة جاهزة
+              <div className="row">
+                {DURATIONS.map(([days, label]) => {
+                  const end = addDays(c.start, days - 1);
+                  return <button type="button" key={days} className="tab" aria-pressed={c.end === end} onClick={() => set("end", end)}>{label}</button>;
+                })}
+              </div>
+              <span style={{ color: "var(--muted)", fontSize: 11 }}>بتظبط تاريخ النهاية من البداية — ونفس أيام أكواد الهدايا، فهدية المدة بتغطيها بالكامل.</span>
+            </div>
             <label className="f">الجمهور<input className="inp" value={c.audience} onChange={(e) => set("audience", e.target.value)} /></label>
             <label className="f">الأولوية<select className="inp" value={c.priority} onChange={(e) => set("priority", e.target.value)}><option value="1">منخفضة</option><option value="2">عادية</option><option value="3">عالية</option></select></label>
             <label className="f">أقصى ظهور للمستخدم يوميًا<input className="inp" type="number" min="1" max="10" value={c.dailyCap} onChange={(e) => set("dailyCap", e.target.value)} /></label>
@@ -275,6 +292,43 @@ function PlacementRow({ p, can, onSaved }) {
   );
 }
 
+/**
+ * **خريطة الأماكن المتاحة في التطبيق** — بطاقة لكل موضع بشكله الحقيقي
+ * (النسبة مظبوطة) ومكانه في التطبيق ومقاسه وعدد أماكنه وسعره.
+ *
+ * ليه موجودة: «خريطة المخزون» بتقول **إيه المحجوز** — مابتقولش **إيه
+ * الموجود أصلًا وشكله فين**. فاللي بيبيع إعلانًا مكانش عنده صفحة واحدة
+ * يقول منها للمعلن «ده المكان وده مقاسه وده سعره».
+ */
+function PlacementMap({ placements }) {
+  return (
+    <Card title="الأماكن المتاحة للإعلان في التطبيق">
+      <div className="grid" style={{ gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,240px),1fr))" }}>
+        {placements.map((p) => {
+          const wide = p.width >= p.height;
+          const w = wide ? 200 : 96;
+          const h = Math.max(24, Math.round((w * p.height) / p.width));
+          return (
+            <div key={p.key} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, opacity: p.active ? 1 : .55 }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "start" }}>
+                <b>{p.name}</b>
+                {!p.active && <span className="tag">متوقف</span>}
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: 12, margin: "2px 0 8px" }}>{p.note || KINDS[p.kind] || p.kind}</div>
+              {/* الشكل بنسبته الحقيقية — الفرق بين ٤:١ و٩:١٦ بيبان بالعين */}
+              <div style={{ width: w, height: h, borderRadius: wide ? 8 : 12, background: "linear-gradient(135deg,#5B2621,#14100F)", border: "1px solid var(--line)" }} />
+              <div style={{ marginTop: 8, fontSize: 12 }}>
+                <div><span dir="ltr">{n(p.width)}×{n(p.height)}</span> px</div>
+                <div style={{ color: "var(--muted)" }}>{n(p.slots)} أماكن في اليوم · {egp(p.pricePerDay)}/يوم</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 function Placements({ data, can, reload, today }) {
   const run = useDo();
   const [b, setB] = useState({ placement: data.placements[0]?.key || "", from: today, to: addDays(today, 2), reason: "" });
@@ -282,6 +336,7 @@ function Placements({ data, can, reload, today }) {
   const add = (e) => { e.preventDefault(); run(() => api("/admin/ads/blocks", { method: "POST", body: b }), "تم قفل الموضع").then((ok) => ok && (setB({ ...b, reason: "" }), reload())); };
   return (
     <div className="grid" style={{ gap: 14 }}>
+      <PlacementMap placements={data.placements} />
       <div className="grid" style={{ gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))" }}>
         {data.placements.map((p) => <PlacementRow key={p.key} p={p} can={can} onSaved={reload} />)}
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, useLocation, NavLink } from "react-router-dom";
+import { Routes, Route, useLocation, NavLink, useNavigate } from "react-router-dom";
 import { Ankh, Cartouche, Lotus, Pyramids, Scarab } from "./components/PharaohIcons";
 import { NotificationToast } from "./components/NotificationToast";
 import logo from "./assets/logo.png";
@@ -34,6 +34,7 @@ import { LogoutContext } from "./auth";
 import { IncomingCall } from "./rtc/IncomingCall";
 import { PushBridge } from "./push/PushBridge";
 import { AppBadge } from "./push/AppBadge";
+import { useAndroidBack } from "./mobile/backButton";
 import { API_ON, clearMaintenance, logoutApi, useMaintenance, useSession } from "./api/client";
 import { useLang, useT } from "./i18n";
 
@@ -155,6 +156,8 @@ function MobileShell() {
 
 export default function App() {
   const [demoAuthed, setAuthed] = useState(false);
+  // زرار الرجوع في أندرويد: يقفل النافذة أو يرجع صفحة بدل ما يقفل التطبيق
+  useAndroidBack(useNavigate());
   const session = useSession();
   const maint = useMaintenance();
   const authed = API_ON ? !!session : demoAuthed;
