@@ -242,3 +242,62 @@ describe("صورة الإعلان على مسار اللوحة", () => {
     expect(b.imageUrl, "الصورة ما اتشالتش").toBeNull();
   });
 });
+
+/**
+ * **صورة لكل موضع — كل موضع مقاسه مختلف.**
+ *
+ * البانر ١٢٠٠×٣٠٠ والنافذة ١٠٨٠×١٩٢٠: صورة واحدة للحملة بتتعرض
+ * `object-fit: cover` فبتتقصّ في الموضع اللي نسبته مختلفة — واللوجو أو
+ * السعر في الطرف يضيع. فالصورة بقت على **الحجز** (حملة × موضع).
+ *
+ * والفحص الحاسم على **إن كل موضع بياخد صورته هو** في كتالوج التطبيق — مش
+ * على إن الحقل اتخزن: الخلط بين الصورتين بيعرض الإعلان الغلط لكل المستخدمين.
+ */
+describe("صورة لكل موضع", () => {
+  const WIDE = "/uploads/1111aaaa2222bbbb.png";   // ١٢٠٠×٣٠٠
+  const TALL = "/uploads/3333cccc4444dddd.png";   // ١٠٨٠×١٩٢٠
+
+  it("🔴 كل موضع بياخد صورته هو في اللوحة وفي الكتالوج", async () => {
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
+      placements: ["banner", "modal"], start: T, end: d(1), approve: true,
+      images: { banner: WIDE, modal: TALL },
+    })).expect(201)).body;
+    expect(a.images).toEqual({ banner: WIDE, modal: TALL });
+
+    const mine = ((await api().get("/ads/catalog").set(owner.auth).expect(200)).body as { id: string; images: Record<string, string> }[])
+      .find((c) => c.id === a.id);
+    expect(mine?.images, "الصور مش بتوصل للتطبيق بمفاتيح المواضع").toEqual({ banner: WIDE, modal: TALL });
+  });
+
+  it("الموضع اللي مالوش صورة بياخد صورة الحملة (الحملات القديمة)", async () => {
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
+      placements: ["banner", "modal"], start: d(60), end: d(61), imageUrl: WIDE, images: { modal: TALL },
+    })).expect(201)).body;
+    expect(a.imageUrl).toBe(WIDE);
+    expect(a.images).toEqual({ modal: TALL });
+  });
+
+  it("🔴 الرابط الخارجي في صورة موضع بيترفض زي صورة الحملة", async () => {
+    const r = await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
+      placements: ["banner"], start: d(64), end: d(65), images: { banner: "https://evil.com/uploads/aaaabbbbccccdddd.png" },
+    }));
+    expect(r.status, "اتقبل رابط خارجي في صورة موضع").toBe(400);
+  });
+
+  it("التعديل بيبدّل صورة موضع ويشيل التانية", async () => {
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
+      placements: ["banner", "modal"], start: d(68), end: d(69), images: { banner: WIDE, modal: TALL },
+    })).expect(201)).body;
+    const b = (await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth)
+      .send({ images: { banner: TALL, modal: null } }).expect(200)).body;
+    expect(b.images).toEqual({ banner: TALL });
+  });
+
+  it("صورة لموضع مش في الحملة بترفض", async () => {
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
+      placements: ["banner"], start: d(72), end: d(73),
+    })).expect(201)).body;
+    const r = await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ images: { modal: TALL } });
+    expect(r.status).toBe(400);
+  });
+});

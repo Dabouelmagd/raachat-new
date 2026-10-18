@@ -52,17 +52,22 @@ describe("رابط الملف المرفوع في اللوحة", () => {
  */
 describe("كل عرض لصورة الإعلان بيمرّ على المحوّل", () => {
   for (const f of ["admin/src/adPreview.jsx", "admin/src/liveAds.jsx"]) {
-    it(`${f} — مفيش src={…imageUrl} بلا toAbs`, () => {
+    it(`${f} — كل src={…} بيمرّ على toAbs`, () => {
       const s = read(f);
+      // الملفين دول مافيهمش غير صور مرفوعة، فالقاعدة على **كل** src={…}:
+      // لو الفحص على اسم المتغيّر، أي إعادة تسمية (c.imageUrl → rowImage(c))
+      // بتخرج من الفلتر والصورة ترجع مكسورة من غير ما الحارس ياخد باله.
       const bad = [...s.matchAll(/src=\{([^}]*)\}/g)]
         .map((m) => m[1].trim())
-        .filter((e) => /imageUrl|\burl\b/.test(e) && !e.includes("toAbs("));
+        .filter((e) => !e.includes("toAbs("));
       expect(bad, `صور بتتعرض بلا toAbs: ${bad.join(" · ")}`).toEqual([]);
     });
   }
 
-  it("كتالوج الإعلانات في التطبيق بيحوّل الصورة كمان", () => {
+  it("كتالوج الإعلانات في التطبيق بيحوّل صورة الحملة وصور المواضع", () => {
     const s = read("src/ads/ads.ts");
     expect(s).toMatch(/imageUrl:\s*c\.imageUrl\s*\?\s*toAbs\(c\.imageUrl\)/);
+    // خريطة صور المواضع لازم تتحوّل هي كمان — وإلا كل موضع له صورته بيطلع مكسورًا
+    expect(s, "صور المواضع مش بتمرّ على toAbs").toMatch(/images:.*toAbs\(v\)/s);
   });
 });

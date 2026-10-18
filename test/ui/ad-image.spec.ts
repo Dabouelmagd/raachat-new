@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoPageErrors, openApp } from "../helpers";
+import { expectNoPageErrors, openApp, tab } from "../helpers";
 
 /**
  * **صورة الإعلان في الواجهة.**
@@ -65,5 +65,37 @@ test("🔴 الصورة المكسورة بترجّع الإعلان للتصم�
   // والنص لسه مكانه — الإعلان اتعرض، مش اختفى
   await expect(card.getByText(/رحلات واحة/)).toBeVisible();
   await expect(card.getByText(/إجازة نهاية الأسبوع/)).toBeVisible();
+  expectNoPageErrors(page);
+});
+
+/**
+ * **كل موضع بياخد صورته هو.**
+ *
+ * البانر ١٢٠٠×٣٠٠ والنافذة والستوري ١٠٨٠×١٩٢٠ — فصورة واحدة لكل المواضع
+ * بتتقصّ في اللي نسبته مختلفة، واللوجو أو السعر في الطرف يضيع. الصورة بقت
+ * على **الحجز** (حملة × موضع)، و`adsFor(placement)` بتختار صورة الموضع.
+ *
+ * وإعلان الديمو `a6` له صورة مختلفة لموضع الخدمات **عن قصد** — من غيرها
+ * مفيش طريق نجرّب بيه الاستبدال في بناء مابيعملش ولا نداء شبكة.
+ */
+test("🔴 نفس الإعلان بيعرض صورة مختلفة في كل موضع", async ({ page }) => {
+  await openApp(page);
+
+  const srcOf = async () => {
+    const card = page.getByRole("region", { name: /^إعلان$/ }).first();
+    await card.hover();
+    await card.getByRole("button", { name: /الإعلان ٦/ }).click();
+    await expect(card.getByText(/رحلات واحة/)).toBeVisible();
+    return card.locator("img").getAttribute("src");
+  };
+
+  await tab(page, /الدردشات|Chats/);
+  const banner = await srcOf();
+  await tab(page, /الخدمات|Services/);
+  const services = await srcOf();
+
+  expect(banner, "مفيش صورة في البانر").toBeTruthy();
+  expect(services, "صورة الخدمات هي نفس صورة البانر — الموضع مش بياخد صورته")
+    .not.toBe(banner);
   expectNoPageErrors(page);
 });

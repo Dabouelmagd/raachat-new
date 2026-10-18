@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { GRADS } from "./data.js";
 import { n } from "./ui.jsx";
-import { toAbs } from "./api.js";
+import { toAbs, uploadAdImage } from "./api.js";
 
 /**
  * **معاينة الإعلان بمقاس الموضع نفسه.**
@@ -42,9 +42,27 @@ function CropWarn({ img, p }) {
   );
 }
 
-/** مربع واحد: الموضع بنسبته، وجواه الصورة أو التصميم المتدرّج بالنص. */
-function PlacementBox({ p, c, onImg }) {
+/**
+ * مربع واحد: الموضع بنسبته، وجواه صورته هو أو التصميم المتدرّج بالنص.
+ *
+ * **ورفع الصورة هنا مش في النموذج** — كل موضع مقاسه مختلف، فالمكان الطبيعي
+ * للرفع هو جنب المقاس المطلوب وتحذير القطع، مش خانة واحدة لكل المواضع.
+ */
+function PlacementBox({ p, c, onPick, canUpload }) {
   const [img, setImg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  // صورة الموضع، وإلا صورة الحملة (الحملات القديمة) — نفس ترتيب السيرفر
+  const url = c.images?.[p.key] || c.imageUrl || "";
+  const pick = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // عشان اختيار نفس الملف تاني يشتغل
+    if (!f) return;
+    setErr(""); setBusy(true);
+    try { onPick(p.key, (await uploadAdImage(f)).url); setImg(null); }
+    catch (x) { setErr(x.message || "تعذّر رفع الصورة"); }
+    finally { setBusy(false); }
+  };
   const bg = GRADS[c.grad]?.[1] || GRADS[0][1];
   const w = boxWidth(p);
   const h = Math.round((w * p.height) / p.width) || w;
@@ -54,17 +72,17 @@ function PlacementBox({ p, c, onImg }) {
     <div style={{ minWidth: w }}>
       <div className="tag" style={{ marginBottom: 6, display: "inline-block" }}>{p.name}</div>
       <div style={{ width: w, height: h, borderRadius: wide ? 14 : 18, background: bg, color: "#fff", overflow: "hidden", position: "relative", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-        {c.imageUrl && (
+        {url && (
           <img
-            src={toAbs(c.imageUrl)}
+            src={toAbs(url)}
             alt=""
-            onLoad={(e) => { const v = { w: e.target.naturalWidth, h: e.target.naturalHeight }; setImg(v); onImg?.(v); }}
-            onError={() => { setImg(null); onImg?.(null); }}
+            onLoad={(e) => setImg({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+            onError={() => setImg(null)}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
           />
         )}
         {/* نفس التعتيم المتدرّج اللي في التطبيق عشان النص يفضل مقروءًا فوق الصورة */}
-        {c.imageUrl && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #000e, #0005)" }} />}
+        {url && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #000e, #0005)" }} />}
         <div style={{ position: "relative", padding: wide ? "8px 10px" : "10px 11px" }}>
           <div style={{ fontSize: 8, opacity: .8 }}>
             <b style={{ background: "#0006", color: "#C9A227", borderRadius: 3, padding: "0 4px" }}>إعلان</b> {c.advertiser || "اسم المعلن"}
@@ -77,7 +95,17 @@ function PlacementBox({ p, c, onImg }) {
       <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 5 }}>
         <span dir="ltr">{n(p.width)}×{n(p.height)}</span> px · معروضة بتصغير <span dir="ltr">×{(1 / scale).toFixed(1).replace(/\d/g, (d) => n(+d))}</span>
       </div>
-      {c.imageUrl && <CropWarn img={img} p={p} />}
+      {url && <CropWarn img={img} p={p} />}
+      {canUpload && (
+        <div className="row" style={{ gap: 6, marginTop: 6 }}>
+          <label className="btn sm" style={{ cursor: busy ? "progress" : "pointer" }}>
+            {busy ? "جاري الرفع…" : url ? "استبدال" : "ارفعي صورة"}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pick} disabled={busy} style={{ display: "none" }} />
+          </label>
+          {c.images?.[p.key] && !busy && <button type="button" className="btn sm" onClick={() => { onPick(p.key, null); setImg(null); setErr(""); }}>شيل</button>}
+        </div>
+      )}
+      {err && <div role="alert" style={{ color: "var(--bad)", fontSize: 11, marginTop: 4 }}>{err}</div>}
     </div>
   );
 }
@@ -86,17 +114,20 @@ function PlacementBox({ p, c, onImg }) {
  * المعاينة لكل المواضع المختارة. لو مفيش موضع مختار بتعرض المواضع النشطة كلها
  * عشان المراجع يشوف المقاسات المتاحة قبل ما يختار.
  */
-export function AdPreview({ c, placements }) {
+export function AdPreview({ c, placements, onPick }) {
   const picked = placements.filter((p) => c.placements.includes(p.key));
   const show = picked.length ? picked : placements.filter((p) => p.active);
   if (!show.length) return <div className="empty">مفيش مواضع</div>;
+  const none = !c.imageUrl && !Object.keys(c.images || {}).length;
   return (
     <>
-      {!picked.length && <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>دي كل المواضع النشطة — اختاري موضع من النموذج والمعاينة تتظبط عليه.</div>}
+      {!picked.length
+        ? <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>دي كل المواضع النشطة — اختاري موضع من النموذج والمعاينة تتظبط عليه، وساعتها تقدري ترفعي صورة لكل موضع.</div>
+        : <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>لكل موضع صورته بمقاسه — ارفعي صورة تحت كل واحد.</div>}
       <div className="row" style={{ gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
-        {show.map((p) => <PlacementBox key={p.key} p={p} c={c} />)}
+        {show.map((p) => <PlacementBox key={p.key} p={p} c={c} onPick={onPick} canUpload={!!onPick && picked.length > 0} />)}
       </div>
-      {!c.imageUrl && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 10 }}>مفيش صورة — الإعلان هيظهر بالتصميم المتدرّج والنص وحده.</div>}
+      {none && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 10 }}>مفيش صور — الإعلان هيظهر بالتصميم المتدرّج والنص وحده.</div>}
     </>
   );
 }

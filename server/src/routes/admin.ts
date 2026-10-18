@@ -336,6 +336,8 @@ export function adminRoutes(ctx: Ctx) {
     id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, audience: c.audience,
     priority: c.priority, dailyCap: c.dailyCap, start: c.startDate, end: c.endDate, status: c.status, phase: phaseOf(c), total: Number(c.total), discount: Number(c.discount), gross: +(Number(c.total) + Number(c.discount)).toFixed(2), giftCode: c.giftCode, note: c.note,
     days: dayCount(c.startDate, c.endDate), placements: c.bookings.map((b) => ({ key: b.placement.key, name: b.placement.name, pricePerDay: Number(b.pricePerDay) })), createdAt: c.createdAt.toISOString(),
+    // صورة كل موضع بمفتاحه — الواجهة بتعرضها وبتحذّر لو نسبتها مختلفة عن مقاس الموضع
+    images: Object.fromEntries(c.bookings.filter((b) => b.imageUrl).map((b) => [b.placement.key, b.imageUrl!])) as Record<string, string>,
   });
   const normCode = (s: string) => s.trim().toUpperCase();
   /** يحسب خصم كود الهدية: بيغطي min(مدة الحملة، مدة الهدية) من أيام المواضع المشمولة */
@@ -362,6 +364,18 @@ export function adminRoutes(ctx: Ctx) {
     imageUrl: z.string().trim().max(400).refine((u) => isOwnUpload(u, ctx.config.PUBLIC_URL), {
       message: "الصورة لازم تكون مرفوعة من اللوحة (مش رابط خارجي)",
     }).nullish(),
+    /**
+     * **صورة لكل موضع** (المفتاح = مفتاح الموضع). كل موضع مقاسه مختلف
+     * (١٢٠٠×٣٠٠ للبانر و١٠٨٠×١٩٢٠ للنافذة) فصورة واحدة للحملة بتتقصّ في
+     * الباقي. `null` بيشيل صورة الموضع فيرجع لصورة الحملة لو موجودة.
+     * ونفس حارس الأصل على كل قيمة — مش على الأولى بس.
+     */
+    images: z.record(
+      Key,
+      z.string().trim().max(400).refine((u) => isOwnUpload(u, ctx.config.PUBLIC_URL), {
+        message: "الصورة لازم تكون مرفوعة من اللوحة (مش رابط خارجي)",
+      }).nullable(),
+    ).optional(),
     priority: z.number().int().min(1).max(3).default(2), dailyCap: z.number().int().min(1).max(10).default(3), note: z.string().trim().max(300).optional(),
   });
   const Range = z.object({ start: Day, end: Day }).refine((b) => b.end >= b.start, { message: "تاريخ النهاية قبل البداية", path: ["end"] })
@@ -473,7 +487,7 @@ export function adminRoutes(ctx: Ctx) {
         data: {
           advertiser: b.advertiser, headline: b.headline, body: b.body, cta: b.cta, link: b.link, imageUrl: b.imageUrl ?? null, grad: b.grad, audience: b.audience, priority: b.priority, dailyCap: b.dailyCap, note: b.note,
           startDate: b.start, endDate: b.end, status: b.approve ? "approved" : "pending", total: (gross - (g?.discount ?? 0)).toFixed(2), discount: (g?.discount ?? 0).toFixed(2), giftCode: g?.gift.code ?? null, createdById: s.userId,
-          bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerDay: p.pricePerDay })) },
+          bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerDay: p.pricePerDay, imageUrl: b.images?.[p.key] ?? null })) },
         },
       });
       if (g) {
@@ -505,8 +519,8 @@ export function adminRoutes(ctx: Ctx) {
       }
       const ps = await placementsByKeys(keys);
       if (slotsChanged) { const c = await findConflicts(ctx, ps, start, end, id); if (c.length) throw conflictError(c); }
-      const { start: _s, end: _e, placements: _p, giftCode: newCode, ...fields } = b;
-      void _s; void _e; void _p;
+      const { start: _s, end: _e, placements: _p, images: _i, giftCode: newCode, ...fields } = b;
+      void _s; void _e; void _p; void _i;
       const code = cur.giftCode ?? newCode;
       const priceChanged = slotsChanged || (!!newCode && !cur.giftCode);
       const g = code && priceChanged ? await giftDiscount(code, ps, start, end, id) : null;
@@ -522,6 +536,14 @@ export function adminRoutes(ctx: Ctx) {
         const have = new Set(cur.bookings.map((x) => x.placementId));
         const add = ps.filter((p) => !have.has(p.id));
         if (add.length) await db.adBooking.createMany({ data: add.map((p) => ({ campaignId: id, placementId: p.id, pricePerDay: p.pricePerDay })) });
+      }
+      // صور المواضع: بعد مزامنة الحجوزات عشان الموضع الجديد يلاقي صفّه
+      if (b.images) {
+        for (const [key, url] of Object.entries(b.images)) {
+          const p = ps.find((x) => x.key === key);
+          if (!p) throw bad("bad_placement", `الموضع ${key} مش من مواضع الحملة`);
+          await db.adBooking.updateMany({ where: { campaignId: id, placementId: p.id }, data: { imageUrl: url } });
+        }
       }
       return (await loadCampaign(id))!;
     });

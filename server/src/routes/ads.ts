@@ -43,7 +43,11 @@ export function adRoutes(ctx: Ctx) {
   r.get("/ads/catalog", wrap(async (_req, res) => {
     const t = todayCairo();
     const rows = await ctx.db.adCampaign.findMany({ where: { status: "approved", startDate: { lte: t }, endDate: { gte: t } }, include: { bookings: { include: { placement: { select: { key: true, active: true } } } } }, orderBy: [{ priority: "desc" }, { startDate: "asc" }] });
-    res.json(rows.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, priority: c.priority, dailyCap: c.dailyCap, placements: c.bookings.filter((b) => b.placement.active).map((b) => b.placement.key) })));
+    res.json(rows.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, priority: c.priority, dailyCap: c.dailyCap, placements: c.bookings.filter((b) => b.placement.active).map((b) => b.placement.key),
+      // صورة كل موضع بمقاسه. الموضع اللي مالوش صورة بياخد صورة الحملة
+      // (`imageUrl` فوق) — ده اللي بيخلّي الحملات القديمة تفضل شغّالة.
+      images: Object.fromEntries(c.bookings.filter((b) => b.placement.active && b.imageUrl).map((b) => [b.placement.key, b.imageUrl!])),
+    })));
   }));
 
   r.get("/ads/today", wrap(async (req, res) => {

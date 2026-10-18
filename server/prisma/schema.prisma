@@ -460,6 +460,9 @@ model AdBooking {
   campaignId  String
   placementId String
   pricePerDay Decimal     @db.Decimal(10, 2)
+  /// صورة الإعلان **في الموضع ده** — كل موضع مقاسه مختلف فالصورة بتختلف.
+  /// NULL = يرجع لصورة الحملة (`AdCampaign.imageUrl`) لو موجودة، وإلا نصّ بتدرّج.
+  imageUrl    String?
   campaign    AdCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   placement   AdPlacement @relation(fields: [placementId], references: [id], onDelete: Restrict)
 

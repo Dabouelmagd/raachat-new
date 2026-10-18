@@ -14,6 +14,8 @@ export interface Ad {
   placements?: string[];
   /** صورة الإعلان (مرفوعة من اللوحة). مفيش صورة = التصميم المتدرّج بالنص وحده. */
   imageUrl?: string;
+  /** صورة كل موضع بمقاسه — `adsFor` بتختار منها وبترجع لـ`imageUrl` لو الموضع مالوش واحدة. */
+  images?: Record<string, string>;
 }
 
 export const ADS: Ad[] = [
@@ -24,7 +26,10 @@ export const ADS: Ad[] = [
   { id: "a5", get advertiser() { return tr("مطعم ست الحبايب", "Set El-Habayeb Restaurant"); }, get headline() { return tr("وجبة عائلية بسعر خاص 🍗", "Family meal at a special price 🍗"); }, get body() { return tr("٤ أفراد + مشروبات بـ ٢٤٩ ج.م لفترة محدودة.", "4 people + drinks for EGP 249, for a limited time."); }, get cta() { return tr("احجز", "Book"); }, gradient: "from-rachat-coral to-rachat-maroon" },
   // إعلان واحد بصورة **عن قصد**: بناء الديمو مابيعملش ولا نداء شبكة، فمن غير
   // ده مسار الصورة (والرجوع للتصميم النصّي لو ما حمّلتش) مابيظهرش ولا بيتجرّب.
-  { id: "a6", get advertiser() { return tr("رحلات واحة", "Waha Trips"); }, get headline() { return tr("إجازة نهاية الأسبوع 🌴", "Weekend getaway 🌴"); }, get body() { return tr("٣ أيام في سيوة شاملة الإقامة والمواصلات.", "3 days in Siwa, accommodation and transport included."); }, get cta() { return tr("احجز رحلتك", "Book your trip"); }, gradient: "from-[#C9A227] to-[#5B2621]", imageUrl: new URL("../assets/wp/pyramid-night.jpg", import.meta.url).href },
+  { id: "a6", get advertiser() { return tr("رحلات واحة", "Waha Trips"); }, get headline() { return tr("إجازة نهاية الأسبوع 🌴", "Weekend getaway 🌴"); }, get body() { return tr("٣ أيام في سيوة شاملة الإقامة والمواصلات.", "3 days in Siwa, accommodation and transport included."); }, get cta() { return tr("احجز رحلتك", "Book your trip"); }, gradient: "from-[#C9A227] to-[#5B2621]", imageUrl: new URL("../assets/wp/pyramid-night.jpg", import.meta.url).href,
+    // صورة مختلفة لموضع الخدمات **عن قصد**: ده اللي بيثبّت إن كل موضع
+    // بياخد صورته هو (مقاس البانر غير مقاس النافذة فالصورة بتختلف).
+    images: { services: new URL("../assets/wp/temple.jpg", import.meta.url).href } },
 ];
 
 // ============ الجدول اليومي: ٦ إعلانات في أوقات متفرقة ============
@@ -45,17 +50,27 @@ export function ensureCatalog(): Promise<void> {
   if (!API_ON) return Promise.resolve();
   if (!catalogP || catalogDay !== dayKey()) {
     catalogDay = dayKey();
-    catalogP = api<{ id: string; advertiser: string; headline: string; body: string; cta: string; link: string; grad: number; placements: string[]; imageUrl?: string | null }[]>("/ads/catalog")
-      .then((r) => { live = r.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, placements: c.placements, imageUrl: c.imageUrl ? toAbs(c.imageUrl) : undefined, gradient: GRADS[c.grad] ?? GRADS[0] })); loadedErr = false; })
+    catalogP = api<{ id: string; advertiser: string; headline: string; body: string; cta: string; link: string; grad: number; placements: string[]; imageUrl?: string | null; images?: Record<string, string> }[]>("/ads/catalog")
+      .then((r) => { live = r.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, placements: c.placements, imageUrl: c.imageUrl ? toAbs(c.imageUrl) : undefined,
+        images: Object.fromEntries(Object.entries(c.images ?? {}).map(([k, v]) => [k, toAbs(v)])),
+        gradient: GRADS[c.grad] ?? GRADS[0] })); loadedErr = false; })
       .catch(() => { live = []; loadedErr = true; catalogP = null; })
       .finally(() => { loaded = true; emit(); });
   }
   return catalogP;
 }
 /** إعلانات موضع معيّن (modal | banner | services | story) */
+/**
+ * إعلانات موضع معيّن (modal | banner | services | story).
+ *
+ * **وصورة الموضع هي اللي بتتعرض** — كل موضع مقاسه مختلف (١٢٠٠×٣٠٠ للبانر
+ * و١٠٨٠×١٩٢٠ للنافذة)، فصورة واحدة لكل المواضع بتتقصّ في اللي نسبته مختلفة.
+ * والموضع اللي مالوش صورة بياخد صورة الحملة — عشان الحملات القديمة تفضل زي ما هي.
+ */
 export function adsFor(placement: string): Ad[] {
   const src = API_ON ? live : ADS;
-  return API_ON ? src.filter((a) => a.placements?.includes(placement)) : src;
+  const list = API_ON ? src.filter((a) => a.placements?.includes(placement)) : src;
+  return list.map((a) => (a.images?.[placement] ? { ...a, imageUrl: a.images[placement] } : a));
 }
 export function useCatalog(placement?: string) {
   const [, force] = useState(0);
