@@ -96,10 +96,22 @@ describe("اختبارات لوحة الإدارة في الـ CI", () => {
     expect(web, `البناء مش على المنفذ ${port}`).toContain(`127.0.0.1:${port}/api`);
   });
 
-  it("والاختبارين موجودين فعلًا", () => {
-    for (const s of ["admin-retry.spec.ts", "admin-update.spec.ts"]) {
+  it("والاختبارات موجودة فعلًا", () => {
+    for (const s of ["admin-retry.spec.ts", "admin-update.spec.ts", "admin-ads.spec.ts"]) {
       expect(fs.existsSync(path.join(ROOT, "test/ui", s)), `${s} مش موجود`).toBe(true);
     }
+  });
+
+  /**
+   * اختبار نموذج الإعلانات بيحكم على **ظهور** زرار الرفع للمستخدم — وده
+   * اللي الحارس النصّي مابيشوفهوش: الزرار كان موجودًا في الكود ومخفيًا على
+   * الشاشة. فلو الفحوص دي اتشالت منه، نرجع لنفس العمى اللي سبّب البلاغ.
+   */
+  it("واختبار نموذج الإعلانات بيفحص الرفع والرجوع فعلًا", () => {
+    const spec = fs.readFileSync(path.join(ROOT, "test/ui/admin-ads.spec.ts"), "utf8");
+    expect(spec, "مفيش فحص على ظهور زرار الرفع").toContain("ارفعي صورة");
+    expect(spec, "مفيش فحص على سهم الرجوع").toContain("رجوع للإعلانات");
+    expect(spec, "مفيش فحص إن الرجوع مابيضيّعش المسوّدة").toMatch(/toHaveValue\("شركة النور"\)/);
   });
 });
 

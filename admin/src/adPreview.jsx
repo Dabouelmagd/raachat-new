@@ -47,8 +47,14 @@ function CropWarn({ img, p }) {
  *
  * **ورفع الصورة هنا مش في النموذج** — كل موضع مقاسه مختلف، فالمكان الطبيعي
  * للرفع هو جنب المقاس المطلوب وتحذير القطع، مش خانة واحدة لكل المواضع.
+ *
+ * 🔴 **والموضع اللي لسه مش في الحملة بياخد زرار اختيار مش فراغ.** الرفع
+ * بيتطلّب إن الموضع يكون محجوزًا في الحملة (الصورة بتتخزن على `AdBooking`)،
+ * فالمربع غير المختار مالوش زرار رفع — واللي بيتبلّغ إن «زرار الابلود
+ * مابيظهرش» هو ده بالظبط. فبدل ما نسيب الشرط مخفيًا ونكتب تحته سطرًا رماديًا،
+ * المربع نفسه بيعرض «اختاري الموضع ده» وبيحجزه بضغطة، والرفع بيظهر فورًا.
  */
-function PlacementBox({ p, c, onPick, canUpload }) {
+function PlacementBox({ p, c, onPick, canUpload, onToggle }) {
   const [img, setImg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -96,7 +102,7 @@ function PlacementBox({ p, c, onPick, canUpload }) {
         <span dir="ltr">{n(p.width)}×{n(p.height)}</span> px · معروضة بتصغير <span dir="ltr">×{(1 / scale).toFixed(1).replace(/\d/g, (d) => n(+d))}</span>
       </div>
       {url && <CropWarn img={img} p={p} />}
-      {canUpload && (
+      {canUpload ? (
         <div className="row" style={{ gap: 6, marginTop: 6 }}>
           <label className="btn sm" style={{ cursor: busy ? "progress" : "pointer" }}>
             {busy ? "جاري الرفع…" : url ? "استبدال" : "ارفعي صورة"}
@@ -104,7 +110,11 @@ function PlacementBox({ p, c, onPick, canUpload }) {
           </label>
           {c.images?.[p.key] && !busy && <button type="button" className="btn sm" onClick={() => { onPick(p.key, null); setImg(null); setErr(""); }}>شيل</button>}
         </div>
-      )}
+      ) : onToggle ? (
+        <div className="row" style={{ gap: 6, marginTop: 6 }}>
+          <button type="button" className="btn sm" onClick={() => onToggle(p.key)}>اختاري الموضع ده عشان ترفعي صورته</button>
+        </div>
+      ) : null}
       {err && <div role="alert" style={{ color: "var(--bad)", fontSize: 11, marginTop: 4 }}>{err}</div>}
     </div>
   );
@@ -114,7 +124,7 @@ function PlacementBox({ p, c, onPick, canUpload }) {
  * المعاينة لكل المواضع المختارة. لو مفيش موضع مختار بتعرض المواضع النشطة كلها
  * عشان المراجع يشوف المقاسات المتاحة قبل ما يختار.
  */
-export function AdPreview({ c, placements, onPick }) {
+export function AdPreview({ c, placements, onPick, onToggle }) {
   const picked = placements.filter((p) => c.placements.includes(p.key));
   const show = picked.length ? picked : placements.filter((p) => p.active);
   if (!show.length) return <div className="empty">مفيش مواضع</div>;
@@ -122,10 +132,12 @@ export function AdPreview({ c, placements, onPick }) {
   return (
     <>
       {!picked.length
-        ? <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>دي كل المواضع النشطة — اختاري موضع من النموذج والمعاينة تتظبط عليه، وساعتها تقدري ترفعي صورة لكل موضع.</div>
+        ? <div role="status" style={{ border: "1px solid var(--gold)", borderRadius: 10, padding: "8px 10px", fontSize: 12, marginBottom: 10 }}>
+            <b>الرفع بيظهر بعد اختيار الموضع.</b> كل موضع بيتحجز في الحملة وبعدين بتترفع صورته بمقاسه — اختاري موضع من تحت (أو من «المواضع المحجوزة» في النموذج) وزرار «ارفعي صورة» يبان تحته.
+          </div>
         : <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>لكل موضع صورته بمقاسه — ارفعي صورة تحت كل واحد.</div>}
       <div className="row" style={{ gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
-        {show.map((p) => <PlacementBox key={p.key} p={p} c={c} onPick={onPick} canUpload={!!onPick && picked.length > 0} />)}
+        {show.map((p) => <PlacementBox key={p.key} p={p} c={c} onPick={onPick} onToggle={onToggle} canUpload={!!onPick && c.placements.includes(p.key)} />)}
       </div>
       {none && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 10 }}>مفيش صور — الإعلان هيظهر بالتصميم المتدرّج والنص وحده.</div>}
     </>

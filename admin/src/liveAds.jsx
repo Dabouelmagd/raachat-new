@@ -98,7 +98,14 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
 }
 
 /* ---------- نموذج الحجز / التعديل ---------- */
-function CampaignForm({ draft, placements, onDone, onCancel }) {
+/**
+ * 🔴 **`onBack` مش `onCancel`.** النموذج بيحلّ محلّ شاشة الإعلانات كلها بلا
+ * تبويبات، والمخرج الوحيد كان «إلغاء» في آخر نموذج طويل — و«إلغاء» **بيمسح
+ * المسوّدة**. فاللي عايزة ترجع تبصّ على الطابور أو المواضع كانت لازم تضيّع
+ * اللي كتبته. فالسهم فوق بيخرج من النموذج **والمسوّدة بتفضل محفوظة**، وأول
+ * ما ترجعي النموذج بيرجع باللي كان فيه.
+ */
+function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
   const run = useDo();
   /**
    * المسوّدة بترجع من `localStorage` **قبل أول رسم** — من غير كده النموذج
@@ -142,6 +149,12 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
   return (
     <div className="grid two">
       <Card title={isNew ? "حجز حملة جديدة" : `تعديل حملة ${c.advertiser}`}>
+        {onBack && (
+          <div className="row" style={{ marginBottom: 10 }}>
+            <button type="button" className="btn sm" aria-label="رجوع للإعلانات" onClick={onBack}>→ رجوع للإعلانات</button>
+            <span style={{ color: "var(--muted)", fontSize: 11 }}>الرجوع مابيضيّعش اللي كتبتيه — المسوّدة بتفضل محفوظة</span>
+          </div>
+        )}
         <form className="grid" style={{ gap: 12 }} onSubmit={submit}>
           <div className="form">
             <label className="f">اسم المعلن<input className="inp" required minLength={2} value={c.advertiser} onChange={(e) => set("advertiser", e.target.value)} /></label>
@@ -269,7 +282,7 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
             </>
           )}
         </Card>
-        <Card title="المعاينة بمقاس الموضع"><AdPreview c={c} placements={placements} onPick={(key, url) => setC((x) => ({ ...x, images: { ...x.images, ...(url ? { [key]: url } : { [key]: undefined }) } }))} /></Card>
+        <Card title="المعاينة بمقاس الموضع"><AdPreview c={c} placements={placements} onToggle={toggle} onPick={(key, url) => setC((x) => ({ ...x, images: { ...x.images, ...(url ? { [key]: url } : { [key]: undefined }) } }))} /></Card>
       </div>
     </div>
   );
@@ -518,7 +531,7 @@ export function LiveAds() {
 
   if (err && !data) return <Err msg={err} />;
   if (!data) return <div className="empty">جاري التحميل…</div>;
-  if (form) return <CampaignForm draft={form} placements={data.placements} onCancel={() => setForm(null)} onDone={() => { setForm(null); bump(); setTab("campaigns"); }} />;
+  if (form) return <CampaignForm draft={form} placements={data.placements} onBack={() => setForm(null)} onCancel={() => setForm(null)} onDone={() => { setForm(null); bump(); setTab("campaigns"); }} />;
   const start = from && from > today ? from : today;
   return (
     <>
