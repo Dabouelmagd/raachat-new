@@ -156,3 +156,131 @@ describe("سكربت الديمو", () => {
     expect(sh).toMatch(/امسح\|امسحي/);
   });
 });
+
+/**
+ * **الوضع الدقيق — يشيل الديمو ويسيب كلام الناس الحقيقي.**
+ *
+ * الحالة اللي ولّدت الوضع ده حقيقية (الإنتاج، ١٨ أكتوبر ٢٠٢٦): محادثة فردية
+ * بـ١٠ رسائل وجروب اسمه «?» بـ٨ رسائل، الاتنين لحسابات حقيقية ومعاها حساب
+ * تجريبي — فالمسح الواسع كان هيضيّع ١٨ رسالة حقيقية.
+ *
+ * وأخطر حاجة هنا مش «يمسح الديمو» — هي **إنه مايسيبش جروبًا بلا مالك**: كل
+ * علاقات `User` في المخطط `Cascade` ماعدا `Thread.createdById` اللي `SetNull`،
+ * فالجروب اللي مالكه تجريبي يفضل بلا مالك للأبد لو محدش اترقّى.
+ */
+describe("مسح الديمو مع الحفاظ على الحقيقي", () => {
+  const dbx = () =>
+    env.ctx.db as never as {
+      thread: { create: (a: unknown) => Promise<{ id: string }>; findUnique: (a: unknown) => Promise<unknown> };
+      message: { create: (a: unknown) => Promise<{ id: string }>; count: (a?: unknown) => Promise<number>; findMany: (a?: unknown) => Promise<{ id: string; authorId: string }[]> };
+      membership: { findMany: (a?: unknown) => Promise<{ userId: string; role: string }[]>; create: (a: unknown) => Promise<unknown>; update: (a: unknown) => Promise<unknown> };
+      user: { findMany: (a?: unknown) => Promise<{ id: string }[]> };
+    };
+
+  it("🔴 بيسيب المحادثة اللي فيها حساب حقيقي ورسايله، وبيشيل رسايل الديمو منها", async () => {
+    await seedDemo(db());
+    const me = await realUser("صاحبة الكلام الحقيقي");
+    const demo = (await demoScope(db())).demoUsers[0]!;
+
+    // محادثة حساب حقيقي مع حساب تجريبي — زي اللي في الإنتاج
+    const mixed = await dbx().thread.create({
+      data: { type: "group", name: "كلام حقيقي", createdById: demo.id, members: { create: [{ userId: demo.id, role: "owner" }, { userId: me.id }] } },
+    });
+    const mine = await dbx().message.create({ data: { threadId: mixed.id, authorId: me.id, text: "رسالتي الحقيقية" } });
+    await dbx().message.create({ data: { threadId: mixed.id, authorId: demo.id, text: "رسالة ديمو" } });
+
+    const { unseedDemoKeepReal } = await import("../src/seed-demo.js");
+    const r = await unseedDemoKeepReal(db());
+
+    expect((await dbx().thread.findUnique({ where: { id: mixed.id } })), "المحادثة اتمسحت وكان فيها كلام حقيقي").not.toBeNull();
+    const left = await dbx().message.findMany({ where: { threadId: mixed.id }, select: { id: true, authorId: true } });
+    expect(left.map((m) => m.id), "رسالتي الحقيقية ضاعت").toContain(mine.id);
+    expect(left.some((m) => m.authorId === demo.id), "رسالة الديمو لسه موجودة").toBe(false);
+    expect(r.threadsKept).toBeGreaterThan(0);
+  });
+
+  it("🔴 الجروب اللي مالكه تجريبي مابيفضلش بلا مالك", async () => {
+    await seedDemo(db());
+    const me = await realUser("عضو حقيقي");
+    const demo = (await demoScope(db())).demoUsers[0]!;
+    const t = await dbx().thread.create({
+      data: { type: "group", name: "جروب مالكه ديمو", createdById: demo.id, members: { create: [{ userId: demo.id, role: "owner" }, { userId: me.id }] } },
+    });
+
+    const { unseedDemoKeepReal } = await import("../src/seed-demo.js");
+    const r = await unseedDemoKeepReal(db());
+
+    const ms = await dbx().membership.findMany({ where: { threadId: t.id }, select: { userId: true, role: true } });
+    expect(ms.length, "العضو الحقيقي اتشال").toBe(1);
+    expect(ms[0]!.userId).toBe(me.id);
+    expect(ms[0]!.role, "الجروب فضل بلا مالك — ده العطل اللي الوضع ده موجود يمنعه").toBe("owner");
+    expect(r.ownersPromoted).toBeGreaterThan(0);
+  });
+
+  it("المشرف الحقيقي الموجود هو اللي بيترقّى، مش أي عضو", async () => {
+    await seedDemo(db());
+    const admin = await realUser("مشرف حقيقي");
+    const plain = await realUser("عضو عادي");
+    const demo = (await demoScope(db())).demoUsers[0]!;
+    const t = await dbx().thread.create({
+      data: {
+        type: "group", name: "فيه مشرف", createdById: demo.id,
+        members: { create: [{ userId: demo.id, role: "owner" }, { userId: plain.id }, { userId: admin.id, role: "admin" }] },
+      },
+    });
+
+    const { unseedDemoKeepReal } = await import("../src/seed-demo.js");
+    await unseedDemoKeepReal(db());
+
+    const ms = await dbx().membership.findMany({ where: { threadId: t.id }, select: { userId: true, role: true } });
+    expect(ms.find((m) => m.role === "owner")?.userId, "المشرف الموجود المفروض يترقّى").toBe(admin.id);
+  });
+
+  it("المحادثات الديمو الخالصة بتتمسح، والحسابات التجريبية بتختفي", async () => {
+    await seedDemo(db());
+    const before = await demoScope(db());
+    const pureDemo = before.threads.filter((t) => t.realMembers === 0).length;
+    expect(pureDemo, "المفروض فيه محادثة ديمو خالصة واحدة على الأقل").toBeGreaterThan(0);
+
+    const { unseedDemoKeepReal } = await import("../src/seed-demo.js");
+    const r = await unseedDemoKeepReal(db());
+    expect(r.threadsDeleted).toBe(pureDemo);
+    expect(r.users).toBe(before.demoUsers.length);
+
+    const after = await demoScope(db());
+    expect(after.demoUsers, "لسه فيه حساب تجريبي").toEqual([]);
+    expect(await dbx().user.findMany({ where: { phone: { in: DEMO_PHONES } } })).toEqual([]);
+  });
+
+  it("مابيلمسش محادثة مالهاش علاقة بالديمو", async () => {
+    await seedDemo(db());
+    const me = await realUser("مالك جروب حقيقي");
+    const safe = await dbx().thread.create({
+      data: { type: "group", name: "جروب حقيقي بحت", createdById: me.id, members: { create: [{ userId: me.id, role: "owner" }] } },
+    });
+    const msg = await dbx().message.create({ data: { threadId: safe.id, authorId: me.id, text: "كلام" } });
+
+    const { unseedDemoKeepReal } = await import("../src/seed-demo.js");
+    await unseedDemoKeepReal(db());
+
+    expect(await dbx().thread.findUnique({ where: { id: safe.id } })).not.toBeNull();
+    expect((await dbx().message.findMany({ where: { threadId: safe.id } })).map((m) => m.id)).toContain(msg.id);
+  });
+
+  it("على قاعدة بلا ديمو مابيعملش حاجة", async () => {
+    const { unseedDemoKeepReal } = await import("../src/seed-demo.js");
+    expect(await unseedDemoKeepReal(db())).toEqual({ users: 0, threadsDeleted: 0, threadsKept: 0, ownersPromoted: 0 });
+  });
+});
+
+describe("سكربت الديمو — الوضع الدقيق", () => {
+  const sh = fs.readFileSync(path.resolve(import.meta.dirname, "../../scripts/seed-demo.sh"), "utf8");
+
+  it("بيمرّر KEEP_REAL للحاوية", () => {
+    expect(sh, "KEEP_REAL مش بيوصل للكود جوه الحاوية — الوضع الدقيق مش هيتنفّذ").toContain('-e KEEP_REAL="$KEEP"');
+  });
+
+  it("بيقترح الوضع الدقيق لما يبقى فيه حساب حقيقي متأثر", () => {
+    expect(sh).toContain("REMOVE=1 KEEP_REAL=1");
+  });
+});

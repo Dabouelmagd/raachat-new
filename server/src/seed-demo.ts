@@ -85,9 +85,74 @@ export async function unseedDemo(db: Db) {
   return { users: ids.length, threads: threads.length };
 }
 
+/**
+ * **مسح الحسابات التجريبية مع الحفاظ على المحادثات اللي فيها ناس حقيقية.**
+ *
+ * `unseedDemo` بيمسح **كل** محادثة فيها حساب تجريبي — ومنها محادثات فيها كلام
+ * حقيقي (حصل فعلًا في الإنتاج ١٨ أكتوبر ٢٠٢٦: محادثة فردية بـ١٠ رسائل وجروب
+ * اسمه «?» بـ٨ رسائل، الاتنين لحسابات حقيقية). الوضع ده بيفرّق:
+ *   • محادثة **ديمو خالصة** (مفيش ولا عضو حقيقي) → تتمسح بالكامل.
+ *   • محادثة **فيها عضو حقيقي** → تفضل، ورسايل الحسابات التجريبية بس هي اللي
+ *     تروح (بالـ cascade على `Message.authorId`).
+ *
+ * **والحاجة الوحيدة اللي الـ cascade مابيعملهاش:** كل علاقات `User` في المخطط
+ * `onDelete: Cascade` ماعدا `Thread.createdById` اللي `SetNull` — فالجروب اللي
+ * مالكه حساب تجريبي بيفضل **بلا مالك** بعد الحذف (نفس عطل «آخر مشرف يخرج
+ * فيفضل الجروب بلا مشرف للأبد»). فبنرقّي عضوًا حقيقيًا **قبل** الحذف.
+ */
+export async function unseedDemoKeepReal(db: Db) {
+  const { demoScope } = await import("./lib/demoScope.js");
+  const s = await demoScope(db);
+  if (!s.demoUsers.length) return { users: 0, threadsDeleted: 0, threadsKept: 0, ownersPromoted: 0 };
+
+  const demoIds = s.demoUsers.map((u) => u.id);
+  const demo = new Set(demoIds);
+  const drop = s.threads.filter((t) => t.realMembers === 0).map((t) => t.id);
+  const keep = s.threads.filter((t) => t.realMembers > 0);
+
+  /**
+   * ترقية مالك حقيقي في أي جروب/قناة هيفضل بلا مالك.
+   * الأفضلية لمشرف حقيقي موجود، وبعده أقدم عضو حقيقي — والقرار من العضويات
+   * نفسها مش من `createdById` (اللي بيبقى NULL بعد الحذف).
+   */
+  const promote: { threadId: string; userId: string }[] = [];
+  for (const t of keep) {
+    if (t.type === "dm") continue;
+    const ms = await db.membership.findMany({
+      where: { threadId: t.id },
+      select: { userId: true, role: true, joinedAt: true },
+      orderBy: { joinedAt: "asc" },
+    });
+    const real = ms.filter((m) => !demo.has(m.userId));
+    if (real.some((m) => m.role === "owner")) continue; // فيه مالك حقيقي خلاص
+    const pick = real.find((m) => m.role === "admin") ?? real[0];
+    if (pick) promote.push({ threadId: t.id, userId: pick.userId });
+  }
+
+  await db.$transaction([
+    ...promote.map((p) =>
+      db.membership.update({ where: { threadId_userId: { threadId: p.threadId, userId: p.userId } }, data: { role: "owner" } }),
+    ),
+    // المحادثات الديمو الخالصة: بالكامل
+    db.message.deleteMany({ where: { threadId: { in: drop } } }),
+    db.membership.deleteMany({ where: { threadId: { in: drop } } }),
+    db.thread.deleteMany({ where: { id: { in: drop } } }),
+    // والحسابات: الـ cascade بياخد رسايلها وعضوياتها ومحفظتها وجلساتها
+    // ونجومها وأصواتها وستورياتها… والمحادثات الباقية تسيب createdById = NULL
+    db.user.deleteMany({ where: { id: { in: demoIds } } }),
+  ]);
+
+  return { users: demoIds.length, threadsDeleted: drop.length, threadsKept: keep.length, ownersPromoted: promote.length };
+}
+
 if (process.argv[1]?.includes("seed-demo")) {
   const db = createDb(process.env.DATABASE_URL!);
-  const run = process.env.REMOVE === "1" ? unseedDemo(db) : seedDemo(db, process.env.ME);
+  const run =
+    process.env.REMOVE === "1"
+      ? process.env.KEEP_REAL === "1"
+        ? unseedDemoKeepReal(db)
+        : unseedDemo(db)
+      : seedDemo(db, process.env.ME);
   run.then((r) => { console.log(JSON.stringify(r)); return db.$disconnect(); })
      .catch((e) => { console.error(e); process.exit(1); });
 }
