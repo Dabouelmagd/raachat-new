@@ -14,6 +14,9 @@ export function SponsoredCard({ index = 0, rotate = true, placement = "banner" }
   const [i, setI] = useState(index);
   const [hidden, setHidden] = useState(dismissed);
   const [paused, setPaused] = useState(false);
+  // الصور اللي ما حمّلتش (رابط اتمسح من القرص، أو شبكة). الرجوع للتصميم النصّي
+  // أحسن من مستطيل فاضي، والمستخدم لازم يشوف الإعلان على كل حال.
+  const [broken, setBroken] = useState<Record<string, true>>({});
 
   useEffect(() => {
     if (!rotate || paused || hidden) return;
@@ -39,6 +42,17 @@ export function SponsoredCard({ index = 0, rotate = true, placement = "banner" }
       >
         <X size={13} />
       </button>
+      {ad.imageUrl && !broken[ad.id] && (
+        // مقاس البانر ١٢٠٠×٣٠٠، فالنسبة ٤:١ — والشريحة بتاخد عرض الكارت كله
+        // فوق النص. `object-cover` عشان صورة بنسبة تانية ما تتمدّش.
+        <img
+          src={ad.imageUrl}
+          alt=""
+          loading="lazy"
+          onError={() => setBroken((b) => ({ ...b, [ad.id]: true }))}
+          className="mb-2.5 aspect-[4/1] w-full rounded-xl object-cover"
+        />
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pe-7">
         <div className="min-w-[10rem] flex-1">
           <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/70">

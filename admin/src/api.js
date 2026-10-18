@@ -71,6 +71,33 @@ export async function api(path, { method = "GET", body, auth = true } = {}, retr
   return j;
 }
 
+/** أنواع صور الإعلانات المسموح بها — نفس امتدادات `isOwnUpload` على السيرفر. */
+export const AD_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+export const AD_IMAGE_MAX = 10 * 1024 * 1024; // نفس حد multer على السيرفر
+
+/**
+ * رفع صورة الإعلان على `POST /uploads` وإرجاع `{url,...}`.
+ *
+ * **مفيش `Content-Type` بإيدينا** — المتصفح هو اللي بيحدّده مع الـ boundary،
+ * ولو كتبناه بنفسنا الطلب بيوصل ناقصًا وmulter يرفضه. والفحص هنا قبل الرفع
+ * عشان الملف الكبير أو النوع الغلط يطلّع رسالة عربية واضحة بدل خطأ multer.
+ */
+export async function uploadAdImage(file, retry = true) {
+  if (!AD_IMAGE_TYPES.includes(file.type)) throw new ApiError(0, "bad_type", "الصورة لازم تكون PNG أو JPG أو WebP أو GIF");
+  if (file.size > AD_IMAGE_MAX) throw new ApiError(0, "too_big", "حجم الصورة أكبر من ١٠ ميجا");
+  const fd = new FormData();
+  fd.append("file", file);
+  const headers = {};
+  if (session) headers.Authorization = `Bearer ${session.access}`;
+  let r;
+  try { r = await fetch(`${API_URL}/uploads`, { method: "POST", headers, body: fd }); }
+  catch { throw new ApiError(0, "network", "تعذّر الاتصال بالسيرفر"); }
+  if (r.status === 401 && retry && (await refresh())) return uploadAdImage(file, false);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ApiError(r.status, j.code || "error", j.message || "تعذّر رفع الصورة");
+  return j;
+}
+
 export const requestOtp = (contact) => api("/auth/otp/request", { method: "POST", auth: false, body: { channel: contact.includes("@") ? "email" : "phone", target: contact.trim() } });
 export async function verifyOtp(contact, code, rememberMe = true) {
   const j = await api("/auth/otp/verify", { method: "POST", auth: false, body: { channel: contact.includes("@") ? "email" : "phone", target: contact.trim(), code: code.trim() } });

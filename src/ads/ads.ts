@@ -12,6 +12,8 @@ export interface Ad {
   gradient: string;
   link?: string;
   placements?: string[];
+  /** صورة الإعلان (مرفوعة من اللوحة). مفيش صورة = التصميم المتدرّج بالنص وحده. */
+  imageUrl?: string;
 }
 
 export const ADS: Ad[] = [
@@ -20,7 +22,9 @@ export const ADS: Ad[] = [
   { id: "a3", get advertiser() { return tr("أكاديمية سِفر", "Sifr Academy"); }, get headline() { return tr("اتعلم برمجة من الصفر 💻", "Learn to code from scratch 💻"); }, get body() { return tr("دورة مكثفة بالعربي مع مشاريع عملية وشهادة إتمام.", "An intensive course with hands-on projects and a completion certificate."); }, get cta() { return tr("سجّل", "Sign up"); }, gradient: "from-[#2b2118] to-rachat-gold" },
   { id: "a4", get advertiser() { return tr("تأمين الأمان", "Aman Insurance"); }, get headline() { return tr("أمّن عربيتك في دقيقتين", "Insure your car in two minutes"); }, get body() { return tr("قسّط وثيقتك على ١٢ شهر بدون فوايد.", "Pay your policy over 12 months with no interest."); }, get cta() { return tr("اعرف أكتر", "Learn more"); }, gradient: "from-rachat-maroon to-[#14100F]" },
   { id: "a5", get advertiser() { return tr("مطعم ست الحبايب", "Set El-Habayeb Restaurant"); }, get headline() { return tr("وجبة عائلية بسعر خاص 🍗", "Family meal at a special price 🍗"); }, get body() { return tr("٤ أفراد + مشروبات بـ ٢٤٩ ج.م لفترة محدودة.", "4 people + drinks for EGP 249, for a limited time."); }, get cta() { return tr("احجز", "Book"); }, gradient: "from-rachat-coral to-rachat-maroon" },
-  { id: "a6", get advertiser() { return tr("رحلات واحة", "Waha Trips"); }, get headline() { return tr("إجازة نهاية الأسبوع 🌴", "Weekend getaway 🌴"); }, get body() { return tr("٣ أيام في سيوة شاملة الإقامة والمواصلات.", "3 days in Siwa, accommodation and transport included."); }, get cta() { return tr("احجز رحلتك", "Book your trip"); }, gradient: "from-[#C9A227] to-[#5B2621]" },
+  // إعلان واحد بصورة **عن قصد**: بناء الديمو مابيعملش ولا نداء شبكة، فمن غير
+  // ده مسار الصورة (والرجوع للتصميم النصّي لو ما حمّلتش) مابيظهرش ولا بيتجرّب.
+  { id: "a6", get advertiser() { return tr("رحلات واحة", "Waha Trips"); }, get headline() { return tr("إجازة نهاية الأسبوع 🌴", "Weekend getaway 🌴"); }, get body() { return tr("٣ أيام في سيوة شاملة الإقامة والمواصلات.", "3 days in Siwa, accommodation and transport included."); }, get cta() { return tr("احجز رحلتك", "Book your trip"); }, gradient: "from-[#C9A227] to-[#5B2621]", imageUrl: new URL("../assets/wp/pyramid-night.jpg", import.meta.url).href },
 ];
 
 // ============ الجدول اليومي: ٦ إعلانات في أوقات متفرقة ============
@@ -41,8 +45,8 @@ export function ensureCatalog(): Promise<void> {
   if (!API_ON) return Promise.resolve();
   if (!catalogP || catalogDay !== dayKey()) {
     catalogDay = dayKey();
-    catalogP = api<{ id: string; advertiser: string; headline: string; body: string; cta: string; link: string; grad: number; placements: string[] }[]>("/ads/catalog")
-      .then((r) => { live = r.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, placements: c.placements, gradient: GRADS[c.grad] ?? GRADS[0] })); loadedErr = false; })
+    catalogP = api<{ id: string; advertiser: string; headline: string; body: string; cta: string; link: string; grad: number; placements: string[]; imageUrl?: string | null }[]>("/ads/catalog")
+      .then((r) => { live = r.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, placements: c.placements, imageUrl: c.imageUrl ?? undefined, gradient: GRADS[c.grad] ?? GRADS[0] })); loadedErr = false; })
       .catch(() => { live = []; loadedErr = true; catalogP = null; })
       .finally(() => { loaded = true; emit(); });
   }

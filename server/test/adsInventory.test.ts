@@ -201,3 +201,44 @@ describe("خريطة الإعلانات", () => {
     expect(ps.find((p) => p.key === "banner")).toMatchObject({ effectiveCpm: 150, marketCpm: 150 });
   });
 });
+
+/**
+ * **صورة الإعلان من رفعنا بس — متفحوصة على المسار نفسه مش على الدالة لوحدها.**
+ *
+ * الدالة `isOwnUpload` متفحوصة في `adImage.test.ts`، إنما اللي يهمّ هنا إنها
+ * **مربوطة فعلًا** في مخطط التحقق: لو الربط اتشال، الدالة تفضل ناجحة
+ * واللوحة تقبل رابطًا خارجيًا **في سكوت** — والمعلن يبدّل صورته بعد الموافقة.
+ */
+describe("صورة الإعلان على مسار اللوحة", () => {
+  it("بيقبل صورة مرفوعة عندنا وبترجع في رد اللوحة وفي كتالوج التطبيق", async () => {
+    const img = "/uploads/aabbccddeeff0011.png";
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send(camp({ placements: ["services"], start: T, end: d(1), imageUrl: img, approve: true })).expect(201)).body;
+    expect(a.imageUrl).toBe(img);
+
+    const cat = (await api().get("/ads/catalog").set(owner.auth).expect(200)).body;
+    const mine = cat.find((c: { id: string }) => c.id === a.id);
+    expect(mine?.imageUrl, "الصورة مش بتوصل للتطبيق").toBe(img);
+  });
+
+  it("🔴 بيرفض الرابط الخارجي (٤٠٠) — وإلا المراجعة بلا معنى", async () => {
+    const r = await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send(camp({ placements: ["services"], start: d(44), end: d(45), imageUrl: "https://evil.com/uploads/x1y2z3a4b5c6.png" }));
+    expect(r.status, "اتقبل رابط خارجي").toBe(400);
+  });
+
+  it("الإعلان بلا صورة لسه شغّال (نصّ + تدرّج زي ما كان)", async () => {
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send(camp({ placements: ["services"], start: d(48), end: d(49) })).expect(201)).body;
+    expect(a.imageUrl).toBeNull();
+  });
+
+  it("التعديل بيقدر يشيل الصورة (null)", async () => {
+    const img = "/uploads/ffeeddccbbaa9988.jpg";
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send(camp({ placements: ["services"], start: d(52), end: d(53), imageUrl: img })).expect(201)).body;
+    expect(a.imageUrl).toBe(img);
+    const b = (await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ imageUrl: null }).expect(200)).body;
+    expect(b.imageUrl, "الصورة ما اتشالتش").toBeNull();
+  });
+});

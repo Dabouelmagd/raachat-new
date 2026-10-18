@@ -432,6 +432,9 @@ model AdCampaign {
   body        String    @default("")
   cta         String    @default("")
   link        String
+  /// صورة الإعلان — **ملف مرفوع عندنا بس** (`isOwnUpload` في `lib/adImage.ts`).
+  /// NULL = إعلان نصّي بتدرّج لوني زي ما كان.
+  imageUrl    String?
   grad        Int       @default(0)
   audience    String    @default("كل المستخدمين")
   priority    Int       @default(2)

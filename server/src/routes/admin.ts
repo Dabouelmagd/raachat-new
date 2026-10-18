@@ -13,6 +13,7 @@ import { notifyPush } from "../lib/push.js";
 import { messageInclude, messageView } from "../serialize.js";
 import { ALL_PERMS, CATALOG, effectivePerms, ensurePresetRoles, isPerm } from "../lib/permissions.js";
 import { eraseUser } from "../lib/eraseUser.js";
+import { isOwnUpload } from "../lib/adImage.js";
 
 export interface StaffInfo { userId: string; name: string; isOwner: boolean; perms: Set<string> }
 type StaffReq = AuthedRequest & { staff: StaffInfo };
@@ -332,7 +333,7 @@ export function adminRoutes(ctx: Ctx) {
   };
   const campView = (c: NonNullable<CampRow>, tot?: Totals) => ({
     shown: tot?.get(c.id)?.shown ?? 0, clicked: tot?.get(c.id)?.clicked ?? 0,
-    id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience,
+    id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, audience: c.audience,
     priority: c.priority, dailyCap: c.dailyCap, start: c.startDate, end: c.endDate, status: c.status, phase: phaseOf(c), total: Number(c.total), discount: Number(c.discount), gross: +(Number(c.total) + Number(c.discount)).toFixed(2), giftCode: c.giftCode, note: c.note,
     days: dayCount(c.startDate, c.endDate), placements: c.bookings.map((b) => ({ key: b.placement.key, name: b.placement.name, pricePerDay: Number(b.pricePerDay) })), createdAt: c.createdAt.toISOString(),
   });
@@ -352,6 +353,15 @@ export function adminRoutes(ctx: Ctx) {
   const Content = z.object({
     advertiser: z.string().trim().min(2).max(60), headline: z.string().trim().min(2).max(50), body: z.string().trim().max(110).default(""), cta: z.string().trim().max(16).default("اعرف أكتر"),
     link: z.string().trim().max(300).regex(/^https:\/\/\S+$/, "الرابط لازم يبدأ بـ https://"), grad: z.number().int().min(0).max(5).default(0), audience: z.string().trim().max(60).default("كل المستخدمين"),
+    /**
+     * صورة الإعلان. **لازم ملف مرفوع عندنا** — رابط خارجي معناه إن المعلن
+     * يقدر يبدّل الصورة **بعد** الموافقة فالمراجعة تبقى بلا معنى، وكمان كل
+     * مستخدم بيشوف الإعلان بيسلّم عنوانه لسيرفر الطرف التالت. التفاصيل في
+     * `lib/adImage.ts`.
+     */
+    imageUrl: z.string().trim().max(400).refine((u) => isOwnUpload(u, ctx.config.PUBLIC_URL), {
+      message: "الصورة لازم تكون مرفوعة من اللوحة (مش رابط خارجي)",
+    }).nullish(),
     priority: z.number().int().min(1).max(3).default(2), dailyCap: z.number().int().min(1).max(10).default(3), note: z.string().trim().max(300).optional(),
   });
   const Range = z.object({ start: Day, end: Day }).refine((b) => b.end >= b.start, { message: "تاريخ النهاية قبل البداية", path: ["end"] })
@@ -461,7 +471,7 @@ export function adminRoutes(ctx: Ctx) {
       const g = b.giftCode ? await giftDiscount(b.giftCode, ps, b.start, b.end) : null;
       const row = await db.adCampaign.create({
         data: {
-          advertiser: b.advertiser, headline: b.headline, body: b.body, cta: b.cta, link: b.link, grad: b.grad, audience: b.audience, priority: b.priority, dailyCap: b.dailyCap, note: b.note,
+          advertiser: b.advertiser, headline: b.headline, body: b.body, cta: b.cta, link: b.link, imageUrl: b.imageUrl ?? null, grad: b.grad, audience: b.audience, priority: b.priority, dailyCap: b.dailyCap, note: b.note,
           startDate: b.start, endDate: b.end, status: b.approve ? "approved" : "pending", total: (gross - (g?.discount ?? 0)).toFixed(2), discount: (g?.discount ?? 0).toFixed(2), giftCode: g?.gift.code ?? null, createdById: s.userId,
           bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerDay: p.pricePerDay })) },
         },

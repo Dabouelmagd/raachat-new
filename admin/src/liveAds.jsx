@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, Kpi, Table, Pill, Switch, n, egp, useAdmin } from "./ui.jsx";
 import { GRADS } from "./data.js";
-import { api } from "./api.js";
-import { Preview } from "./ads.jsx";
+import { api, uploadAdImage } from "./api.js";
+import { AdPreview } from "./adPreview.jsx";
 import { useMe, useLoad, Err, Confirm, useDo } from "./live.jsx";
 
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -16,7 +16,7 @@ const Size = ({ p }) => {
   const k = 22 / Math.max(p.width, p.height);
   return <span className="ratio" style={{ width: Math.max(6, p.width * k), height: Math.max(6, p.height * k) }} aria-hidden="true" />;
 };
-const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: addDays(start, 6), placements: [], approve: false, giftCode: "" });
+const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: addDays(start, 6), placements: [], approve: false, giftCode: "", imageUrl: "" });
 
 /* ---------- خريطة المخزون ---------- */
 function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }) {
@@ -82,6 +82,42 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
 }
 
 /* ---------- نموذج الحجز / التعديل ---------- */
+/**
+ * **رفع صورة الإعلان من اللوحة — مش لصق رابط خارجي.**
+ *
+ * السيرفر بيرفض أي رابط مش من رفعنا (`isOwnUpload`)، وسببه الأول إن المعلن
+ * يقدر يبدّل صورة على سيرفره **بعد** الموافقة فتبقى المراجعة بلا معنى؛ وكمان
+ * كل مستخدم بيشوف الإعلان كان هيسلّم عنوانه لجهة تالتة غير معلنة في سياسة
+ * الخصوصية. فالخانة هنا ملف بيترفع، ومفيش خانة رابط أصلًا.
+ */
+function AdImageField({ url, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const pick = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // عشان اختيار نفس الملف تاني يشتغل
+    if (!f) return;
+    setErr(""); setBusy(true);
+    try { onChange((await uploadAdImage(f)).url); }
+    catch (x) { setErr(x.message || "تعذّر رفع الصورة"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="f">صورة الإعلان (اختيارية)
+      <div className="row" style={{ alignItems: "center", gap: 10 }}>
+        {url && <img src={url} alt="" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line)" }} />}
+        <label className="btn sm" style={{ cursor: busy ? "progress" : "pointer" }}>
+          {busy ? "جاري الرفع…" : url ? "استبدال الصورة" : "ارفعي صورة"}
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pick} disabled={busy} style={{ display: "none" }} />
+        </label>
+        {url && !busy && <button type="button" className="btn sm" onClick={() => { onChange(""); setErr(""); }}>شيل الصورة</button>}
+      </div>
+      {err && <span role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>{err}</span>}
+      <span style={{ color: "var(--muted)", fontSize: 11 }}>PNG أو JPG أو WebP أو GIF، لحد ١٠ ميجا. ارفعيها بمقاس الموضع عشان ما تتقصّش — والمعاينة جنبك بتحذّرك لو النسبة مختلفة.</span>
+    </div>
+  );
+}
+
 function CampaignForm({ draft, placements, onDone, onCancel }) {
   const run = useDo();
   const [c, setC] = useState(draft);
@@ -101,7 +137,7 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
     if (!c.placements.length) return setErr("اختار موضع واحد على الأقل");
     if (c.end < c.start) return setErr("تاريخ النهاية قبل تاريخ البداية");
     setErr("");
-    const body = { advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: +c.grad, audience: c.audience, priority: +c.priority, dailyCap: +c.dailyCap, note: c.note || undefined, start: c.start, end: c.end, placements: c.placements, giftCode: c.giftCode || undefined };
+    const body = { advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: +c.grad, audience: c.audience, priority: +c.priority, dailyCap: +c.dailyCap, note: c.note || undefined, start: c.start, end: c.end, placements: c.placements, giftCode: c.giftCode || undefined, imageUrl: c.imageUrl || null };
     const r = await run(() => isNew ? api("/admin/ads/campaigns", { method: "POST", body: { ...body, approve: c.approve } }) : api(`/admin/ads/campaigns/${c.id}`, { method: "PATCH", body }), isNew ? `تم حجز حملة ${c.advertiser}` : `تم تعديل حملة ${c.advertiser}`);
     if (r) onDone();
   };
@@ -120,6 +156,7 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
           </div>
           <div className="f">الخلفية
             <div className="row">{GRADS.map(([name, g], i) => <button type="button" key={name} aria-label={name} aria-pressed={c.grad === i} onClick={() => set("grad", i)} style={{ width: 36, height: 36, borderRadius: 10, background: g, border: c.grad === i ? "2px solid var(--gold)" : "2px solid transparent", outlineOffset: 2 }} />)}</div></div>
+          <AdImageField url={c.imageUrl} onChange={(u) => set("imageUrl", u)} />
           <div className="f">المواضع المحجوزة
             <div className="grid" style={{ gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
               {placements.map((p) => (
@@ -157,7 +194,7 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
             </>
           )}
         </Card>
-        <Card title="المعاينة"><Preview c={c} /></Card>
+        <Card title="المعاينة بمقاس الموضع"><AdPreview c={c} placements={placements} /></Card>
       </div>
     </div>
   );
@@ -191,7 +228,10 @@ function Campaigns({ onEdit, onNew, onRepublish, can, reloadMap, mapKey }) {
         <Table head={["الحملة", "المواضع", "الفترة", "السعر", "ظهور / نقرات", "الحالة", can("ads.manage") ? "إجراءات" : ""]}>
           {rows.map((c) => (
             <tr key={c.id}>
-              <td><div className="row" style={{ flexWrap: "nowrap" }}><span style={{ width: 10, height: 34, borderRadius: 4, background: GRADS[c.grad]?.[1], flex: "none" }} /><div><b>{c.advertiser}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.headline}</div></div></div></td>
+              {/* الصورة نفسها في الطابور عشان اللي بيوافق يشوف اللي بيوافق عليه، مش اسم المعلن بس */}
+              <td><div className="row" style={{ flexWrap: "nowrap" }}>{c.imageUrl
+                ? <img src={c.imageUrl} alt="" style={{ width: 34, height: 34, borderRadius: 5, objectFit: "cover", flex: "none" }} />
+                : <span style={{ width: 10, height: 34, borderRadius: 4, background: GRADS[c.grad]?.[1], flex: "none" }} />}<div><b>{c.advertiser}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.headline}</div></div></div></td>
               <td>{c.placements.map((p) => <span key={p.key} className="tag" style={{ marginInlineEnd: 4 }}>{p.name}</span>)}</td>
               <td style={{ fontSize: 12 }}>{fdate(c.start)}<br />{fdate(c.end)}<div style={{ color: "var(--muted)" }}>{n(c.days)} يوم</div></td>
               <td>{egp(c.total)}{c.giftCode && <div className="tag" dir="ltr" style={{ marginTop: 4 }} title={`خصم ${egp(c.discount)}`}>🎁 {c.giftCode}</div>}</td>
@@ -383,8 +423,8 @@ export function LiveAds() {
         </>
       )}
       {tab === "campaigns" && <Campaigns can={can} mapKey={tick} reloadMap={bump} onNew={() => setForm(blank(start))}
-        onRepublish={(c) => { const len = c.days - 1; const st = c.end >= start && ["approved", "paused"].includes(c.status) ? addDays(c.end, 1) : start; setForm({ ...blank(st), advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", end: addDays(st, len), placements: c.placements.map((p) => p.key) }); act(`اتجهّزت نسخة جديدة من حملة ${c.advertiser} — راجعي التواريخ وأكدي الحجز`); }}
-        onEdit={(c) => setForm({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", start: c.start, end: c.end, placements: c.placements.map((p) => p.key), giftCode: c.giftCode || "" })} />}
+        onRepublish={(c) => { const len = c.days - 1; const st = c.end >= start && ["approved", "paused"].includes(c.status) ? addDays(c.end, 1) : start; setForm({ ...blank(st), advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", end: addDays(st, len), placements: c.placements.map((p) => p.key), imageUrl: c.imageUrl || "" }); act(`اتجهّزت نسخة جديدة من حملة ${c.advertiser} — راجعي التواريخ وأكدي الحجز`); }}
+        onEdit={(c) => setForm({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", start: c.start, end: c.end, placements: c.placements.map((p) => p.key), giftCode: c.giftCode || "", imageUrl: c.imageUrl || "" })} />}
       {tab === "gifts" && <Gifts placements={data.placements} can={can} />}
       {tab === "placements" && <Placements data={data} can={can} reload={bump} today={today} />}
     </>

@@ -16,6 +16,8 @@ export const FILE_COLUMNS = [
   "Thread.photoUrl",
   "Attachment.url",
   "Story.imageUrl",
+  // صورة الإعلان: من غير السطر ده كنس الملفات اليتيمة بيمسح صور إعلانات **شغّالة**
+  "AdCampaign.imageUrl",
 ] as const;
 
 /**
