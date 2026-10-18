@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { GRADS } from "./data.js";
 import { n } from "./ui.jsx";
+import { toAbs } from "./api.js";
 
 /**
  * **معاينة الإعلان بمقاس الموضع نفسه.**
@@ -55,7 +56,7 @@ function PlacementBox({ p, c, onImg }) {
       <div style={{ width: w, height: h, borderRadius: wide ? 14 : 18, background: bg, color: "#fff", overflow: "hidden", position: "relative", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
         {c.imageUrl && (
           <img
-            src={c.imageUrl}
+            src={toAbs(c.imageUrl)}
             alt=""
             onLoad={(e) => { const v = { w: e.target.naturalWidth, h: e.target.naturalHeight }; setImg(v); onImg?.(v); }}
             onError={() => { setImg(null); onImg?.(null); }}

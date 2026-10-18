@@ -1,8 +1,12 @@
 import { useSyncExternalStore } from "react";
+import { fileUrl } from "./fileUrl.js";
 
 /** وضع الباك إند الحقيقي: VITE_API_URL (مثلاً https://api.example.com). من غيره اللوحة بتشتغل ببيانات تجريبية. */
 export const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 export const API_ON = API_URL !== "";
+
+/** رابط ملف مرفوع كامل — الملفات بيقدّمها الـ API مش دومين اللوحة. */
+export const toAbs = (u) => fileUrl(u, API_URL);
 
 const KEY = "rachat-admin-session";
 let session = null;

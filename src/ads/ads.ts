@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { tr, num } from "../i18n";
-import { API_ON, api } from "../api/client";
+import { API_ON, api, toAbs } from "../api/client";
 
 // ============ بيانات الإعلانات (تجريبية — تُستبدل بنداء API لخادم الإعلانات) ============
 export interface Ad {
@@ -46,7 +46,7 @@ export function ensureCatalog(): Promise<void> {
   if (!catalogP || catalogDay !== dayKey()) {
     catalogDay = dayKey();
     catalogP = api<{ id: string; advertiser: string; headline: string; body: string; cta: string; link: string; grad: number; placements: string[]; imageUrl?: string | null }[]>("/ads/catalog")
-      .then((r) => { live = r.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, placements: c.placements, imageUrl: c.imageUrl ?? undefined, gradient: GRADS[c.grad] ?? GRADS[0] })); loadedErr = false; })
+      .then((r) => { live = r.map((c) => ({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, placements: c.placements, imageUrl: c.imageUrl ? toAbs(c.imageUrl) : undefined, gradient: GRADS[c.grad] ?? GRADS[0] })); loadedErr = false; })
       .catch(() => { live = []; loadedErr = true; catalogP = null; })
       .finally(() => { loaded = true; emit(); });
   }

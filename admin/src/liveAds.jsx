@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, Kpi, Table, Pill, Switch, n, egp, useAdmin } from "./ui.jsx";
 import { GRADS } from "./data.js";
-import { api, uploadAdImage } from "./api.js";
+import { api, uploadAdImage, toAbs } from "./api.js";
 import { AdPreview } from "./adPreview.jsx";
 import { useMe, useLoad, Err, Confirm, useDo } from "./live.jsx";
 
@@ -105,7 +105,7 @@ function AdImageField({ url, onChange }) {
   return (
     <div className="f">صورة الإعلان (اختيارية)
       <div className="row" style={{ alignItems: "center", gap: 10 }}>
-        {url && <img src={url} alt="" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line)" }} />}
+        {url && <img src={toAbs(url)} alt="" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line)" }} />}
         <label className="btn sm" style={{ cursor: busy ? "progress" : "pointer" }}>
           {busy ? "جاري الرفع…" : url ? "استبدال الصورة" : "ارفعي صورة"}
           <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pick} disabled={busy} style={{ display: "none" }} />
@@ -230,7 +230,7 @@ function Campaigns({ onEdit, onNew, onRepublish, can, reloadMap, mapKey }) {
             <tr key={c.id}>
               {/* الصورة نفسها في الطابور عشان اللي بيوافق يشوف اللي بيوافق عليه، مش اسم المعلن بس */}
               <td><div className="row" style={{ flexWrap: "nowrap" }}>{c.imageUrl
-                ? <img src={c.imageUrl} alt="" style={{ width: 34, height: 34, borderRadius: 5, objectFit: "cover", flex: "none" }} />
+                ? <img src={toAbs(c.imageUrl)} alt="" style={{ width: 34, height: 34, borderRadius: 5, objectFit: "cover", flex: "none" }} />
                 : <span style={{ width: 10, height: 34, borderRadius: 4, background: GRADS[c.grad]?.[1], flex: "none" }} />}<div><b>{c.advertiser}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.headline}</div></div></div></td>
               <td>{c.placements.map((p) => <span key={p.key} className="tag" style={{ marginInlineEnd: 4 }}>{p.name}</span>)}</td>
               <td style={{ fontSize: 12 }}>{fdate(c.start)}<br />{fdate(c.end)}<div style={{ color: "var(--muted)" }}>{n(c.days)} يوم</div></td>
