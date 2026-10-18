@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 
-export const n = (v, d = 0) => Number(v).toLocaleString("ar-EG", { minimumFractionDigits: d, maximumFractionDigits: d });
+export const n = (v, d = 0) => Number(v).toLocaleString("ar-EG-u-nu-latn", { minimumFractionDigits: d, maximumFractionDigits: d });
 export const egp = (v) => `${n(v, 2)} ج.م`;
 
 export const Ctx = createContext(null);
@@ -54,7 +54,7 @@ export const Table = ({ head, children }) => (
 );
 
 /* مخطط خطي بمقياس واحد: أقصى/أدنى قيمة تُحسب من البيانات والتسميات على نفس المقياس */
-export function LineChart({ data, step = 500, label = "مستخدمون نشطون يوميًا خلال ٣٠ يوم", ends = ["قبل ٢٩ يوم", "اليوم"] }) {
+export function LineChart({ data, step = 500, label = "مستخدمون نشطون يوميًا خلال 30 يوم", ends = ["قبل 29 يوم", "اليوم"] }) {
   const W = 640, H = 220, L = 46, R = 14, T = 14, B = 26;
   const min = Math.floor(Math.min(...data) / step) * step, max = Math.ceil(Math.max(...data) / step) * step;
   const x = (i) => L + (i * (W - L - R)) / (data.length - 1);

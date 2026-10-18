@@ -33,7 +33,7 @@ export function Payments({ tx, setTx }) {
       </div>
       <div style={{ marginTop: 14 }}>
         <Card title="مزودو الخدمات والعمولات">
-          <Table head={["الخدمة", "المزود", "حجم ٣٠ يوم", "العمولة ٪", "مفعّلة"]}>
+          <Table head={["الخدمة", "المزود", "حجم 30 يوم", "العمولة ٪", "مفعّلة"]}>
             {prov.map((p) => (
               <tr key={p.key}><td><b>{p.name}</b></td><td>{p.biller}</td><td>{egp(p.vol)}</td>
                 <td><input aria-label={`عمولة ${p.name}`} className="inp" type="number" step="0.1" min="0" max="10" value={p.fee} style={{ width: 80 }}
@@ -105,7 +105,7 @@ export function Notifications() {
           <label className="f">العنوان<input id="nt" className="inp" maxLength={60} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></label>
           <label className="f">النص<textarea id="nb" className="inp" rows="3" maxLength={160} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></label>
           <label className="f">الجمهور<select id="na" className="inp" value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value })}>
-            <option>كل المستخدمين</option><option>مستخدمو المحفظة</option><option>مستخدمو الغرف الصوتية</option><option>مستخدمون غير نشطين ٣٠ يوم</option></select></label>
+            <option>كل المستخدمين</option><option>مستخدمو المحفظة</option><option>مستخدمو الغرف الصوتية</option><option>مستخدمون غير نشطين 30 يوم</option></select></label>
           <button className="btn pri" type="submit">إرسال الآن</button>
         </form>
       </Card>

@@ -188,7 +188,7 @@ export function Ads({ campaigns, setCampaigns }) {
       {tab === "reports" && (
         <>
           <div className="grid two">
-            <Card title="مرات الظهور اليومية · آخر ٣٠ يوم"><LineChart data={AD_DAILY} step={1000} label="مرات ظهور الإعلانات يوميًا خلال ٣٠ يوم" /></Card>
+            <Card title="مرات الظهور اليومية · آخر 30 يوم"><LineChart data={AD_DAILY} step={1000} label="مرات ظهور الإعلانات يوميًا خلال 30 يوم" /></Card>
             <Card title="نسبة النقر لكل حملة">
               <Bars rows={campaigns.filter((c) => c.impressions).map((c) => [c.advertiser, Math.round(ctr(c) * 10) / 10])} />
               <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>القيم بالنسبة المئوية</div>

@@ -9,7 +9,7 @@ const REASONS = { child_safety: "إيذاء طفل أو استغلاله", abuse
  *  عشان مايضيعوش بين عشرين بلاغ سبام — الإجراء المنشور «من أول بلاغ». */
 const URGENT = "child_safety";
 const RES = { delete: "اتحذف المحتوى", delete_ban: "حذف + حظر", warn: "تحذير", dismiss: "تم التجاهل" };
-const fmt = (iso) => new Date(iso).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" });
+const fmt = (iso) => new Date(iso).toLocaleString("ar-EG-u-nu-latn", { dateStyle: "medium", timeStyle: "short" });
 
 export function LiveReports() {
   const { can } = useMe();

@@ -55,10 +55,28 @@ export const dayCount = (from: string, to: string) => Math.round((+new Date(to +
 
 export const MAX_CAMPAIGN_DAYS = 366;
 
-/** أول استخدام: لو مفيش مواضع، نزرع الافتراضية (الأسعار والسعات قابلة للتعديل من اللوحة) */
+/**
+ * بيزرع **المواضع الناقصة** (الأسعار والسعات قابلة للتعديل من اللوحة بعدها).
+ *
+ * 🔴 **كان `if (count() > 0) return;` — وده عطل صامت مكشوف:** أول ما القاعدة
+ * فيها أي موضع، أي موضع **جديد** يتضاف لـ`DEFAULT_PLACEMENTS` عمره ما يتخلق
+ * في الإنتاج. وحصل فعلًا: `rooms` و`adsfeed` اتضافوا في ١٨ أكتوبر ٢٠٢٦
+ * والإنتاج فضل على **٤ مواضع** — يعني مكانين للبيع موجودين في الكود
+ * والتطبيق بينادي `adsFor()` عليهم، و**مفيش صفّ في القاعدة** فمستحيل
+ * يتباعوا ومش باينين في الخريطة. ومفيش ولا خطأ في أي مكان بيقول كده.
+ *
+ * **والاختبارات مستحيل تشوفها:** كل ملف بيشتغل على قاعدة **فاضية**، فالشرط
+ * القديم بيزرع الستة ويعدّي. الفرق بيبان بس على قاعدة **فيها مواضع أقدم**
+ * — وده اللي الاختبار الجديد بيعمله بالظبط.
+ *
+ * **ومابيلمسش الموجود:** `skipDuplicates` على `key`، فالأسعار والمقاسات
+ * والتوقيف اللي داليا عدّلتهم من اللوحة بيفضلوا زي ما هم.
+ */
 export async function ensureDefaultPlacements(ctx: Ctx) {
-  if ((await ctx.db.adPlacement.count()) > 0) return;
-  await ctx.db.adPlacement.createMany({ data: DEFAULT_PLACEMENTS.map((p) => ({ ...p })), skipDuplicates: true });
+  const have = new Set((await ctx.db.adPlacement.findMany({ select: { key: true } })).map((p) => p.key));
+  const missing = DEFAULT_PLACEMENTS.filter((p) => !have.has(p.key));
+  if (!missing.length) return;
+  await ctx.db.adPlacement.createMany({ data: missing.map((p) => ({ ...p })), skipDuplicates: true });
 }
 
 export interface Occupancy { held: number; booked: number; blocked: boolean }

@@ -9,8 +9,17 @@ import { clearDraft, draftHasWork, draftKey, loadDraft, saveDraft } from "./draf
 const iso = (d) => d.toISOString().slice(0, 10);
 const addDays = (s, k) => iso(new Date(+new Date(s + "T00:00:00Z") + k * 864e5));
 const dnum = (s) => n(+s.slice(8));
-const mon = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("ar-EG", { month: "long", timeZone: "UTC" });
-const fdate = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const AR_LATN = "ar-EG-u-nu-latn";
+/**
+ * 🔴 **الخريطة كانت جدار من ٣٠ عمود بلا أي علامة.** العين مالهاش حاجة
+ * ترسّي عليها، فعد الأعمدة عشان توصل ليوم معيّن كان شغلًا بالإصبع على
+ * الشاشة. الحرف ده (ح · ن · ث …) بيدي إيقاعًا أسبوعيًا، والجمعة والسبت
+ * بيتظللوا — فالأسبوع بقى وحدة مرئية بدل شريط متصل.
+ */
+const wday = (s) => new Date(s + "T00:00:00Z").toLocaleDateString(AR_LATN, { weekday: "narrow", timeZone: "UTC" });
+const isWeekend = (s) => [5, 6].includes(new Date(s + "T00:00:00Z").getUTCDay()); // الجمعة والسبت
+const mon = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("ar-EG-u-nu-latn", { month: "long", timeZone: "UTC" });
+const fdate = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("ar-EG-u-nu-latn", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const KINDS = { modal: "نافذة كاملة", banner: "بانر", story: "ستوري", room: "غرفة صوتية" };
 const WHY = { inactive: "الموضع متوقف", blocked: "الموضع مقفول", full: "مفيش مكان فاضي" };
 const Size = ({ p }) => {
@@ -23,7 +32,7 @@ const Size = ({ p }) => {
  * بهدية بتسيب يومًا بفلوس والسبب مش واضح — ده اللي حصل فعلًا (٩٢٠ ج.م).
  * والفترة **شاملة الطرفين**، فالنهاية = البداية + الأيام − ١.
  */
-const DURATIONS = [[30, "شهر"], [90, "٣ شهور"], [180, "٦ شهور"], [365, "سنة"]];
+const DURATIONS = [[30, "شهر"], [90, "3 شهور"], [180, "6 شهور"], [365, "سنة"]];
 /**
  * نسب العرض الجاهزة — **اختيارات بس، والرقم بيتكتب بالإيد** لأن الخصم
  * بيتفق عليه لكل حملة وكل عميل على حدة (قرار داليا ١٨ أكتوبر ٢٠٢٦).
@@ -52,13 +61,25 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
         <input className="inp" type="date" aria-label="من تاريخ" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} />
         <button className="btn sm" onClick={() => setFrom(addDays(from, span))} aria-label="الفترة التالية">←</button>
         <button className="btn sm" onClick={() => setFrom(today)}>النهارده</button>
-        <select className="inp" aria-label="المدة" value={span} onChange={(e) => setSpan(+e.target.value)}><option value="14">١٤ يوم</option><option value="30">٣٠ يوم</option><option value="60">٦٠ يوم</option></select>
+        <select className="inp" aria-label="المدة" value={span} onChange={(e) => setSpan(+e.target.value)}><option value="14">14 يوم</option><option value="30">30 يوم</option><option value="60">60 يوم</option></select>
       </div>}>
+      {/* الشرح فوق الخريطة مش تحتها: الرقم في الخانة مابيشرحش نفسه، وقراءة
+          ٣٠ خانة قبل ما توصلي لسطر في وسيلة الإيضاح بيخلّي الأرقام تتقري غلط */}
+      <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 8 }}>
+        الرقم في كل خانة = <b>الأماكن الفاضية</b> في اليوم ده. اضغطي على يوم البداية ثم يوم النهاية لحجز فترة.
+      </div>
       <div className="imap" role="region" aria-label="خريطة مخزون الإعلانات" tabIndex={0}>
         <table>
           <thead><tr>
             <th className="pl">الموضع</th>
-            {data.days.map((d, i) => <th key={d} className={`dh${d === today ? " today" : ""}${d.endsWith("-01") || i === 0 ? " mo" : ""}`}>{(d.endsWith("-01") || i === 0) && <div style={{ color: "var(--gold)" }}>{mon(d)}</div>}{dnum(d)}</th>)}
+            {data.days.map((d, i) => (
+              <th key={d} className={`dh${d === today ? " today" : ""}${d.endsWith("-01") || i === 0 ? " mo" : ""}${isWeekend(d) ? " we" : ""}`}>
+                {(d.endsWith("-01") || i === 0) && <div style={{ color: "var(--gold)" }}>{mon(d)}</div>}
+                <div style={{ fontSize: 9, opacity: .65, fontWeight: 500 }}>{wday(d)}</div>
+                {dnum(d)}
+              </th>
+            ))}
+            <th className="sumcol">متاح في الفترة</th>
           </tr></thead>
           <tbody>
             {data.placements.map((p) => (
@@ -70,8 +91,16 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
                 {p.cells.map((c) => {
                   const st = cellState(p, c);
                   const tip = `${p.name} — ${fdate(c.day)}\n${!p.active ? "الموضع متوقف" : c.blocked ? "مقفول" : `متاح ${n(c.free)} من ${n(p.slots)}`}${c.booked ? ` · مؤكد ${n(c.booked)}` : ""}${c.held ? ` · بانتظار الموافقة ${n(c.held)}` : ""}`;
-                  return <td key={c.day}><button type="button" title={tip} aria-label={tip.replace("\n", " ")} className={`c ${st}${c.held ? " held" : ""}${inSel(p, c.day) ? " sel" : ""}${c.day < today ? " past" : ""}`} onClick={() => click(p, c)}>{st === "blk" ? "✕" : st === "off" ? "—" : n(c.free)}</button></td>;
+                  return <td key={c.day}><button type="button" title={tip} aria-label={tip.replace("\n", " ")} className={`c ${st}${c.held ? " held" : ""}${inSel(p, c.day) ? " sel" : ""}${c.day < today ? " past" : ""}${isWeekend(c.day) ? " we" : ""}`} onClick={() => click(p, c)}>{st === "blk" ? "✕" : st === "off" ? "—" : n(c.free)}</button></td>;
                 })}
+                {/* ملخّص الصفّ: من غيره لازم تعدّي بعينك على ٣٠ خانة عشان تعرف
+                    الموضع ده فيه مكان ولا لأ — وده السؤال اللي بيتباع عليه */}
+                <td className="sumcol">
+                  {(() => {
+                    const open = p.cells.filter((c) => p.active && !c.blocked && c.free > 0).length;
+                    return <><b style={{ color: open ? "var(--good)" : "var(--bad)" }}>{n(open)}</b><span style={{ color: "var(--muted)" }}> / {n(p.cells.length)} يوم</span></>;
+                  })()}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -83,7 +112,7 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
         <span><i style={{ background: "color-mix(in srgb,var(--bad) 46%,transparent)" }} />ممتلئ</span>
         <span><i className="c blk" style={{ width: 14 }} />مقفول</span>
         <span><i style={{ boxShadow: "inset 0 -3px 0 var(--warn)" }} />فيه حجز بانتظار الموافقة</span>
-        <span>الرقم = الأماكن الفاضية في اليوم</span>
+        <span><i style={{ background: "var(--panel2)" }} />الجمعة والسبت</span>
       </div>
       {sel && (
         <div className="row" style={{ marginTop: 12 }} role="status">
@@ -168,7 +197,7 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
           <div className="f">الخلفية
             <div className="row">{GRADS.map(([name, g], i) => <button type="button" key={name} aria-label={name} aria-pressed={c.grad === i} onClick={() => set("grad", i)} style={{ width: 36, height: 36, borderRadius: 10, background: g, border: c.grad === i ? "2px solid var(--gold)" : "2px solid transparent", outlineOffset: 2 }} />)}</div></div>
           <div className="f">صور الإعلان (اختيارية)
-            <span style={{ color: "var(--muted)", fontSize: 11 }}>كل موضع مقاسه مختلف، فلكل واحد صورته — اختاري المواضع تحت، والرفع من <b>المعاينة</b> جنبك تحت كل موضع. PNG أو JPG أو WebP أو GIF، لحد ١٠ ميجا.</span>
+            <span style={{ color: "var(--muted)", fontSize: 11 }}>كل موضع مقاسه مختلف، فلكل واحد صورته — اختاري المواضع تحت، والرفع من <b>المعاينة</b> جنبك تحت كل موضع. PNG أو JPG أو WebP أو GIF، لحد 10 ميجا.</span>
           </div>
           <div className="f">المواضع المحجوزة
             <div className="grid" style={{ gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
@@ -509,7 +538,7 @@ function Placements({ data, can, reload, today }) {
 
 
 /* ---------- أكواد الهدايا ---------- */
-const MONTHS = [[1, "شهر"], [3, "٣ شهور"], [6, "٦ شهور"], [12, "سنة"]];
+const MONTHS = [[1, "شهر"], [3, "3 شهور"], [6, "6 شهور"], [12, "سنة"]];
 const GIFT_ST = { available: ["متاح", "good"], used: ["مستخدم", "info"], expired: ["منتهي", "mute"], void: ["ملغي", "bad"] };
 function Gifts({ placements, can }) {
   const run = useDo();
@@ -587,7 +616,9 @@ export function LiveAds() {
     if (!data) return null;
     let cap = 0, used = 0;
     data.placements.forEach((p) => p.active && p.cells.forEach((c) => { if (!c.blocked) { cap += p.slots; used += p.slots - c.free; } }));
-    return { cap, used, pct: cap ? Math.round((used / cap) * 100) : 0 };
+    // أماكن اليوم الواحد — الرقم اللي المعلن بيفهمه، غير مجموع الفترة
+    const perDay = data.placements.reduce((a, p) => a + (p.active ? p.slots : 0), 0);
+    return { cap, used, perDay, pct: cap ? Math.round((used / cap) * 100) : 0 };
   }, [data]);
 
   if (err && !data) return <Err msg={err} />;
@@ -606,7 +637,13 @@ export function LiveAds() {
       {tab === "map" && (
         <>
           <div className="grid kpis" style={{ marginBottom: 14 }}>
-            <Kpi l="نسبة الحجز في الفترة" v={`${n(stats.pct)}٪`} d="شامل اللي بانتظار الموافقة والمتوقف" /><Kpi l="أماكن محجوزة" v={n(stats.used)} /><Kpi l="أماكن متاحة" v={n(stats.cap - stats.used)} /><Kpi l="مواضع نشطة" v={n(data.placements.filter((p) => p.active).length)} />
+            {/* 🔴 الأرقام دي **مكان×يوم** مش عدد أماكن: ٤ مواضع فيها ١٢ مكان
+                في اليوم × ٣٠ يوم = ٣٦٠. وتسميتها «أماكن محجوزة» كانت بتتقري
+                كأن فيه ٢٦١ حجز — والدليل إنها بتتغيّر لما تغيّري المدة. */}
+            <Kpi l="نسبة الحجز في الفترة" v={`${n(stats.pct)}٪`} d="شامل اللي بانتظار الموافقة والمتوقف" />
+            <Kpi l="محجوز (مكان × يوم)" v={n(stats.used)} d={`من ${n(stats.cap)} في ${n(data.days.length)} يوم`} />
+            <Kpi l="متاح (مكان × يوم)" v={n(stats.cap - stats.used)} d={`${n(stats.perDay)} مكان في اليوم الواحد`} />
+            <Kpi l="مواضع نشطة" v={`${n(data.placements.filter((p) => p.active).length)} من ${n(data.placements.length)}`} />
           </div>
           <InventoryMap data={data} from={from || data.from} setFrom={setFrom} span={span} setSpan={setSpan} today={today} can={can}
             onPick={(s) => { setForm({ ...blank(s.start), end: s.end, placements: [s.key] }); act("اتفتح نموذج الحجز بالفترة المحددة"); }} />

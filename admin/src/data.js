@@ -72,12 +72,12 @@ export const GRADS = [
   ["ليل","linear-gradient(135deg,#2b2118,#C9A227)"],["عنابي","linear-gradient(135deg,#5B2621,#14100F)"],
 ];
 export const PLACEMENTS = { modal:"نافذة كاملة", banner:"بانر الدردشات", services:"بانر الخدمات" };
-export const AUDIENCES = ["كل المستخدمين","مستخدمو المحفظة","مستخدمو الغرف الصوتية","مستخدمون جدد (٧ أيام)","غير نشطين ٣٠ يوم"];
+export const AUDIENCES = ["كل المستخدمين","مستخدمو المحفظة","مستخدمو الغرف الصوتية","مستخدمون جدد (7 أيام)","غير نشطين 30 يوم"];
 const C=(id,advertiser,headline,body,cta,grad,placements,start,end,budget,spent,cpm,audience,priority,dailyCap,impressions,clicks,status)=>({id,advertiser,headline,body,cta,link:"https://example.com/"+id.toLowerCase(),grad,placements,start,end,budget,spent,cpm,audience,priority,dailyCap,impressions,clicks,status});
 export const CAMPAIGNS = [
   C("AD-11","كافيه النيل","قهوتك الصبحية علينا ☕","اطلب أول مشروب واحصل على الثاني مجانًا طوال هذا الأسبوع.","اطلب الآن",3,{modal:true,banner:true,services:false},"2026-10-01","2026-10-31",6000,4200,87,"كل المستخدمين",2,3,48200,1930,"active"),
   C("AD-12","متجر الفرعون","خصم ٣٠٪ على الإلكترونيات","عروض نهاية الأسبوع على الموبايلات والسماعات مع شحن مجاني.","تسوّق",0,{modal:true,banner:true,services:true},"2026-10-03","2026-11-03",10000,7800,126,"مستخدمو المحفظة",3,4,61900,2850,"active"),
-  C("AD-13","أكاديمية سِفر","اتعلم برمجة من الصفر 💻","دورة مكثفة بالعربي مع مشاريع عملية وشهادة إتمام.","سجّل",4,{modal:false,banner:true,services:false},"2026-09-20","2026-10-20",4000,3100,93,"مستخدمون جدد (٧ أيام)",1,2,33400,1420,"active"),
+  C("AD-13","أكاديمية سِفر","اتعلم برمجة من الصفر 💻","دورة مكثفة بالعربي مع مشاريع عملية وشهادة إتمام.","سجّل",4,{modal:false,banner:true,services:false},"2026-09-20","2026-10-20",4000,3100,93,"مستخدمون جدد (7 أيام)",1,2,33400,1420,"active"),
   C("AD-14","تأمين الأمان","أمّن عربيتك في دقيقتين","قسّط وثيقتك على ١٢ شهر بدون فوايد.","اعرف أكتر",5,{modal:true,banner:false,services:true},"2026-10-12","2026-11-12",8000,0,0,"مستخدمو المحفظة",2,2,0,0,"pending"),
   C("AD-15","مطعم ست الحبايب","وجبة عائلية بسعر خاص 🍗","٤ أفراد + مشروبات بـ ٢٤٩ ج.م لفترة محدودة.","احجز",2,{modal:false,banner:true,services:false},"2026-09-25","2026-10-25",3000,2200,79,"كل المستخدمين",1,2,27800,960,"paused"),
   C("AD-16","رحلات واحة","إجازة نهاية الأسبوع 🌴","٣ أيام في سيوة شاملة الإقامة والمواصلات.","احجز رحلتك",1,{modal:true,banner:true,services:false},"2026-10-15","2026-11-15",5000,0,0,"كل المستخدمين",2,3,0,0,"pending"),

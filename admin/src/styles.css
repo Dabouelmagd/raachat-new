@@ -108,6 +108,11 @@ label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mu
 .imap .dh{min-width:34px;padding:5px 0;color:var(--muted);font-weight:600}
 .imap .dh.today{color:var(--accent);font-weight:800}
 .imap .dh.mo{border-inline-start:2px solid var(--line)}
+/* الجمعة والسبت: علامة بصرية تكسر جدار الـ30 عمود وتخلّي الأسبوع وحدة تتعدّ */
+.imap .dh.we{background:var(--panel2)}
+.imap button.c.we{box-shadow:inset 1px 0 0 var(--line),inset -1px 0 0 var(--line)}
+/* ملخّص الصفّ لاصق في آخر الجدول — الخريطة بتتزحلق أفقيًا والرقم ده لازم يفضل ظاهر */
+.imap .sumcol{position:sticky;inset-inline-end:0;background:var(--panel);z-index:1;min-width:104px;padding:8px 10px;text-align:center;border-inline-start:1px solid var(--line);white-space:nowrap}
 .imap button.c{width:34px;height:38px;border:0;border-radius:0;font-weight:700;font-size:11px;background:transparent;color:var(--fg)}
 .c.free{background:color-mix(in srgb,var(--good) 34%,transparent)}
 .c.part{background:color-mix(in srgb,var(--warn) 42%,transparent)}

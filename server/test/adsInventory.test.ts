@@ -609,3 +609,44 @@ describe("مسوّدة نموذج الحملة", () => {
     expect(src).toMatch(/if \(r\) \{ clearDraft\(key\); onDone\(\); \}/);
   });
 });
+
+/**
+ * 🔴 **الموضع الجديد لازم يوصل لقاعدة فيها مواضع قديمة.**
+ *
+ * `ensureDefaultPlacements` كان بيرجع فورًا لو القاعدة فيها أي موضع، فأي
+ * موضع بيتضاف لـ`DEFAULT_PLACEMENTS` بعد أول تشغيل **عمره ما يتخلق في
+ * الإنتاج**. وحصل: `rooms` و`adsfeed` اتضافوا والإنتاج فضل على ٤ مواضع —
+ * مكانان للبيع في الكود ومش موجودين في القاعدة، **بلا أي خطأ**.
+ *
+ * والاختبارات التانية مستحيل تمسكها: كلها على قاعدة **فاضية** فالشرط القديم
+ * بيزرع الكل ويعدّي. فالاختبار ده بيعمل الحالة الحقيقية بإيده — قاعدة فيها
+ * **بعض** المواضع — وهي الوحيدة اللي بتفرّق بين الصح والغلط.
+ */
+describe("زرع المواضع الناقصة", () => {
+  it("الموضع الجديد بيتخلق على قاعدة فيها مواضع قديمة، والمعدَّل مابيتلمسش", async () => {
+    // سعر معدَّل من اللوحة — لازم يفضل بعد الزرع
+    await api().put("/admin/ads/placements/banner").set(owner.auth)
+      .send({ name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: 199, active: true }).expect(200);
+    // نرجّع القاعدة لحالة الإنتاج: المواضع القديمة بس.
+    // ⚠️ الكتلة دي بتعدّل حالة مشتركة (بتمسح حجوزات المواضع دي) فلازم تفضل
+    // **آخر** حاجة في الملف — أي اختبار بعدها هيشوف قاعدة ناقصة.
+    const newKeys = ["rooms", "adsfeed"];
+    await env.ctx.db.adBooking.deleteMany({ where: { placement: { key: { in: newKeys } } } });
+    await env.ctx.db.adPlacement.deleteMany({ where: { key: { in: newKeys } } });
+    // الفحص القبلي **من القاعدة مباشرة**: `GET /placements` بينادي الزرع هو
+    // كمان، فقراءة الحالة منه بتصلّحها قبل ما نختبرها
+    const before = (await env.ctx.db.adPlacement.findMany({ select: { key: true } })).map((p) => p.key);
+    expect(before, "التجهيز فشل — الحالة اللي بنختبرها مش موجودة").not.toContain("rooms");
+    expect(before.length, "لازم تفضل مواضع قديمة — قاعدة فاضية بتزرع الكل وتخفي العطل").toBeGreaterThan(0);
+
+    // أي نداء على المخزون بيعدّي على ensureDefaultPlacements
+    await api().get("/admin/ads/inventory?days=1").set(owner.auth).expect(200);
+
+    const after = (await api().get("/admin/ads/placements").set(owner.auth).expect(200)).body;
+    for (const k of DEFAULT_PLACEMENTS.map((p) => p.key)) {
+      expect(after.map((p: { key: string }) => p.key), `الموضع ${k} ما اتخلقش — مكان للبيع مش موجود في القاعدة`).toContain(k);
+    }
+    const banner = after.find((p: { key: string }) => p.key === "banner");
+    expect(banner.pricePerDay, "الزرع كتب فوق سعر معدَّل من اللوحة").toBe(199);
+  });
+});

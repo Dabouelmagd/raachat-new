@@ -90,7 +90,7 @@ function Dashboard({ demo, me }) {
           <div className="brand"><img src={logo} alt="" /><div><b>رع شات</b><span>لوحة تحكم المالك</span></div></div>
           {nav.map(([k, label, Icon]) => (
             <button key={k} className="nav" aria-current={page === k ? "page" : undefined} onClick={() => setPage(k)}>
-              <Icon size={17} /> {label}{badge[k] ? <span className="dot">{badge[k].toLocaleString("ar-EG")}</span> : null}
+              <Icon size={17} /> {label}{badge[k] ? <span className="dot">{badge[k].toLocaleString("ar-EG-u-nu-latn")}</span> : null}
             </button>
           ))}
           <div className="foot">{demo ? "نسخة تجريبية · بيانات وهمية" : <><div>{me.user.name} · {me.isOwner ? "المالك" : me.role?.name}</div><button className="btn sm" style={{ marginTop: 8 }} onClick={logout}>تسجيل الخروج</button></>}</div>

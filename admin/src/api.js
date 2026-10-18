@@ -88,7 +88,7 @@ export const AD_IMAGE_MAX = 10 * 1024 * 1024; // نفس حد multer على ال�
  */
 export async function uploadAdImage(file, retry = true) {
   if (!AD_IMAGE_TYPES.includes(file.type)) throw new ApiError(0, "bad_type", "الصورة لازم تكون PNG أو JPG أو WebP أو GIF");
-  if (file.size > AD_IMAGE_MAX) throw new ApiError(0, "too_big", "حجم الصورة أكبر من ١٠ ميجا");
+  if (file.size > AD_IMAGE_MAX) throw new ApiError(0, "too_big", "حجم الصورة أكبر من 10 ميجا");
   const fd = new FormData();
   fd.append("file", file);
   const headers = {};

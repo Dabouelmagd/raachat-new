@@ -11,7 +11,7 @@ export function MeProvider({ me, children }) {
   return <MeCtx.Provider value={value}>{children}</MeCtx.Provider>;
 }
 
-const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" }) : "—");
+const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ar-EG-u-nu-latn", { dateStyle: "medium", timeStyle: "short" }) : "—");
 const SERVICES = { elec: "كهرباء", water: "مياه", gas: "غاز", net: "إنترنت", topup: "شحن رصيد", mobile: "فاتورة موبايل", landline: "تليفون أرضي", insurance: "تأمين", tv: "تلفزيون", other: "أخرى" };
 const svc = (k) => SERVICES[k] || k || "—";
 
@@ -136,10 +136,10 @@ export function LivePayments() {
   return (
     <>
       <div className="grid kpis">
-        <Kpi l="حجم الفواتير (٣٠ يوم)" v={egp(s?.bills.amount ?? 0)} d={`${n(s?.bills.count ?? 0)} عملية`} up />
-        <Kpi l="خصومات العروض (٣٠ يوم)" v={egp(s?.bills.discount ?? 0)} />
-        <Kpi l="الشحن (٣٠ يوم)" v={egp(s?.topups.amount ?? 0)} d={`${n(s?.topups.count ?? 0)} عملية`} />
-        <Kpi l="المستردّ (٣٠ يوم)" v={egp(s?.refunds.amount ?? 0)} d={`${n(s?.refunds.count ?? 0)} عملية`} />
+        <Kpi l="حجم الفواتير (30 يوم)" v={egp(s?.bills.amount ?? 0)} d={`${n(s?.bills.count ?? 0)} عملية`} up />
+        <Kpi l="خصومات العروض (30 يوم)" v={egp(s?.bills.discount ?? 0)} />
+        <Kpi l="الشحن (30 يوم)" v={egp(s?.topups.amount ?? 0)} d={`${n(s?.topups.count ?? 0)} عملية`} />
+        <Kpi l="المستردّ (30 يوم)" v={egp(s?.refunds.amount ?? 0)} d={`${n(s?.refunds.count ?? 0)} عملية`} />
       </div>
       <div style={{ marginTop: 14 }}>
         <Card title="آخر العمليات" right={

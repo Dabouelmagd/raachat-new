@@ -15,14 +15,14 @@ export function Overview({ reports, campaigns, tx, go }) {
     <>
       <div className="grid k3">
         <Kpi l="نشطون اليوم" v={n(6410)} d="▲ ٤٫٦٪ عن الأسبوع الماضي" up />
-        <Kpi l="مستخدمون جدد (٣٠ يوم)" v={n(3630)} d="▲ ١١٪" up />
+        <Kpi l="مستخدمون جدد (30 يوم)" v={n(3630)} d="▲ ١١٪" up />
         <Kpi l="رسائل اليوم" v={n(184200)} d="▲ ٢٫٩٪" up />
         <Kpi l="غرف مباشرة الآن" v={n(ROOMS.filter((r) => r.status === "live").length)} d={`${n(344)} مستمع`} up />
-        <Kpi l="حجم المدفوعات (٣٠ يوم)" v={`${n(851800)} ج.م`} d="▲ ٨٪" up />
-        <Kpi l="إيراد الإعلانات (٣٠ يوم)" v={`${n(17300)} ج.م`} d="▼ ١٫٢٪" />
+        <Kpi l="حجم المدفوعات (30 يوم)" v={`${n(851800)} ج.م`} d="▲ ٨٪" up />
+        <Kpi l="إيراد الإعلانات (30 يوم)" v={`${n(17300)} ج.م`} d="▼ ١٫٢٪" />
       </div>
       <div className="grid two" style={{ marginTop: 14 }}>
-        <Card title="المستخدمون النشطون يوميًا · آخر ٣٠ يوم"><LineChart data={DAU} /></Card>
+        <Card title="المستخدمون النشطون يوميًا · آخر 30 يوم"><LineChart data={DAU} /></Card>
         <Card title="يحتاج انتباهك">
           <div className="list">
             {attention.map((a) => (
@@ -35,7 +35,7 @@ export function Overview({ reports, campaigns, tx, go }) {
         </Card>
       </div>
       <div className="grid two" style={{ marginTop: 14 }}>
-        <Card title="مصدر التسجيل (٣٠ يوم)"><Bars rows={SIGNUPS} /></Card>
+        <Card title="مصدر التسجيل (30 يوم)"><Bars rows={SIGNUPS} /></Card>
         <Card title="الغرف المباشرة الآن">
           <div className="list">
             {ROOMS.filter((r) => r.status === "live").map((r) => (

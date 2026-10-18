@@ -3,8 +3,8 @@ import { Card, Kpi, Table, Pill, Switch, LineChart, n, egp } from "./ui.jsx";
 import { api } from "./api.js";
 import { useMe, useLoad, useDo, Err, Confirm } from "./live.jsx";
 
-const fmt = (iso) => new Date(iso).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" });
-/** يملأ آخر ٣٠ يوم بأصفار */
+const fmt = (iso) => new Date(iso).toLocaleString("ar-EG-u-nu-latn", { dateStyle: "medium", timeStyle: "short" });
+/** يملأ آخر 30 يوم بأصفار */
 function series(rows) {
   const m = new Map((rows || []).map((r) => [r.day, r.count]));
   const out = [];
@@ -30,14 +30,14 @@ export function LiveOverview({ go }) {
     <>
       <div className="grid k3">
         {o.activeToday !== undefined && <Kpi l="نشطون اليوم" v={n(o.activeToday)} d={`من ${n(o.totalUsers)} مستخدم`} up />}
-        {o.newUsers30 !== undefined && <Kpi l="مستخدمون جدد (٣٠ يوم)" v={n(o.newUsers30)} />}
+        {o.newUsers30 !== undefined && <Kpi l="مستخدمون جدد (30 يوم)" v={n(o.newUsers30)} />}
         {o.messagesToday !== undefined && <Kpi l="رسائل اليوم" v={n(o.messagesToday)} />}
         {o.liveRooms !== undefined && <Kpi l="غرف مباشرة الآن" v={n(o.liveRooms)} d={`${n(o.listeners)} مشارك`} up />}
-        {o.billsVolume30 !== undefined && <Kpi l="فواتير مدفوعة (٣٠ يوم)" v={`${egp(o.billsVolume30)}`} d={`${n(o.billsCount30)} عملية`} up />}
-        {o.adRevenue30 !== undefined && <Kpi l="حجوزات الإعلانات (٣٠ يوم)" v={`${egp(o.adRevenue30)}`} />}
+        {o.billsVolume30 !== undefined && <Kpi l="فواتير مدفوعة (30 يوم)" v={`${egp(o.billsVolume30)}`} d={`${n(o.billsCount30)} عملية`} up />}
+        {o.adRevenue30 !== undefined && <Kpi l="حجوزات الإعلانات (30 يوم)" v={`${egp(o.adRevenue30)}`} />}
       </div>
       <div className="grid two" style={{ marginTop: 14 }}>
-        {ms && <Card title="الرسائل يوميًا · آخر ٣٠ يوم"><LineChart data={ms} step={stepOf(ms)} label="الرسائل يوميًا خلال ٣٠ يوم" /></Card>}
+        {ms && <Card title="الرسائل يوميًا · آخر 30 يوم"><LineChart data={ms} step={stepOf(ms)} label="الرسائل يوميًا خلال 30 يوم" /></Card>}
         {att.length > 0 && <Card title="يحتاج انتباهك">
           <div className="list">
             {att.map((a) => (
@@ -49,7 +49,7 @@ export function LiveOverview({ go }) {
           </div>
         </Card>}
       </div>
-      {sg && <div style={{ marginTop: 14 }}><Card title="تسجيلات جديدة يوميًا · آخر ٣٠ يوم"><LineChart data={sg} step={stepOf(sg)} label="التسجيلات الجديدة يوميًا" /></Card></div>}
+      {sg && <div style={{ marginTop: 14 }}><Card title="تسجيلات جديدة يوميًا · آخر 30 يوم"><LineChart data={sg} step={stepOf(sg)} label="التسجيلات الجديدة يوميًا" /></Card></div>}
     </>
   );
 }
@@ -86,7 +86,7 @@ export function LiveSpaces() {
           {g.data && !g.data.length && <div className="empty">لا توجد جروبات</div>}
         </Card>
       ) : (
-        <Card title="الغرف الصوتية (المباشرة وآخر ٧ أيام)">
+        <Card title="الغرف الصوتية (المباشرة وآخر 7 أيام)">
           <Err msg={r.err} />
           <Table head={["الغرفة", "المضيف", "المشاركون الآن", "بهوية مؤقتة", "الحالة", "إجراءات"]}>
             {(r.data || []).map((x) => (
