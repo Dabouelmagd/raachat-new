@@ -10,8 +10,13 @@ import { expectNoPageErrors, openApp } from "../helpers";
  * بيانات الديمو فيها ٤ ستوريز من ٣ حسابات (مريم عندها اتنين) — فالفرق بين
  * «لكل ستوري» و«لكل حساب» بيبان في العدد.
  */
+/**
+ * دواير **الحسابات** في الشريط — من غير الستوري الممول (`SponsoredStory`)،
+ * ده إعلان مش حساب وله اختباره في `sponsored-story.spec.ts`.
+ */
 const bar = (page: import("@playwright/test").Page) =>
-  page.locator("button").filter({ has: page.locator("div.h-14.w-14") });
+  page.locator("button").filter({ has: page.locator("div.h-14.w-14") })
+    .filter({ hasNot: page.getByText(/^إعلان$/) });
 
 test("شريط الستوريز: دايرة واحدة لكل حساب مش لكل ستوري", async ({ page }) => {
   await openApp(page);

@@ -75,7 +75,7 @@ export default function ChatsScreen() {
           </button>
         )}
         {pinNote && <p role="status" className="mb-2 rounded-xl bg-rachat-card px-3 py-2 text-xs text-rachat-gold">{pinNote}</p>}
-        {filter === "all" && <SponsoredCard index={1} />}
+        {filter === "all" && <SponsoredCard index={1} placement="banner" />}
         {filter === "room" && rooms.map((r) => (
           <button key={r.id} onClick={() => navigate("/rooms")} className="mb-2.5 flex w-full items-center gap-3 rounded-2xl bg-rachat-card p-3 text-start shadow-lg shadow-black/20">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-rachat-maroon text-rachat-gold"><Mic size={18} /></span>

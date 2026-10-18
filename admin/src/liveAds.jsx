@@ -158,6 +158,23 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
                 {q.lines.map((l) => <tr key={l.key}><td><b>{l.name}</b></td><td>{egp(l.pricePerDay)}</td><td>{n(l.days)}</td><td>{egp(l.subtotal)}</td></tr>)}
               </Table>
               {q.discount > 0 && <div className="li"><div><div className="t">هدية (تغطي {n(q.giftDays)} يوم)</div><div className="s">قبل الخصم {egp(q.gross)}</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.discount)}</div></div>}
+              {/*
+                الهدية بتغطي عدد أيام ثابت (٣٦٥ للسنة)، والفترة بتتحسب **شاملة
+                الطرفين** — فـ١٨/١٠/٢٠٢٦ لـ١٨/١٠/٢٠٢٧ = ٣٦٦ يوم، يعني يوم واحد
+                بفلوس والباقي مجاني. الرقم صح بس **مفاجئ**، فالسطر ده بيسمّي
+                الفرق ويصلّحه بضغطة بدل ما تدوّري على سبب المبلغ المتبقي.
+              */}
+              {q.discount > 0 && q.giftDays < q.lines[0]?.days && (
+                <div className="li" style={{ alignItems: "center" }}>
+                  <div>
+                    <div className="t" style={{ color: "var(--bad)" }}>{n(q.lines[0].days - q.giftDays)} يوم برّه الهدية — دي سبب المبلغ المتبقي</div>
+                    <div className="s">الهدية بتغطي {n(q.giftDays)} يوم والحملة {n(q.lines[0].days)}</div>
+                  </div>
+                  <button type="button" className="btn sm" onClick={() => set("end", addDays(c.start, q.giftDays - 1))}>
+                    اظبطي النهاية على آخر يوم مغطّى
+                  </button>
+                </div>
+              )}
               <div className="li"><div className="t">المطلوب دفعه</div><div style={{ fontWeight: 800, fontSize: 18 }}>{egp(q.total)}</div></div>
               {q.ok ? <div style={{ color: "var(--good)", fontWeight: 700 }}>✓ كل المواضع متاحة في الفترة دي</div>
                 : <div role="alert" style={{ color: "var(--bad)", fontWeight: 700 }}>✕ مش متاح:{q.conflicts.map((x) => <div key={x.key}>{x.name} — {WHY[x.reason]} من {fdate(x.day)}</div>)}</div>}

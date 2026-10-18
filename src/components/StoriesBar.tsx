@@ -4,6 +4,7 @@ import { num, useT } from "../i18n";
 import { useAppState } from "../store/AppContext";
 import { StoryViewer } from "./StoryViewer";
 import { AddStorySheet } from "./AddStorySheet";
+import { SponsoredStory } from "../ads/SponsoredStory";
 
 /**
  * شريط "القصص" أعلى شاشة الدردشات — هذا هو تنفيذ قسم "نشر المحتوى"
@@ -72,6 +73,9 @@ export function StoriesBar() {
           </button>
         );
       })}
+
+      {/* الستوري الممول في آخر الشريط ومتعلّم بـ«إعلان» — مش وسط ستوريز الناس */}
+      <SponsoredStory />
 
       {openAuthor && <StoryViewer authorId={openAuthor} onClose={() => setOpenAuthor(null)} />}
       {showAdd && <AddStorySheet onClose={() => setShowAdd(false)} />}

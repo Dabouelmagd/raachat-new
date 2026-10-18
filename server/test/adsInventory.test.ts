@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { startTestEnv } from "./helpers.js";
-import { addDays, todayCairo } from "../src/lib/adsInventory.js";
+import { DEFAULT_PLACEMENTS, addDays, todayCairo } from "../src/lib/adsInventory.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 let owner: Awaited<ReturnType<typeof env.login>>;
@@ -299,5 +299,32 @@ describe("صورة لكل موضع", () => {
     })).expect(201)).body;
     const r = await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ images: { modal: TALL } });
     expect(r.status).toBe(400);
+  });
+});
+
+/**
+ * 🔴 **كل موضع مباع لازم يكون معروضًا في التطبيق فعلًا.**
+ *
+ * `story` كان مباعًا بـ٢٥٠ ج/يوم في اللوحة و**مفيش في التطبيق كله سطر بيعرضه**
+ * (`adsFor("story")` مكانش بيتنادى من أي مكان) — يعني المعلن يدفع على مكان
+ * عمره ما ظهر، والإحصاءات تفضل صفرًا بلا أي خطأ. اتكشف ١٨ أكتوبر ٢٠٢٦.
+ *
+ * الحارس بيقرا **كود الواجهة** ويتأكد إن كل مفتاح موضع في المخزون له عارض —
+ * فأي موضع جديد يتباع من غير مكان يعرضه بيفشّل الاختبار.
+ */
+describe("مفيش موضع مباع بلا عارض في التطبيق", () => {
+  it("🔴 كل مفتاح موضع في المخزون متنادى من كود الواجهة", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(import.meta.dirname, "../..");
+    const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []);
+    const code = walk(path.join(root, "src")).map((f) => fs.readFileSync(f, "utf8")).join("\n");
+    expect(code.length, "مالقاش كود الواجهة").toBeGreaterThan(10000);
+
+    const missing = DEFAULT_PLACEMENTS
+      .map((p) => p.key)
+      .filter((k) => !new RegExp(`placement=["'{]?["']?${k}\\b|useCatalog\\(["']${k}["']\\)|adsFor\\(["']${k}["']\\)`).test(code));
+    expect(missing, `مواضع مباعة ومفيش في التطبيق حاجة بتعرضها: ${missing.join(" · ")}`).toEqual([]);
   });
 });
