@@ -406,7 +406,7 @@ model AuditLog {
   @@index([createdAt])
 }
 
-/// موضع إعلاني (مخزون): مقاس + سعة (عدد معلنين في نفس اليوم) + سعر اليوم
+/// موضع إعلاني (مخزون): مقاس + سعة (عدد معلنين في نفس اليوم) + سعر الشهر
 model AdPlacement {
   id          String    @id @default(cuid())
   key         String    @unique
@@ -415,6 +415,9 @@ model AdPlacement {
   width       Int
   height      Int
   slots       Int       @default(1)
+  /// 🔴 **البيع بالشهر** (قرار داليا ١٩ أكتوبر ٢٠٢٦) — الشهر = 30 يوم بالظبط (`MONTH_DAYS`).
+  pricePerMonth Decimal @db.Decimal(10, 2)
+  /// مشتقّ = pricePerMonth / 30، متساب للكود القديم ومابيتحسبش منه سعر.
   pricePerDay Decimal   @db.Decimal(10, 2)
   active      Boolean   @default(true)
   note        String?
@@ -467,6 +470,9 @@ model AdBooking {
   id          String      @id @default(cuid())
   campaignId  String
   placementId String
+  /// السعر وقت الحجز — بيتقفل هنا فتعديل سعر الموضع بعدين مابيأثرش على حملة قايمة
+  pricePerMonth Decimal   @db.Decimal(10, 2)
+  /// مشتقّ = pricePerMonth / 30 (الكود القديم)
   pricePerDay Decimal     @db.Decimal(10, 2)
   /// صورة الإعلان **في الموضع ده** — كل موضع مقاسه مختلف فالصورة بتختلف.
   /// NULL = يرجع لصورة الحملة (`AdCampaign.imageUrl`) لو موجودة، وإلا نصّ بتدرّج.

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { startTestEnv } from "./helpers.js";
-import { DEFAULT_PLACEMENTS, addDays, todayCairo } from "../src/lib/adsInventory.js";
+import { DEFAULT_PLACEMENTS, MONTH_DAYS, addDays, todayCairo } from "../src/lib/adsInventory.js";
 // @ts-expect-error دالة خالصة بـ JS عادي — مفيش types ولا تبعيات (نفس `uploadUrl.test.ts`)
 import { clearDraft, draftHasWork, draftKey, loadDraft, saveDraft } from "../../admin/src/draft.js";
 
@@ -12,75 +12,86 @@ afterAll(async () => { await env?.stop(); }, 60_000);
 const api = () => request(env.app);
 const T = todayCairo();
 const d = (n: number) => addDays(T, n);
-const camp = (o: Record<string, unknown> = {}) => ({ advertiser: "كافيه النيل", headline: "قهوتك علينا", link: "https://example.com/a", start: d(1), end: d(3), placements: ["banner"], ...o });
+/**
+ * 🔴 **البيع شهور كاملة بس** (قرار داليا ١٩ أكتوبر ٢٠٢٦) — فكل فترة حملة أو
+ * تسعيرة في الاختبارات دي لازم تكون مضاعفًا لـ`MONTH_DAYS`، وإلا السيرفر
+ * بيرفض بـ٤٠٠ `bad_range`. والقفل (`/blocks`) لسه بالأيام عن قصد: ده صيانة
+ * مش بيع.
+ */
+const mo = (from: number, months = 1) => ({ start: d(from), end: d(from + months * MONTH_DAYS - 1) });
+/** فترة الشهر رقم k — نوافذ متتالية مابتتقاطعش، فكل اختبار له مكانه */
+const W = (k: number, months = 1) => mo(1 + k * MONTH_DAYS, months);
+// نافذة بعيدة للطلبات اللي المفروض تترفض — لو واحد نجح بالغلط مايزاحمش حد
+const camp = (o: Record<string, unknown> = {}) => ({ advertiser: "كافيه النيل", headline: "قهوتك علينا", link: "https://example.com/a", ...W(25), placements: ["banner"], ...o });
 
 describe("خريطة الإعلانات", () => {
-  it("المواضع الافتراضية بمقاساتها وأسعارها، والتسعير = سعر اليوم × الأيام × المواضع", async () => {
+  it("المواضع الافتراضية بمقاساتها وأسعارها، والتسعير = سعر الشهر × الشهور × المواضع", async () => {
     const ps = (await api().get("/admin/ads/placements").set(owner.auth).expect(200)).body;
     // من المصدر مش قايمة مكتوبة بالإيد — إضافة موضع جديد مايكسرش الاختبار،
     // وفي نفس الوقت الترتيب والعدد لسه متفحوصين
     expect(ps.map((p: { key: string }) => p.key)).toEqual(DEFAULT_PLACEMENTS.map((p) => p.key));
-    expect(ps[1]).toMatchObject({ width: 1200, height: 300, slots: 3, pricePerDay: 150 });
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner", "services"], start: d(1), end: d(3) }).expect(200)).body;
-    expect(q.days).toBe(3); expect(q.total).toBe((150 + 120) * 3); expect(q.ok).toBe(true);
+    expect(ps[1]).toMatchObject({ width: 1200, height: 300, slots: 3, pricePerMonth: 4500, pricePerDay: 150 });
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner", "services"], ...W(0) }).expect(200)).body;
+    expect(q.months).toBe(1); expect(q.days).toBe(MONTH_DAYS); expect(q.total).toBe(4500 + 3600); expect(q.ok).toBe(true);
   });
 
   it("الحجز بيستهلك السعة، وبعد ما تمتلي الأيام دي بتبقى غير متاحة (409) والباقي متاح", async () => {
-    await api().put("/admin/ads/placements/story").set(owner.auth).send({ name: "ستوري", kind: "story", width: 1080, height: 1920, slots: 1, pricePerDay: 400, active: true }).expect(200);
-    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["story"], start: d(5), end: d(7) })).expect(201)).body;
-    expect(a.status).toBe("pending"); expect(a.total).toBe(1200);
-    const r = await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "تاني", placements: ["story"], start: d(7), end: d(9) }));
+    await api().put("/admin/ads/placements/story").set(owner.auth).send({ name: "ستوري", kind: "story", width: 1080, height: 1920, slots: 1, pricePerMonth: 12000, active: true }).expect(200);
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["story"], ...W(5) })).expect(201)).body;
+    expect(a.status).toBe("pending"); expect(a.total).toBe(12000);
+    const r = await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "تاني", placements: ["story"], ...mo(1 + 5 * MONTH_DAYS + 10) }));
     expect(r.status).toBe(409); expect(r.body.code).toBe("ad_unavailable");
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "تاني", placements: ["story"], start: d(8), end: d(9) })).expect(201);
-    const inv = (await api().get(`/admin/ads/inventory?from=${d(4)}&days=6`).set(owner.auth).expect(200)).body;
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "تاني", placements: ["story"], ...W(6) })).expect(201);
+    const inv = (await api().get(`/admin/ads/inventory?from=${d(5 * MONTH_DAYS)}&days=3`).set(owner.auth).expect(200)).body;
     const st = inv.placements.find((p: { key: string }) => p.key === "story");
-    expect(st.cells.map((c: { free: number }) => c.free)).toEqual([1, 0, 0, 0, 0, 0]);
+    expect(st.cells.map((c: { free: number }) => c.free)).toEqual([1, 0, 0]);
     expect(st.cells[1].held).toBe(1);
   });
 
   it("رفض/إلغاء بيحرر المكان، والموافقة بتحوّل الحجز المؤقت لمؤكد، والتعديل بيعيد التسعير", async () => {
-    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["modal"], start: d(20), end: d(21) })).expect(201)).body;
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["modal"], ...W(20) })).expect(201)).body;
     expect((await api().post(`/admin/ads/campaigns/${a.id}/approve`).set(owner.auth).expect(200)).body.status).toBe("approved");
     await api().post(`/admin/ads/campaigns/${a.id}/approve`).set(owner.auth).expect(400);
-    const up = (await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ end: d(23), placements: ["modal", "services"] }).expect(200)).body;
-    expect(up.total).toBe((400 + 120) * 4);
-    let inv = (await api().get(`/admin/ads/inventory?from=${d(20)}&days=1`).set(owner.auth)).body;
+    const up = (await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ end: W(20, 2).end, placements: ["modal", "services"] }).expect(200)).body;
+    expect(up.total).toBe((12000 + 3600) * 2);
+    let inv = (await api().get(`/admin/ads/inventory?from=${W(20).start}&days=1`).set(owner.auth)).body;
     expect(inv.placements.find((p: { key: string }) => p.key === "modal").cells[0]).toMatchObject({ booked: 1, held: 0 });
     await api().post(`/admin/ads/campaigns/${a.id}/pause`).set(owner.auth).expect(200);
     await api().post(`/admin/ads/campaigns/${a.id}/cancel`).set(owner.auth).expect(200);
-    inv = (await api().get(`/admin/ads/inventory?from=${d(20)}&days=1`).set(owner.auth)).body;
+    inv = (await api().get(`/admin/ads/inventory?from=${W(20).start}&days=1`).set(owner.auth)).body;
     expect(inv.placements.find((p: { key: string }) => p.key === "modal").cells[0]).toMatchObject({ booked: 0, free: 4 });
     await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ headline: "x y" }).expect(400);
   });
 
   it("قفل موضع لفترة بيخليه غير متاح، وممنوع قفل فترة فيها حجز، وفتحه بيرجّعه", async () => {
-    const blk = (await api().post("/admin/ads/blocks").set(owner.auth).send({ placement: "services", from: d(30), to: d(32), reason: "صيانة" }).expect(201)).body;
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["services"], start: d(31), end: d(33) }).expect(200)).body;
-    expect(q.ok).toBe(false); expect(q.conflicts[0]).toMatchObject({ key: "services", day: d(31), reason: "blocked" });
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["services"], start: d(32), end: d(33) })).expect(409);
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(40), end: d(41) })).expect(201);
-    await api().post("/admin/ads/blocks").set(owner.auth).send({ placement: "banner", from: d(41), to: d(42), reason: "حدث" }).expect(409);
+    const blk = (await api().post("/admin/ads/blocks").set(owner.auth).send({ placement: "services", from: W(30).start, to: d(1 + 30 * MONTH_DAYS + 2), reason: "صيانة" }).expect(201)).body;
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["services"], ...W(30) }).expect(200)).body;
+    expect(q.ok).toBe(false); expect(q.conflicts[0]).toMatchObject({ key: "services", day: W(30).start, reason: "blocked" });
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["services"], ...mo(1 + 30 * MONTH_DAYS + 1) })).expect(409);
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(31) })).expect(201);
+    await api().post("/admin/ads/blocks").set(owner.auth).send({ placement: "banner", from: d(1 + 31 * MONTH_DAYS + 1), to: d(1 + 31 * MONTH_DAYS + 2), reason: "حدث" }).expect(409);
     await api().delete(`/admin/ads/blocks/${blk.id}`).set(owner.auth).expect(204);
-    expect((await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["services"], start: d(31), end: d(33) })).body.ok).toBe(true);
+    expect((await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["services"], ...W(30) })).body.ok).toBe(true);
   });
 
   it("حجزين متزامنين على آخر مكان: واحد بس ينجح", async () => {
-    await api().put("/admin/ads/placements/story").set(owner.auth).send({ name: "ستوري", kind: "story", width: 1080, height: 1920, slots: 1, pricePerDay: 400, active: true }).expect(200);
-    const rs = await Promise.all([0, 1, 2].map((i) => api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "م" + i, placements: ["story"], start: d(60), end: d(61) }))));
+    await api().put("/admin/ads/placements/story").set(owner.auth).send({ name: "ستوري", kind: "story", width: 1080, height: 1920, slots: 1, pricePerMonth: 12000, active: true }).expect(200);
+    const rs = await Promise.all([0, 1, 2].map((i) => api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "م" + i, placements: ["story"], ...W(60) }))));
     expect(rs.filter((r) => r.status === 201)).toHaveLength(1);
     expect(rs.filter((r) => r.status === 409)).toHaveLength(2);
   });
 
   it("تقليل سعة موضع تحت الحجوزات القائمة ممنوع", async () => {
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(50), end: d(51) })).expect(201);
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(50), end: d(51) })).expect(201);
-    const r = await api().put("/admin/ads/placements/banner").set(owner.auth).send({ name: "بانر", kind: "banner", width: 1200, height: 300, slots: 1, pricePerDay: 150, active: true });
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(50) })).expect(201);
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(50) })).expect(201);
+    const r = await api().put("/admin/ads/placements/banner").set(owner.auth).send({ name: "بانر", kind: "banner", width: 1200, height: 300, slots: 1, pricePerMonth: 4500, active: true });
     expect(r.status).toBe(409); expect(r.body.code).toBe("slots_in_use");
   });
 
   it("التحقق: تاريخ فات / نهاية قبل بداية / رابط مش https / موضع مجهول", async () => {
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ start: d(-2), end: d(1) })).expect(400);
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ ...mo(-2) })).expect(400);  // تاريخ فات — والفترة شهر كامل عشان الرفض يبقى للسبب ده
     await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ start: d(5), end: d(4) })).expect(400);
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ ...W(90), end: d(1 + 90 * MONTH_DAYS + 9) })).expect(400); // 🔴 عشرة أيام — مش شهورًا كاملة
     await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ link: "http://x.com" })).expect(400);
     await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["nope"] })).expect(400);
   });
@@ -93,18 +104,18 @@ describe("خريطة الإعلانات", () => {
     };
     const mgr = await mk("01099000020", "manager"), acc = await mk("01099000021", "accountant");
     await api().get("/admin/ads/inventory").set(acc.auth).expect(403);
-    await api().post("/admin/ads/campaigns").set(acc.auth).send(camp({ start: d(70), end: d(71) })).expect(403);
+    await api().post("/admin/ads/campaigns").set(acc.auth).send(camp({ ...W(70) })).expect(403);
     await api().get("/admin/ads/inventory").set(mgr.auth).expect(200);
-    await api().post("/admin/ads/campaigns").set(mgr.auth).send(camp({ placements: ["services"], start: d(70), end: d(71), approve: true })).expect(201);
+    await api().post("/admin/ads/campaigns").set(mgr.auth).send(camp({ placements: ["services"], ...W(70), approve: true })).expect(201);
     const log = (await api().get("/admin/audit").set(owner.auth)).body as { what: string }[];
     expect(log.some((l) => l.what === "أنشأ واعتمد حملة")).toBe(true);
   });
 
   it("/ads/catalog بيرجّع الشغّال النهارده بس (معتمد وفي فترته)", async () => {
     const user = await env.login("01099000030", "مستخدم");
-    const run = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "شغال", placements: ["modal", "services"], start: T, end: d(2), approve: true })).expect(201)).body;
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "مستني", placements: ["modal"], start: T, end: d(2) })).expect(201);
-    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "بكرة", placements: ["modal"], start: d(3), end: d(4), approve: true })).expect(201);
+    const run = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "شغال", placements: ["modal", "services"], ...mo(0), approve: true })).expect(201)).body;
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "مستني", placements: ["story"], ...mo(0) })).expect(201);
+    await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "بكرة", placements: ["modal"], ...W(1), approve: true })).expect(201);
     await api().get("/ads/catalog").expect(401);
     let c = (await api().get("/ads/catalog").set(user.auth).expect(200)).body as { id: string; advertiser: string; placements: string[] }[];
     expect(c.filter((x) => ["شغال", "مستني", "بكرة"].includes(x.advertiser)).map((x) => x.advertiser)).toEqual(["شغال"]);
@@ -116,7 +127,7 @@ describe("خريطة الإعلانات", () => {
 
   it("إحصائيات الحملة: ظهور فريد/نقرات بتتجمّع للحملة الحقيقية، والمكرر ما بيتعدّش", async () => {
     const user = await env.login("01099000040", "قارئ");
-    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "إحصاء", placements: ["banner"], start: T, end: d(1), approve: true })).expect(201)).body;
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "إحصاء", placements: ["banner"], ...mo(0), approve: true })).expect(201)).body;
     const ev = (body: Record<string, unknown>) => api().post("/ads/events").set(user.auth).send({ day: T, adId: c.id, ...body }).expect(204);
     await ev({ kind: "shown", placement: "banner" }); await ev({ kind: "shown", placement: "banner" });
     await ev({ kind: "shown", slot: 2, placement: "modal" }); await ev({ kind: "clicked", placement: "modal" }); await ev({ kind: "clicked", placement: "modal" });
@@ -132,7 +143,7 @@ describe("خريطة الإعلانات", () => {
     const kid = await env.login("01099000051", "قاصر");
     await api().patch("/me").set(big.auth).send({ birthDate: "1990-05-20" }).expect(200);
     await api().patch("/me").set(kid.auth).send({ birthDate: `${new Date().getUTCFullYear() - 12}-01-01` }).expect(200);
-    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "سلوك", placements: ["banner", "modal"], start: T, end: d(1), approve: true })).expect(201)).body;
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "سلوك", placements: ["banner", "modal"], ...mo(0), approve: true })).expect(201)).body;
 
     // ١) مفيش استهداف: نفس الكتالوج بالحرف للبالغ والقاصر (ومن غير تاريخ ميلاد كمان)
     const none = await env.login("01099000052", "بدون تاريخ");
@@ -176,27 +187,27 @@ describe("خريطة الإعلانات", () => {
     const gs = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1, count: 2, recipient: "كافيه النيل" }).expect(201)).body as { id: string; code: string; days: number; status: string }[];
     expect(gs).toHaveLength(2); expect(gs[0].days).toBe(30); expect(gs[0].code).toMatch(/^RA-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 2 }).expect(400);
-    // حملة ٤٥ يوم على بانر (١٥٠/يوم): الهدية بتغطي ٣٠ يوم = ٤٥٠٠ والباقي ١٥ يوم = ٢٢٥٠
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(100), end: d(144), giftCode: gs[0].code.toLowerCase() }).expect(200)).body;
-    expect(q).toMatchObject({ gross: 6750, discount: 4500, total: 2250, giftDays: 30, giftError: null });
-    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(100), end: d(144), giftCode: gs[0].code })).expect(201)).body;
-    expect(c).toMatchObject({ total: 2250, discount: 4500, gross: 6750, giftCode: gs[0].code });
+    // حملة شهرين على بانر (٤٥٠٠/شهر): الهدية بتغطي شهرًا = ٤٥٠٠ والباقي شهر = ٤٥٠٠
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(34, 2), giftCode: gs[0].code.toLowerCase() }).expect(200)).body;
+    expect(q).toMatchObject({ gross: 9000, discount: 4500, total: 4500, months: 2, giftDays: 30, giftMonths: 1, giftError: null });
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(34, 2), giftCode: gs[0].code })).expect(201)).body;
+    expect(c).toMatchObject({ total: 4500, discount: 4500, gross: 9000, giftCode: gs[0].code });
     const used = (await api().get("/admin/ads/gifts").set(owner.auth)).body as { code: string; status: string; usedBy: string }[];
     expect(used.find((g) => g.code === gs[0].code)).toMatchObject({ status: "used", usedBy: "كافيه النيل" });
-    expect((await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["services"], start: d(100), end: d(101), giftCode: gs[0].code }))).body.code).toBe("gift_used");
+    expect((await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["services"], ...W(36), giftCode: gs[0].code }))).body.code).toBe("gift_used");
     await api().delete(`/admin/ads/gifts/${used.find((g) => g.code === gs[0].code) ? (await api().get("/admin/ads/gifts").set(owner.auth)).body.find((g: { code: string }) => g.code === gs[0].code).id : ""}`).set(owner.auth).expect(409);
     await api().post(`/admin/ads/campaigns/${c.id}/reject`).set(owner.auth).expect(200);
     const back = (await api().get("/admin/ads/gifts").set(owner.auth)).body as { code: string; status: string }[];
     expect(back.find((g) => g.code === gs[0].code)!.status).toBe("available");
     await api().delete(`/admin/ads/gifts/${gs[1].id}`).set(owner.auth).expect(204);
-    expect((await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(100), end: d(101), giftCode: gs[1].code })).body.giftError).toMatch(/غير صحيح/);
+    expect((await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(36), giftCode: gs[1].code })).body.giftError).toMatch(/غير صحيح/);
   });
 
   it("هدية مقيّدة بموضع بتخصم الموضع ده بس، ومرفوضة لموضع تاني", async () => {
-    const [g] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 3, placements: ["banner"], expiresAt: d(200) }).expect(201)).body as { code: string }[];
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner", "services"], start: d(120), end: d(122), giftCode: g.code })).body;
-    expect(q).toMatchObject({ gross: 810, discount: 450, total: 360 });
-    const q2 = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["services"], start: d(120), end: d(122), giftCode: g.code })).body;
+    const [g] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 3, placements: ["banner"], expiresAt: d(40 * MONTH_DAYS) }).expect(201)).body as { code: string }[];
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner", "services"], ...W(38), giftCode: g.code })).body;
+    expect(q).toMatchObject({ gross: 8100, discount: 4500, total: 3600 });
+    const q2 = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["services"], ...W(38), giftCode: g.code })).body;
     expect(q2.giftError).toMatch(/مش بيشمل/);
   });
 
@@ -217,7 +228,7 @@ describe("صورة الإعلان على مسار اللوحة", () => {
   it("بيقبل صورة مرفوعة عندنا وبترجع في رد اللوحة وفي كتالوج التطبيق", async () => {
     const img = "/uploads/aabbccddeeff0011.png";
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
-      .send(camp({ placements: ["services"], start: T, end: d(1), imageUrl: img, approve: true })).expect(201)).body;
+      .send(camp({ placements: ["services"], ...mo(0), imageUrl: img, approve: true })).expect(201)).body;
     expect(a.imageUrl).toBe(img);
 
     const cat = (await api().get("/ads/catalog").set(owner.auth).expect(200)).body;
@@ -227,20 +238,20 @@ describe("صورة الإعلان على مسار اللوحة", () => {
 
   it("🔴 بيرفض الرابط الخارجي (٤٠٠) — وإلا المراجعة بلا معنى", async () => {
     const r = await api().post("/admin/ads/campaigns").set(owner.auth)
-      .send(camp({ placements: ["services"], start: d(44), end: d(45), imageUrl: "https://evil.com/uploads/x1y2z3a4b5c6.png" }));
+      .send(camp({ placements: ["services"], ...W(44), imageUrl: "https://evil.com/uploads/x1y2z3a4b5c6.png" }));
     expect(r.status, "اتقبل رابط خارجي").toBe(400);
   });
 
   it("الإعلان بلا صورة لسه شغّال (نصّ + تدرّج زي ما كان)", async () => {
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
-      .send(camp({ placements: ["services"], start: d(48), end: d(49) })).expect(201)).body;
+      .send(camp({ placements: ["services"], ...W(48) })).expect(201)).body;
     expect(a.imageUrl).toBeNull();
   });
 
   it("التعديل بيقدر يشيل الصورة (null)", async () => {
     const img = "/uploads/ffeeddccbbaa9988.jpg";
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
-      .send(camp({ placements: ["services"], start: d(52), end: d(53), imageUrl: img })).expect(201)).body;
+      .send(camp({ placements: ["services"], ...W(52), imageUrl: img })).expect(201)).body;
     expect(a.imageUrl).toBe(img);
     const b = (await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ imageUrl: null }).expect(200)).body;
     expect(b.imageUrl, "الصورة ما اتشالتش").toBeNull();
@@ -263,7 +274,7 @@ describe("صورة لكل موضع", () => {
 
   it("🔴 كل موضع بياخد صورته هو في اللوحة وفي الكتالوج", async () => {
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
-      placements: ["banner", "modal"], start: T, end: d(1), approve: true,
+      placements: ["banner", "modal"], ...mo(0), approve: true,
       images: { banner: WIDE, modal: TALL },
     })).expect(201)).body;
     expect(a.images).toEqual({ banner: WIDE, modal: TALL });
@@ -275,7 +286,7 @@ describe("صورة لكل موضع", () => {
 
   it("الموضع اللي مالوش صورة بياخد صورة الحملة (الحملات القديمة)", async () => {
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
-      placements: ["banner", "modal"], start: d(60), end: d(61), imageUrl: WIDE, images: { modal: TALL },
+      placements: ["banner", "modal"], ...W(56), imageUrl: WIDE, images: { modal: TALL },
     })).expect(201)).body;
     expect(a.imageUrl).toBe(WIDE);
     expect(a.images).toEqual({ modal: TALL });
@@ -283,14 +294,14 @@ describe("صورة لكل موضع", () => {
 
   it("🔴 الرابط الخارجي في صورة موضع بيترفض زي صورة الحملة", async () => {
     const r = await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
-      placements: ["banner"], start: d(64), end: d(65), images: { banner: "https://evil.com/uploads/aaaabbbbccccdddd.png" },
+      placements: ["banner"], ...W(64), images: { banner: "https://evil.com/uploads/aaaabbbbccccdddd.png" },
     }));
     expect(r.status, "اتقبل رابط خارجي في صورة موضع").toBe(400);
   });
 
   it("التعديل بيبدّل صورة موضع ويشيل التانية", async () => {
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
-      placements: ["banner", "modal"], start: d(68), end: d(69), images: { banner: WIDE, modal: TALL },
+      placements: ["banner", "modal"], ...W(68), images: { banner: WIDE, modal: TALL },
     })).expect(201)).body;
     const b = (await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth)
       .send({ images: { banner: TALL, modal: null } }).expect(200)).body;
@@ -299,7 +310,7 @@ describe("صورة لكل موضع", () => {
 
   it("صورة لموضع مش في الحملة بترفض", async () => {
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({
-      placements: ["banner"], start: d(72), end: d(73),
+      placements: ["banner"], ...W(72),
     })).expect(201)).body;
     const r = await api().patch(`/admin/ads/campaigns/${a.id}`).set(owner.auth).send({ images: { modal: TALL } });
     expect(r.status).toBe(400);
@@ -344,7 +355,10 @@ describe("مفيش موضع مباع بلا عارض في التطبيق", () =>
 describe("تتبّع الظهور شغّال لكل موضع", () => {
   it("🔴 كل مفتاح موضع مقبول في /ads/events", async () => {
     const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
-      .send(camp({ placements: ["banner"], start: d(200), end: d(201), approve: true })).expect(201)).body;
+      // ⚠️ نافذة «النهاردة» (`mo(0)`) **مشتركة** بين كل اختبار محتاج حملة
+      // شغّالة النهاردة — والبيع بالشهر خلّى الشهر ده واحدًا لكلهم، فسعة كل
+      // موضع فيه محدودة: البانر (٣ أماكن) اتملا، فده على النافذة (٤).
+      .send(camp({ placements: ["modal"], ...mo(0), approve: true })).expect(201)).body;
     const day = T;
     for (const key of DEFAULT_PLACEMENTS.map((p) => p.key)) {
       const r = await api().post("/ads/events").set(owner.auth)
@@ -365,7 +379,7 @@ describe("تتبّع الظهور شغّال لكل موضع", () => {
  * الحارس بيقرا الرقمين من الملفين ويقارنهم، فأي تعديل في واحد لوحده بيسقط.
  */
 describe("المدد الجاهزة = أيام أكواد الهدايا", () => {
-  it("🔴 أيام «شهر/٣/٦/سنة» في اللوحة نفس GIFT_MONTHS على السيرفر", async () => {
+  it("🔴 شهور «شهر/٣/٦/سنة» في اللوحة نفس GIFT_MONTHS على السيرفر، وطول الشهر واحد", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const root = path.resolve(import.meta.dirname, "../..");
@@ -373,12 +387,20 @@ describe("المدد الجاهزة = أيام أكواد الهدايا", () =>
 
     const line = /const DURATIONS = (\[.*?\]);/s.exec(src);
     expect(line, "مالقاش DURATIONS في liveAds.jsx").toBeTruthy();
-    const days = [...line![1].matchAll(/\[\s*(\d+)\s*,/g)].map((m) => +m[1]);
-    expect(days.length, "المدد الجاهزة مش موجودة").toBe(4);
+    const months = [...line![1].matchAll(/\[\s*(\d+)\s*,/g)].map((m) => +m[1]);
+    expect(months, "المدد الجاهزة مش شهر/٣/٦/سنة").toEqual([1, 3, 6, 12]);
+
+    // 🔴 والحاسم: **طول الشهر** في اللوحة نفسه اللي على السيرفر. لو اتفرقوا،
+    // النهاية اللي اللوحة بتحسبها مابتبقاش شهورًا كاملة عند السيرفر، فالحجز
+    // يترفض بـ٤٠٠ بعد ما الواحد يملا النموذج كله — أو أسوأ: يتقبل بفرق يوم
+    // بفلوس زي اللي حصل فعلًا (٩٢٠ ج.م في عرض سعر حقيقي).
+    const adminMonth = /const MONTH_DAYS = (\d+);/.exec(src);
+    expect(adminMonth, "مالقاش MONTH_DAYS في liveAds.jsx").toBeTruthy();
+    expect(+adminMonth![1], "طول الشهر في اللوحة مختلف عن السيرفر").toBe(MONTH_DAYS);
 
     const { GIFT_MONTHS } = await import("../src/lib/adsInventory.js");
-    expect(days, "المدد الجاهزة اتفرقت عن أيام الهدايا — كل حملة بهدية هتسيب أيامًا بفلوس")
-      .toEqual([1, 3, 6, 12].map((m) => GIFT_MONTHS[m]));
+    expect(months.map((m) => GIFT_MONTHS[m]), "أيام الهدايا مش مشتقّة من طول الشهر")
+      .toEqual(months.map((m) => m * MONTH_DAYS));
   });
 });
 
@@ -421,58 +443,58 @@ describe("خريطة الأماكن المتاحة", () => {
  */
 describe("الخصم اليدوي على الحملة", () => {
   it("🔴 العرض بيتحسب على المتبقي بعد الهدية، و`الإجمالي = المطلوب + الخصم` تفضل صحيحة", async () => {
-    // بانر ١٥٠/يوم × ١٠ أيام = ١٥٠٠
-    const q0 = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(49) }).expect(200)).body;
-    expect(q0.total).toBe(1500);
+    // بانر ٤٥٠٠/شهر × شهر = ٤٥٠٠
+    const q0 = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(76) }).expect(200)).body;
+    expect(q0.total).toBe(4500);
 
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(49), offerPct: 20 }).expect(200)).body;
-    expect(q.gross).toBe(1500);
-    expect(q.offer).toBe(300);          // ٢٠٪ من ١٥٠٠
-    expect(q.total).toBe(1200);
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(76), offerPct: 20 }).expect(200)).body;
+    expect(q.gross).toBe(4500);
+    expect(q.offer).toBe(900);          // ٢٠٪ من ٤٥٠٠
+    expect(q.total).toBe(3600);
     expect(+(q.total + q.discount).toFixed(2)).toBe(q.gross);
 
-    // هدية شهر (٣٠ يوم = ٤٥٠٠) على حملة ٤٠ يوم (٦٠٠٠) + عرض ٢٠٪
-    // → ٢٠٪ من المتبقي (١٥٠٠) = ٣٠٠، والمطلوب ١٢٠٠
+    // هدية شهر (٤٥٠٠) على حملة شهرين (٩٠٠٠) + عرض ٢٠٪
+    // → ٢٠٪ من المتبقي (٤٥٠٠) = ٩٠٠، والمطلوب ٣٦٠٠
     const [gift] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1, placements: ["banner"] }).expect(201)).body as { code: string }[];
-    const qg = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(79), giftCode: gift.code, offerPct: 20 }).expect(200)).body;
-    expect(qg.gross).toBe(6000);
+    const qg = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(76, 2), giftCode: gift.code, offerPct: 20 }).expect(200)).body;
+    expect(qg.gross).toBe(9000);
     expect(qg.gift).toBe(4500);
-    expect(qg.offer).toBe(300);
-    expect(qg.total).toBe(1200);
+    expect(qg.offer).toBe(900);
+    expect(qg.total).toBe(3600);
     expect(+(qg.total + qg.discount).toFixed(2)).toBe(qg.gross);
   });
 
   it("الحملة بتتخزن بالعرض، وتغيير النسبة لوحدها بيعيد حساب الفاتورة", async () => {
-    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(60), end: d(69), offerPct: 10 })).expect(201)).body;
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(80), offerPct: 10 })).expect(201)).body;
     expect(c.offerPct).toBe(10);
-    expect(c.total).toBe(1350); // ١٥٠٠ − ١٠٪
+    expect(c.total).toBe(4050); // ٤٥٠٠ − ١٠٪
 
     // 🔴 النسبة لوحدها لازم تعيد الحساب — من غير كده الرقم بيتخزن
     // والفاتورة تفضل القديمة، والعميل يشوف نسبة متفق عليها بلا أثر
     const up = (await api().patch(`/admin/ads/campaigns/${c.id}`).set(owner.auth).send({ offerPct: 25 }).expect(200)).body;
     expect(up.offerPct).toBe(25);
-    expect(up.total).toBe(1125);
-    expect(up.discount).toBe(375);
+    expect(up.total).toBe(3375);
+    expect(up.discount).toBe(1125);
   });
 
   it("🔴 سحب الهدية عند الرفض مابيشيلش العرض معاها", async () => {
     const [gift] = (await api().post("/admin/ads/gifts").set(owner.auth).send({ months: 1, placements: ["banner"] }).expect(201)).body as { code: string }[];
-    // حملة ٤٠ يوم (٦٠٠٠)، هدية ٣٠ يوم (٤٥٠٠)، عرض ٢٠٪ على المتبقي (١٥٠٠) = ٣٠٠
-    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(120), end: d(159), giftCode: gift.code, offerPct: 20 })).expect(201)).body;
-    expect(c.total).toBe(1200);
+    // حملة شهرين (٩٠٠٠)، هدية شهر (٤٥٠٠)، عرض ٢٠٪ على المتبقي (٤٥٠٠) = ٩٠٠
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(84, 2), giftCode: gift.code, offerPct: 20 })).expect(201)).body;
+    expect(c.total).toBe(3600);
 
     const r = (await api().post(`/admin/ads/campaigns/${c.id}/reject`).set(owner.auth).send({ reason: "مش مناسب" }).expect(200)).body;
-    // الهدية رجعت، **والعرض لسه مطبَّق**: ٦٠٠٠ − ٢٠٪ = ٤٨٠٠
+    // الهدية رجعت، **والعرض لسه مطبَّق**: ٩٠٠٠ − ٢٠٪ = ٧٢٠٠
     expect(r.giftCode).toBe(null);
     expect(r.offerPct).toBe(20);
-    expect(r.total).toBe(4800);
-    expect(r.discount).toBe(1200);
+    expect(r.total).toBe(7200);
+    expect(r.discount).toBe(1800);
   });
 
   it("النسبة محدودة ٠–١٠٠ ومفيش قيم غريبة", async () => {
-    await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(41), offerPct: 101 }).expect(400);
-    await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(41), offerPct: -5 }).expect(400);
-    const full = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(40), end: d(41), offerPct: 100 }).expect(200)).body;
+    await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(88), offerPct: 101 }).expect(400);
+    await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(88), offerPct: -5 }).expect(400);
+    const full = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(88), offerPct: 100 }).expect(200)).body;
     expect(full.total).toBe(0); // ١٠٠٪ = مجاني بحملة — مسموح عن قصد
   });
 });
@@ -488,21 +510,21 @@ describe("الخصم اليدوي على الحملة", () => {
  */
 describe("إعلان بدون حملة", () => {
   it("🔴 مابياخدش مكانًا مبيوعًا — المعلن الدافع لسه يقدر يشتري الموضع كله", async () => {
-    await api().put("/admin/ads/placements/rooms").set(owner.auth).send({ name: "بانر الغرف الصوتية", kind: "room", width: 1200, height: 300, slots: 1, pricePerDay: 100, active: true }).expect(200);
+    await api().put("/admin/ads/placements/rooms").set(owner.auth).send({ name: "بانر الغرف الصوتية", kind: "room", width: 1200, height: 300, slots: 1, pricePerMonth: 3000, active: true }).expect(200);
     const h = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "رع شات", placements: ["rooms"], house: true })).expect(201)).body;
     expect(h.isHouse).toBe(true);
     expect(h.status).toBe("approved"); // بلا مراجعة — إعلاننا إحنا
     expect(h.total).toBe(0);
 
     // المكان الوحيد لسه متاح للبيع
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["rooms"], start: d(100), end: d(102) }).expect(200)).body;
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["rooms"], ...W(92) }).expect(200)).body;
     expect(q.ok).toBe(true);
-    const paid = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "معلن دافع", placements: ["rooms"], start: d(100), end: d(102), approve: true })).expect(201)).body;
-    expect(paid.total).toBe(300);
+    const paid = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "معلن دافع", placements: ["rooms"], ...W(92), approve: true })).expect(201)).body;
+    expect(paid.total).toBe(3000);
   });
 
   it("🔴 بيظهر في الكتالوج لما يكون فيه مكان فاضي، وبيختفي لما المدفوع يملا الموضع", async () => {
-    await api().put("/admin/ads/placements/adsfeed").set(owner.auth).send({ name: "قائمة العروض", kind: "banner", width: 1200, height: 300, slots: 1, pricePerDay: 80, active: true }).expect(200);
+    await api().put("/admin/ads/placements/adsfeed").set(owner.auth).send({ name: "قائمة العروض", kind: "banner", width: 1200, height: 300, slots: 1, pricePerMonth: 2400, active: true }).expect(200);
     const h = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "إعلان بيتنا", placements: ["adsfeed"], house: true })).expect(201)).body;
 
     const inFeed = () => api().get("/ads/catalog").set(owner.auth).expect(200)
@@ -510,7 +532,7 @@ describe("إعلان بدون حملة", () => {
     expect(await inFeed()).toContain(h.id);
 
     // معلن دافع بياخد المكان الوحيد النهارده → إعلاننا يفضي له
-    const paid = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "دافع", placements: ["adsfeed"], start: todayCairo(), end: d(2), approve: true })).expect(201)).body;
+    const paid = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "دافع", placements: ["adsfeed"], ...mo(0), approve: true })).expect(201)).body;
     const now = await inFeed();
     expect(now).toContain(paid.id);
     expect(now).not.toContain(h.id);
@@ -538,21 +560,21 @@ describe("إعلان بدون حملة", () => {
  */
 describe("ضريبة القيمة المضافة", () => {
   it("🔴 الضريبة مستخرجة من الإجمالي مش مزوّدة عليه، ومجموع الصافي والضريبة = الإجمالي", async () => {
-    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(200), end: d(209) }).expect(200)).body;
-    expect(q.total).toBe(1500);
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...W(96) }).expect(200)).body;
+    expect(q.total).toBe(4500);
     expect(q.vat.pct).toBe(14);
-    expect(q.vat.net).toBe(1315.79);
-    expect(q.vat.vat).toBe(184.21);
+    expect(q.vat.net).toBe(3947.37);
+    expect(q.vat.vat).toBe(552.63);
     // الإجمالي ما اتغيّرش — دي الفرضية اللي بتحمي المعلن من مطالبة زايدة
     expect(+(q.vat.net + q.vat.vat).toFixed(2)).toBe(q.total);
     expect(q.vat.total).toBe(q.total);
   });
 
   it("الضريبة بتتحسب على المطلوب بعد الخصم والهدية، وبتفضل متسقة في الحملة المحفوظة", async () => {
-    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(220), end: d(229), offerPct: 20 })).expect(201)).body;
-    expect(c.total).toBe(1200); // ١٥٠٠ − ٢٠٪
-    expect(+(c.vat.net + c.vat.vat).toFixed(2)).toBe(1200);
-    expect(c.vat.vat).toBe(147.37);
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...W(100), offerPct: 20 })).expect(201)).body;
+    expect(c.total).toBe(3600); // ٤٥٠٠ − ٢٠٪
+    expect(+(c.vat.net + c.vat.vat).toFixed(2)).toBe(3600);
+    expect(c.vat.vat).toBe(442.11);
   });
 });
 
@@ -611,6 +633,77 @@ describe("مسوّدة نموذج الحملة", () => {
 });
 
 /**
+ * 🔴 **البيع شهور كاملة بس** (قرار داليا ١٩ أكتوبر ٢٠٢٦: «عايزة الإعلانات
+ * بالشهر مش باليوم» → «شهور كاملة بس»).
+ *
+ * والرفض لازم يكون على **السيرفر** مش في اللوحة: السعر بقى `pricePerMonth`
+ * وضربه في شهور، فلو فترة مش شهورًا كاملة عدّت، التسعير يا يقرّب يا يطلّع
+ * كسرًا — **فاتورة برقم محدش يعرف جا منين**. فـ`priceOf` بترمي بدل ما
+ * تقسّم باليوم، والمسار يرفض بـ٤٠٠ `bad_range` من أول الطريق.
+ *
+ * والحملات **القديمة** (اللي اتعملت قبل القرار وفترتها مش شهور) لسه
+ * بتتعدّل: الرفض على اللي بيغيّر تواريخها بس — وإلا كل حملة قايمة في
+ * الإنتاج تبقى محبوسة ومستحيل حتى تتوقف من اللوحة.
+ */
+describe("شهور كاملة بس", () => {
+  it("🔴 فترة مش شهورًا كاملة بترفض ٤٠٠ في التسعيرة وفي الحجز", async () => {
+    for (const days of [1, 10, 29, 31, 45, 59]) {
+      const range = { start: d(1 + 110 * MONTH_DAYS), end: d(1 + 110 * MONTH_DAYS + days - 1) };
+      const q = await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], ...range });
+      expect(q.status, `${days} يوم اتقبل في التسعيرة`).toBe(400);
+      const c = await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], ...range }));
+      expect(c.status, `${days} يوم اتقبل في الحجز`).toBe(400);
+      // والرسالة بتقول **القاعدة** مش «قيمة غلط» — ده اللي بيوصل للي بيحجز
+      // ⚠️ المطابقة على **الجذر**: النصّ «شهورًا كاملة» بالتنوين، فـ/شهور كاملة/
+      // بتفشل على رسالة سليمة (نفس درس مطابقة العربي في الاختبارات)
+      for (const r of [q, c]) expect(r.body.message, `الرسالة مش بتقول قاعدة الشهور: ${r.body.message}`).toMatch(/شهور.{0,3} كاملة/);
+    }
+  });
+
+  it("الشهور الكاملة بتعدّي، والسعر = سعر الشهر × الشهور بلا كسور", async () => {
+    for (const months of [1, 2, 3, 6, 12]) {
+      const q = (await api().post("/admin/ads/quote").set(owner.auth)
+        .send({ placements: ["banner"], ...mo(1 + 120 * MONTH_DAYS, months) }).expect(200)).body;
+      expect(q.months, `${months} شهر اتحسبت غلط`).toBe(months);
+      expect(q.total).toBe(4500 * months);
+      expect(Number.isInteger(q.total * 100), "فاتورة فيها كسر قرش").toBe(true);
+    }
+  });
+
+  it("🔴 هدية السنة بتغطي حملة السنة بالكامل — مفيش يوم بفلوس", async () => {
+    const [gift] = (await api().post("/admin/ads/gifts").set(owner.auth)
+      .send({ months: 12, placements: ["banner"] }).expect(201)).body as { code: string }[];
+    expect(gift.code).toBeTruthy();
+    const q = (await api().post("/admin/ads/quote").set(owner.auth)
+      .send({ placements: ["banner"], ...mo(1 + 140 * MONTH_DAYS, 12), giftCode: gift.code }).expect(200)).body;
+    expect(q.months).toBe(12);
+    expect(q.giftMonths).toBe(12);
+    // ده الرقم اللي كان بيطلع ٩٢٠ ج.م لما السنة كانت ٣٦٦ يوم والهدية ٣٦٥
+    expect(q.total, "فاضل مبلغ على حملة الهدية بتغطيها بالكامل").toBe(0);
+  });
+
+  it("الحملة القديمة (فترتها مش شهور) لسه بتتعدّل طول ما تواريخها ما اتغيّرتش", async () => {
+    // إنشاؤها بمسار اللوحة مستحيل دلوقتي — فالحالة بتتعمل في القاعدة زي
+    // الحملات اللي في الإنتاج فعلًا قبل القرار
+    const p = (await env.ctx.db.adPlacement.findFirstOrThrow({ where: { key: "banner" } }));
+    const start = d(1 + 160 * MONTH_DAYS);
+    const old = await env.ctx.db.adCampaign.create({ data: {
+      advertiser: "حملة قديمة", headline: "من قبل القرار", link: "https://example.com/old",
+      startDate: start, endDate: d(1 + 160 * MONTH_DAYS + 9), status: "approved", total: "1500",
+      bookings: { create: [{ placementId: p.id, pricePerMonth: p.pricePerMonth, pricePerDay: p.pricePerDay }] },
+    } });
+    // تعديل بلا تواريخ: لازم يعدّي (وإلا الحملة محبوسة ومستحيل توقفها)
+    await api().patch(`/admin/ads/campaigns/${old.id}`).set(owner.auth).send({ headline: "عنوان جديد" }).expect(200);
+    // تعديل بيغيّر التواريخ لفترة مش شهور: يترفض
+    const bad = await api().patch(`/admin/ads/campaigns/${old.id}`).set(owner.auth).send({ end: d(1 + 160 * MONTH_DAYS + 14) });
+    expect(bad.status, "فترة مش شهور اتقبلت في التعديل").toBe(400);
+    expect(bad.body.code).toBe("bad_range");
+    // ولشهر كامل: يعدّي
+    await api().patch(`/admin/ads/campaigns/${old.id}`).set(owner.auth).send({ end: mo(1 + 160 * MONTH_DAYS).end }).expect(200);
+  });
+});
+
+/**
  * 🔴 **الموضع الجديد لازم يوصل لقاعدة فيها مواضع قديمة.**
  *
  * `ensureDefaultPlacements` كان بيرجع فورًا لو القاعدة فيها أي موضع، فأي
@@ -626,7 +719,7 @@ describe("زرع المواضع الناقصة", () => {
   it("الموضع الجديد بيتخلق على قاعدة فيها مواضع قديمة، والمعدَّل مابيتلمسش", async () => {
     // سعر معدَّل من اللوحة — لازم يفضل بعد الزرع
     await api().put("/admin/ads/placements/banner").set(owner.auth)
-      .send({ name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: 199, active: true }).expect(200);
+      .send({ name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerMonth: 5970, active: true }).expect(200);
     // نرجّع القاعدة لحالة الإنتاج: المواضع القديمة بس.
     // ⚠️ الكتلة دي بتعدّل حالة مشتركة (بتمسح حجوزات المواضع دي) فلازم تفضل
     // **آخر** حاجة في الملف — أي اختبار بعدها هيشوف قاعدة ناقصة.
@@ -647,6 +740,6 @@ describe("زرع المواضع الناقصة", () => {
       expect(after.map((p: { key: string }) => p.key), `الموضع ${k} ما اتخلقش — مكان للبيع مش موجود في القاعدة`).toContain(k);
     }
     const banner = after.find((p: { key: string }) => p.key === "banner");
-    expect(banner.pricePerDay, "الزرع كتب فوق سعر معدَّل من اللوحة").toBe(199);
+    expect(banner.pricePerMonth, "الزرع كتب فوق سعر معدَّل من اللوحة").toBe(5970);
   });
 });

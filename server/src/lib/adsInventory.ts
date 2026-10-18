@@ -5,16 +5,17 @@ import { HttpError } from "./errors.js";
 /** حالات الحملة اللي بتحجز مخزون (pending = حجز مؤقت لحد الموافقة) */
 export const HOLD = ["pending", "approved", "paused"] as const;
 
-/** أسعار افتراضية مبنية على سوق مصر: متوسط CPM لإعلانات ميتا ≈ ٢٫٩$ ≈ ١٥٠ ج.م لكل ألف ظهور (سعر صرف ~٥٢).
- *  البانر بسعر قريب من ١٥٠ ج.م/ألف، والنافذة الكاملة والستوري بعلاوة لأنهم أعلى انتباهًا. dailyImpressions تقدير لازم يتعدّل بالأرقام الفعلية. */
+/** أسعار افتراضية **بالشهر** (الشهر = 30 يوم)، مبنية على سوق مصر: متوسط CPM لإعلانات ميتا ≈ ٢٫٩$ ≈ ١٥٠ ج.م لكل ألف ظهور (سعر صرف ~٥٢).
+ *  البانر بسعر قريب من ١٥٠ ج.م/ألف في اليوم، والنافذة الكاملة والستوري بعلاوة لأنهم أعلى انتباهًا. dailyImpressions تقدير لازم يتعدّل بالأرقام الفعلية.
+ *  وبتتزرع للقاعدة الفاضية بس — أي سعر تعدّليه من اللوحة بيفضل زي ما هو. */
 export const MARKET_CPM_EGP = 150;
 export const DEFAULT_PLACEMENTS = [
-  { key: "modal", name: "نافذة كاملة عند الدخول", kind: "modal", width: 1080, height: 1920, slots: 4, pricePerDay: "400", dailyImpressions: 1000, sort: 1, note: "شاشة كاملة 9:16، زر إغلاق متأخر" },
-  { key: "banner", name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: "150", dailyImpressions: 1000, sort: 2, note: "أعلى قائمة الدردشات، يدور بين المعلنين" },
-  { key: "services", name: "بانر الخدمات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: "120", dailyImpressions: 800, sort: 3, note: "أعلى شاشة الخدمات والمحفظة" },
-  { key: "story", name: "إعلان بين الستوريز", kind: "story", width: 1080, height: 1920, slots: 2, pricePerDay: "250", dailyImpressions: 1000, sort: 4, note: "ستوري ممول بين القصص" },
-  { key: "rooms", name: "بانر الغرف الصوتية", kind: "room", width: 1200, height: 300, slots: 3, pricePerDay: "100", dailyImpressions: 500, sort: 5, note: "أعلى قائمة الغرف الصوتية" },
-  { key: "adsfeed", name: "قائمة العروض", kind: "banner", width: 1200, height: 300, slots: 6, pricePerDay: "80", dailyImpressions: 400, sort: 6, note: "شاشة «الإعلانات» — المستخدم داخلها بإرادته" },
+  { key: "modal", name: "نافذة كاملة عند الدخول", kind: "modal", width: 1080, height: 1920, slots: 4, pricePerMonth: "12000", dailyImpressions: 1000, sort: 1, note: "شاشة كاملة 9:16، زر إغلاق متأخر" },
+  { key: "banner", name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerMonth: "4500", dailyImpressions: 1000, sort: 2, note: "أعلى قائمة الدردشات، يدور بين المعلنين" },
+  { key: "services", name: "بانر الخدمات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerMonth: "3600", dailyImpressions: 800, sort: 3, note: "أعلى شاشة الخدمات والمحفظة" },
+  { key: "story", name: "إعلان بين الستوريز", kind: "story", width: 1080, height: 1920, slots: 2, pricePerMonth: "7500", dailyImpressions: 1000, sort: 4, note: "ستوري ممول بين القصص" },
+  { key: "rooms", name: "بانر الغرف الصوتية", kind: "room", width: 1200, height: 300, slots: 3, pricePerMonth: "3000", dailyImpressions: 500, sort: 5, note: "أعلى قائمة الغرف الصوتية" },
+  { key: "adsfeed", name: "قائمة العروض", kind: "banner", width: 1200, height: 300, slots: 6, pricePerMonth: "2400", dailyImpressions: 400, sort: 6, note: "شاشة «الإعلانات» — المستخدم داخلها بإرادته" },
 ] as const;
 
 /**
@@ -26,7 +27,23 @@ export const DEFAULT_PLACEMENTS = [
 type PlacementKey = (typeof DEFAULT_PLACEMENTS)[number]["key"];
 export const PLACEMENT_KEYS = DEFAULT_PLACEMENTS.map((p) => p.key) as [PlacementKey, ...PlacementKey[]];
 
-export const GIFT_MONTHS: Record<number, number> = { 1: 30, 3: 90, 6: 180, 12: 365 };
+/**
+ * 🔴 **الشهر = 30 يوم بالظبط، ومصدره هنا وحده** (قرار داليا ١٩ أكتوبر ٢٠٢٦:
+ * «عايزة الإعلانات بالشهر مش باليوم»).
+ *
+ * ليه ثابت 30 مش شهر تقويمي: الشهر التقويمي ٢٨–٣١ يوم، فـ«شهر» بيبقى
+ * مدة مختلفة بنفس السعر، و«٣١ يناير + شهر» سؤال مالوش إجابة واحدة.
+ * وبما إن السعر بقى للشهر مش لليوم، الثبات ده بيخلّي كل شهر **نفس المدة
+ * ونفس السعر** — وده أعدل وأوضح للمعلن.
+ *
+ * وكل المدد مشتقّة من الرقم ده عن قصد: قبل كده كانت «سنة» في أكواد الهدايا
+ * **٣٦٥** بينما ١٢ شهر × ٣٠ = ٣٦٠، فحملة سنة بهدية سنة كانت تسيب أيامًا
+ * بفلوس والمعلن مايفهمش منين (حصل فعلًا: ٩٢٠ ج.م). الاشتقاق بيمنع ده للأبد.
+ */
+export const MONTH_DAYS = 30;
+export const MAX_CAMPAIGN_MONTHS = 12;
+export const GIFT_MONTH_CHOICES = [1, 3, 6, 12] as const;
+export const GIFT_MONTHS: Record<number, number> = Object.fromEntries(GIFT_MONTH_CHOICES.map((m) => [m, m * MONTH_DAYS]));
 const GIFT_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export function newGiftCode() {
   const pick = (n: number) => Array.from({ length: n }, () => GIFT_ALPHA[crypto.randomInt(GIFT_ALPHA.length)]).join("");
@@ -53,7 +70,18 @@ export function daysBetween(from: string, to: string): string[] {
 }
 export const dayCount = (from: string, to: string) => Math.round((+new Date(to + "T00:00:00Z") - +new Date(from + "T00:00:00Z")) / 864e5) + 1;
 
-export const MAX_CAMPAIGN_DAYS = 366;
+export const MAX_CAMPAIGN_DAYS = MAX_CAMPAIGN_MONTHS * MONTH_DAYS;
+
+/**
+ * عدد الشهور الكاملة لفترة **شاملة الطرفين**، و`null` لو مش شهورًا كاملة.
+ * ده الحكم الوحيد على «هل الفترة دي تتباع؟» — والمسارات كلها بتعدّي عليه.
+ */
+export const monthsOf = (from: string, to: string): number | null => {
+  const d = dayCount(from, to);
+  return d > 0 && d % MONTH_DAYS === 0 ? d / MONTH_DAYS : null;
+};
+/** آخر يوم في فترة N شهر بادئة من `start` (شاملة الطرفين) */
+export const endOfMonths = (start: string, months: number) => addDays(start, months * MONTH_DAYS - 1);
 
 /**
  * بيزرع **المواضع الناقصة** (الأسعار والسعات قابلة للتعديل من اللوحة بعدها).
@@ -76,8 +104,12 @@ export async function ensureDefaultPlacements(ctx: Ctx) {
   const have = new Set((await ctx.db.adPlacement.findMany({ select: { key: true } })).map((p) => p.key));
   const missing = DEFAULT_PLACEMENTS.filter((p) => !have.has(p.key));
   if (!missing.length) return;
-  await ctx.db.adPlacement.createMany({ data: missing.map((p) => ({ ...p })), skipDuplicates: true });
+  // سعر اليوم **مشتقّ** مش مكتوب — عشان مايقدرش يفترق عن سعر الشهر
+  await ctx.db.adPlacement.createMany({ data: missing.map((p) => ({ ...p, pricePerDay: dayRate(p.pricePerMonth) })), skipDuplicates: true });
 }
+
+/** سعر اليوم المشتقّ من سعر الشهر — المكان الوحيد اللي بيحسبه */
+export const dayRate = (pricePerMonth: unknown) => (Number(pricePerMonth) / MONTH_DAYS).toFixed(2);
 
 export interface Occupancy { held: number; booked: number; blocked: boolean }
 
@@ -140,8 +172,17 @@ export async function withAdsLock<T>(ctx: Ctx, fn: () => Promise<T>): Promise<T>
   }, { timeout: 15000 });
 }
 
-export const priceOf = (ps: { pricePerDay: unknown }[], from: string, to: string) =>
-  +(ps.reduce((a, p) => a + Number(p.pricePerDay), 0) * dayCount(from, to)).toFixed(2);
+/**
+ * سعر الحملة = عدد الشهور × مجموع سعر الشهر للمواضع.
+ *
+ * **وبترمي لو الفترة مش شهورًا كاملة** بدل ما ترجّع صفرًا أو تقسّط —
+ * أي مسار جديد ينسى التحقق بيقع بصوت عالٍ، مش بيبيع بسعر غلط في سكوت.
+ */
+export const priceOf = (ps: { pricePerMonth: unknown }[], from: string, to: string) => {
+  const months = monthsOf(from, to);
+  if (months === null) throw new HttpError(400, "bad_range", `المدة لازم تكون شهورًا كاملة (الشهر = ${MONTH_DAYS} يوم)`);
+  return +(ps.reduce((a, p) => a + Number(p.pricePerMonth), 0) * months).toFixed(2);
+};
 
 /**
  * **تفصيل سعر الحملة — مصدر واحد.**

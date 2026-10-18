@@ -27,12 +27,27 @@ const Size = ({ p }) => {
   return <span className="ratio" style={{ width: Math.max(6, p.width * k), height: Math.max(6, p.height * k) }} aria-hidden="true" />;
 };
 /**
- * المدد الجاهزة — **نفس أيام أكواد الهدايا** (`GIFT_MONTHS` على السيرفر).
- * لازم يفضلوا متطابقين: لو «سنة» هنا ٣٦٦ يوم وهدية السنة ٣٦٥، كل حملة سنة
- * بهدية بتسيب يومًا بفلوس والسبب مش واضح — ده اللي حصل فعلًا (٩٢٠ ج.م).
- * والفترة **شاملة الطرفين**، فالنهاية = البداية + الأيام − ١.
+ * 🔴 **البيع بالشهر** (قرار داليا ١٩ أكتوبر ٢٠٢٦) — والشهر = 30 يوم بالظبط،
+ * نفس `MONTH_DAYS` على السيرفر. مفيش نص شهر: المعلن بيشتري شهرًا أو أكتر.
+ *
+ * والفترة **شاملة الطرفين**، فنهاية N شهر = البداية + N×30 − 1. وأكواد
+ * الهدايا مشتقّة من نفس الرقم على السيرفر، فمستحيل يفترقوا (قبل كده كانت
+ * «سنة» 365 هنا و360 هناك، فحملة سنة بهدية سنة تسيب يومًا بفلوس — ٩٢٠ ج.م).
  */
-const DURATIONS = [[30, "شهر"], [90, "3 شهور"], [180, "6 شهور"], [365, "سنة"]];
+const MONTH_DAYS = 30;
+const MAX_MONTHS = 12;
+const DURATIONS = [[1, "شهر"], [3, "3 شهور"], [6, "6 شهور"], [12, "سنة"]];
+const endOfMonths = (start, months) => addDays(start, months * MONTH_DAYS - 1);
+/** أيام الفترة شاملة الطرفين، أو 0 لو الفترة غلط */
+const dayCount = (start, end) => {
+  if (!start || !end || end < start) return 0;
+  return Math.round((+new Date(end + "T00:00:00Z") - +new Date(start + "T00:00:00Z")) / 864e5) + 1;
+};
+/** شهور الفترة، أو null لو مش شهورًا كاملة (حملة قديمة اتعملت قبل القرار) */
+const monthsOf = (start, end) => {
+  const d = dayCount(start, end);
+  return d > 0 && d % MONTH_DAYS === 0 ? d / MONTH_DAYS : null;
+};
 /**
  * نسب العرض الجاهزة — **اختيارات بس، والرقم بيتكتب بالإيد** لأن الخصم
  * بيتفق عليه لكل حملة وكل عميل على حدة (قرار داليا ١٨ أكتوبر ٢٠٢٦).
@@ -41,19 +56,25 @@ const OFFERS = [0, 5, 10, 15, 20, 25, 30, 50];
 
 /** صورة الصفّ في الطابور: أول صورة موضع موجودة، وإلا صورة الحملة (القديمة). */
 const rowImage = (c) => Object.values(c.images || {})[0] || c.imageUrl || "";
-const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: addDays(start, 6), placements: [], approve: false, giftCode: "", imageUrl: "", images: {}, offerPct: 0, house: false });
+const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: endOfMonths(start, 1), placements: [], approve: false, giftCode: "", imageUrl: "", images: {}, offerPct: 0, house: false });
 
 /* ---------- خريطة المخزون ---------- */
 function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }) {
-  const [sel, setSel] = useState(null); // { key, a, b? }
+  /**
+   * 🔴 **ضغطة واحدة = يوم البداية.** الاختيار كان بضغطتين (بداية ثم نهاية)،
+   * وده ماعادش له معنى بعد قرار البيع بالشهر: النهاية **محسوبة** من عدد
+   * الشهور، فضغطتان كانا بيسمحان بفترة مش شهورًا كاملة والسيرفر يرفضها
+   * بـ٤٠٠ بعد كل الشغل. فالبداية من الخريطة والمدة من القايمة.
+   */
+  const [sel, setSel] = useState(null); // { key, a }
+  const [selMonths, setSelMonths] = useState(1);
+  const selEnd = sel && endOfMonths(sel.a, selMonths);
   const cellState = (p, c) => !p.active ? "off" : c.blocked ? "blk" : c.free === 0 ? "full" : c.free < p.slots ? "part" : "free";
   const click = (p, c) => {
     if (c.day < today) return;
-    if (!sel || sel.key !== p.key || sel.b) return setSel({ key: p.key, a: c.day });
-    const [a, b] = c.day < sel.a ? [c.day, sel.a] : [sel.a, c.day];
-    setSel({ key: p.key, a, b });
+    setSel({ key: p.key, a: c.day });
   };
-  const inSel = (p, d) => sel && sel.key === p.key && d >= sel.a && d <= (sel.b || sel.a);
+  const inSel = (p, d) => sel && sel.key === p.key && d >= sel.a && d <= selEnd;
   return (
     <Card title="خريطة المخزون" right={
       <div className="row">
@@ -66,7 +87,7 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
       {/* الشرح فوق الخريطة مش تحتها: الرقم في الخانة مابيشرحش نفسه، وقراءة
           ٣٠ خانة قبل ما توصلي لسطر في وسيلة الإيضاح بيخلّي الأرقام تتقري غلط */}
       <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 8 }}>
-        الرقم في كل خانة = <b>الأماكن الفاضية</b> في اليوم ده. اضغطي على يوم البداية ثم يوم النهاية لحجز فترة.
+        الرقم في كل خانة = <b>الأماكن الفاضية</b> في اليوم ده. اضغطي على <b>يوم البداية</b> واختاري عدد الشهور — البيع بالشهر، والشهر = {n(MONTH_DAYS)} يوم.
       </div>
       <div className="imap" role="region" aria-label="خريطة مخزون الإعلانات" tabIndex={0}>
         <table>
@@ -86,7 +107,7 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
               <tr key={p.key}>
                 <td className="pl">
                   <div className="row" style={{ flexWrap: "nowrap", gap: 8 }}><Size p={p} /><b>{p.name}</b></div>
-                  <div style={{ color: "var(--muted)", fontSize: 11 }}><span dir="ltr">{n(p.width)}×{n(p.height)}</span> · {n(p.slots)} أماكن · {egp(p.pricePerDay)}/يوم</div>
+                  <div style={{ color: "var(--muted)", fontSize: 11 }}><span dir="ltr">{n(p.width)}×{n(p.height)}</span> · {n(p.slots)} أماكن · {egp(p.pricePerMonth)}/شهر</div>
                 </td>
                 {p.cells.map((c) => {
                   const st = cellState(p, c);
@@ -117,8 +138,11 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
       {sel && (
         <div className="row" style={{ marginTop: 12 }} role="status">
           <b>{data.placements.find((p) => p.key === sel.key).name}</b>
-          <span>{sel.b ? `من ${fdate(sel.a)} إلى ${fdate(sel.b)}` : `من ${fdate(sel.a)} — اختار يوم النهاية`}</span>
-          {sel.b && can("ads.manage") && <button className="btn pri" onClick={() => onPick({ key: sel.key, start: sel.a, end: sel.b })}>احجز الفترة دي</button>}
+          <select className="inp" aria-label="عدد الشهور" value={selMonths} onChange={(e) => setSelMonths(+e.target.value)}>
+            {Array.from({ length: MAX_MONTHS }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m === 12 ? "سنة (12 شهر)" : `${m} شهر`}</option>)}
+          </select>
+          <span>من {fdate(sel.a)} إلى {fdate(selEnd)}</span>
+          {can("ads.manage") && <button className="btn pri" onClick={() => onPick({ key: sel.key, start: sel.a, end: selEnd })}>احجز الفترة دي</button>}
           <button className="btn" onClick={() => setSel(null)}>إلغاء التحديد</button>
         </div>
       )}
@@ -151,6 +175,7 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
   const [q, setQ] = useState(null);
   const [err, setErr] = useState("");
   const isNew = !draft.id;
+  const months = monthsOf(c.start, c.end);
   const set = (k, v) => setC((x) => ({ ...x, [k]: v }));
   // الحفظ مع كل تغيير: الكتابة في `localStorage` متزامنة وسريعة، والتأجيل
   // بمؤقّت كان معناه إن إعادة تحميل في اللحظة الغلط تضيّع آخر تعديل
@@ -168,6 +193,9 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
     e.preventDefault();
     if (!c.placements.length) return setErr("اختار موضع واحد على الأقل");
     if (!c.house && c.end < c.start) return setErr("تاريخ النهاية قبل تاريخ البداية");
+    // الفترة شهور كاملة — الحملة القديمة (شهور = null) تفضل متعدّلة طول ما
+    // تواريخها ما اتغيّرتش، فالفحص على الجديدة وعلى اللي اتغيّرت مدتها بس
+    if (!c.house && months === null && (isNew || c.start !== draft.start || c.end !== draft.end)) return setErr(`المدة لازم تكون شهورًا كاملة (الشهر = ${MONTH_DAYS} يوم)`);
     setErr("");
     const body = { advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: +c.grad, audience: c.audience, priority: +c.priority, dailyCap: +c.dailyCap, note: c.note || undefined, start: c.start, end: c.end, placements: c.placements, giftCode: c.giftCode || undefined, imageUrl: c.imageUrl || null, offerPct: +c.offerPct || 0,
       // المواضع اللي اتشالت من الحملة مش بيتبعت لها صورة — السيرفر بيرفض موضع مش منها
@@ -203,7 +231,7 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
             <div className="grid" style={{ gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
               {placements.map((p) => (
                 <button type="button" key={p.key} className="chk" aria-pressed={c.placements.includes(p.key)} onClick={() => toggle(p.key)} disabled={!p.active && !c.placements.includes(p.key)} style={{ textAlign: "start" }}>
-                  <Size p={p} /><span><b>{p.name}</b><span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}><span dir="ltr">{n(p.width)}×{n(p.height)}</span> · {egp(p.pricePerDay)}/يوم{!p.active ? " · متوقف" : ""}</span></span>
+                  <Size p={p} /><span><b>{p.name}</b><span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}><span dir="ltr">{n(p.width)}×{n(p.height)}</span> · {egp(p.pricePerMonth)}/شهر{!p.active ? " · متوقف" : ""}</span></span>
                 </button>))}
             </div></div>
           {isNew && (
@@ -221,16 +249,25 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
             </div>
           )}
           <div className="form" style={c.house ? { display: "none" } : undefined}>
-            <label className="f">تاريخ البداية<input className="inp" type="date" required={!c.house} value={c.start} onChange={(e) => set("start", e.target.value)} /></label>
-            <label className="f">تاريخ النهاية<input className="inp" type="date" required value={c.end} min={c.start} onChange={(e) => set("end", e.target.value)} /></label>
+            <label className="f">تاريخ البداية<input className="inp" type="date" required={!c.house} value={c.start} onChange={(e) => setC((x) => ({ ...x, start: e.target.value, end: endOfMonths(e.target.value, monthsOf(x.start, x.end) ?? 1) }))} /></label>
+            {/* 🔴 النهاية **محسوبة** مش مكتوبة: البيع شهور كاملة، وخانة تاريخ حرّة
+                بتسمح بفترة مش شهورًا كاملة فالسيرفر يرفضها بـ٤٠٠ **بعد** ما الواحد
+                يملا النموذج كله. فالاختيار هو عدد الشهور، والتاريخ عرض للمراجعة. */}
+            <label className="f">عدد الشهور
+              <select className="inp" value={months ?? ""} onChange={(e) => set("end", endOfMonths(c.start, +e.target.value))}>
+                {months === null && <option value="">فترة قديمة ({n(dayCount(c.start, c.end))} يوم)</option>}
+                {Array.from({ length: MAX_MONTHS }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m === 12 ? "سنة (12 شهر)" : `${m} شهر`}</option>)}
+              </select>
+            </label>
             <div className="f">مدة جاهزة
               <div className="row">
-                {DURATIONS.map(([days, label]) => {
-                  const end = addDays(c.start, days - 1);
-                  return <button type="button" key={days} className="tab" aria-pressed={c.end === end} onClick={() => set("end", end)}>{label}</button>;
-                })}
+                {DURATIONS.map(([m, label]) => (
+                  <button type="button" key={m} className="tab" aria-pressed={months === m} onClick={() => set("end", endOfMonths(c.start, m))}>{label}</button>
+                ))}
               </div>
-              <span style={{ color: "var(--muted)", fontSize: 11 }}>بتظبط تاريخ النهاية من البداية — ونفس أيام أكواد الهدايا، فهدية المدة بتغطيها بالكامل.</span>
+              <span style={{ color: "var(--muted)", fontSize: 11 }}>
+                الشهر = {n(MONTH_DAYS)} يوم، والفترة شاملة الطرفين — فالنهاية {months === null ? "محتاجة اختيار مدة" : <b>{fdate(c.end)}</b>}. ونفس أيام أكواد الهدايا، فهدية المدة بتغطيها بالكامل.
+              </span>
             </div>
             <label className="f">الجمهور<input className="inp" value={c.audience} onChange={(e) => set("audience", e.target.value)} /></label>
             <label className="f">الأولوية<select className="inp" value={c.priority} onChange={(e) => set("priority", e.target.value)}><option value="1">منخفضة</option><option value="2">عادية</option><option value="3">عالية</option></select></label>
@@ -273,25 +310,27 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
           {q?.error && <Err msg={q.error} />}
           {q && !q.error && (
             <>
-              <Table head={["الموضع", "سعر اليوم", "الأيام", "الإجمالي"]}>
-                {q.lines.map((l) => <tr key={l.key}><td><b>{l.name}</b></td><td>{egp(l.pricePerDay)}</td><td>{n(l.days)}</td><td>{egp(l.subtotal)}</td></tr>)}
+              <Table head={["الموضع", "سعر الشهر", "الشهور", "الإجمالي"]}>
+                {q.lines.map((l) => <tr key={l.key}><td><b>{l.name}</b></td><td>{egp(l.pricePerMonth)}</td><td>{n(l.months)}</td><td>{egp(l.subtotal)}</td></tr>)}
               </Table>
-              {q.gift > 0 && <div className="li"><div><div className="t">هدية (تغطي {n(q.giftDays)} يوم)</div><div className="s">قبل الخصم {egp(q.gross)}</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.gift)}</div></div>}
+              {q.gift > 0 && <div className="li"><div><div className="t">هدية (تغطي {n(q.giftMonths)} شهر)</div><div className="s">قبل الخصم {egp(q.gross)}</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.gift)}</div></div>}
               {q.offer > 0 && <div className="li"><div><div className="t">عرض {n(q.offerPct)}٪</div><div className="s">على المتبقي بعد الهدية</div></div><div style={{ color: "var(--good)", fontWeight: 800 }}>− {egp(q.offer)}</div></div>}
               {/*
-                الهدية بتغطي عدد أيام ثابت (٣٦٥ للسنة)، والفترة بتتحسب **شاملة
-                الطرفين** — فـ١٨/١٠/٢٠٢٦ لـ١٨/١٠/٢٠٢٧ = ٣٦٦ يوم، يعني يوم واحد
-                بفلوس والباقي مجاني. الرقم صح بس **مفاجئ**، فالسطر ده بيسمّي
-                الفرق ويصلّحه بضغطة بدل ما تدوّري على سبب المبلغ المتبقي.
+                الفرق بقى **شهورًا كاملة** بعد قرار البيع بالشهر — قبل كده كانت
+                الهدية ٣٦٥ يوم والسنة ٣٦٦ (الفترة شاملة الطرفين)، فحملة سنة
+                بهدية سنة تسيب **يومًا واحدًا بفلوس** (٩٢٠ ج.م في عرض حقيقي)
+                والمعلن مايفهمش منين. دلوقتي الاتنين مشتقّان من `MONTH_DAYS`
+                فمستحيل يفترقوا، والسطر ده للفرق المقصود (هدية ٣ شهور على
+                حملة ٦ مثلًا) بيسمّيه ويصلّحه بضغطة.
               */}
-              {q.gift > 0 && q.giftDays < q.lines[0]?.days && (
+              {q.gift > 0 && q.giftMonths < q.lines[0]?.months && (
                 <div className="li" style={{ alignItems: "center" }}>
                   <div>
-                    <div className="t" style={{ color: "var(--bad)" }}>{n(q.lines[0].days - q.giftDays)} يوم برّه الهدية — دي سبب المبلغ المتبقي</div>
-                    <div className="s">الهدية بتغطي {n(q.giftDays)} يوم والحملة {n(q.lines[0].days)}</div>
+                    <div className="t" style={{ color: "var(--bad)" }}>{n(q.lines[0].months - q.giftMonths)} شهر برّه الهدية — دي سبب المبلغ المتبقي</div>
+                    <div className="s">الهدية بتغطي {n(q.giftMonths)} شهر والحملة {n(q.lines[0].months)}</div>
                   </div>
-                  <button type="button" className="btn sm" onClick={() => set("end", addDays(c.start, q.giftDays - 1))}>
-                    اظبطي النهاية على آخر يوم مغطّى
+                  <button type="button" className="btn sm" onClick={() => set("end", endOfMonths(c.start, q.giftMonths))}>
+                    اظبطي المدة على شهور الهدية
                   </button>
                 </div>
               )}
@@ -411,7 +450,7 @@ function Campaigns({ onEdit, onNew, onRepublish, can, reloadMap, mapKey }) {
                 ? <img src={toAbs(rowImage(c))} alt="" style={{ width: 34, height: 34, borderRadius: 5, objectFit: "cover", flex: "none" }} />
                 : <span style={{ width: 10, height: 34, borderRadius: 4, background: GRADS[c.grad]?.[1], flex: "none" }} />}<div><b>{c.advertiser}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.headline}</div></div></div></td>
               <td>{c.placements.map((p) => <span key={p.key} className="tag" style={{ marginInlineEnd: 4 }}>{p.name}</span>)}</td>
-              <td style={{ fontSize: 12 }}>{fdate(c.start)}<br />{fdate(c.end)}<div style={{ color: "var(--muted)" }}>{n(c.days)} يوم</div></td>
+              <td style={{ fontSize: 12 }}>{fdate(c.start)}<br />{fdate(c.end)}<div style={{ color: "var(--muted)" }}>{monthsOf(c.start, c.end) !== null ? `${n(monthsOf(c.start, c.end))} شهر` : `${n(c.days)} يوم`}</div></td>
               <td>{c.isHouse ? <span className="tag">بدون حملة</span> : <>{egp(c.total)}{c.giftCode && <div className="tag" dir="ltr" style={{ marginTop: 4 }} title={`خصم ${egp(c.discount)}`}>🎁 {c.giftCode}</div>}{c.offerPct > 0 && <div className="tag" style={{ marginTop: 4 }} title={`خصم ${egp(c.discount)}`}>عرض {n(c.offerPct)}٪</div>}</>}</td>
               <td>{n(c.shown)}<div style={{ color: "var(--muted)", fontSize: 12 }}>{n(c.clicked)} نقرة · {n(c.shown ? (c.clicked / c.shown) * 100 : 0, 1)}٪</div></td>
               <td><Pill s={c.status} />{c.status === "approved" && <div style={{ marginTop: 4 }}><Pill s={c.phase} /></div>}</td>
@@ -435,12 +474,12 @@ function Campaigns({ onEdit, onNew, onRepublish, can, reloadMap, mapKey }) {
 /* ---------- المواضع والمقاسات والإغلاق ---------- */
 function PlacementRow({ p, can, onSaved }) {
   const run = useDo();
-  const [f, setF] = useState({ name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerDay: p.pricePerDay, dailyImpressions: p.dailyImpressions, active: p.active, note: p.note || "" });
-  useEffect(() => setF({ name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerDay: p.pricePerDay, dailyImpressions: p.dailyImpressions, active: p.active, note: p.note || "" }), [p]);
-  const dirty = JSON.stringify(f) !== JSON.stringify({ name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerDay: p.pricePerDay, dailyImpressions: p.dailyImpressions, active: p.active, note: p.note || "" });
-  const cpm = +f.dailyImpressions > 0 ? Math.round((+f.pricePerDay / +f.dailyImpressions) * 1000) : null;
+  const [f, setF] = useState({ name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerMonth: p.pricePerMonth, dailyImpressions: p.dailyImpressions, active: p.active, note: p.note || "" });
+  useEffect(() => setF({ name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerMonth: p.pricePerMonth, dailyImpressions: p.dailyImpressions, active: p.active, note: p.note || "" }), [p]);
+  const dirty = JSON.stringify(f) !== JSON.stringify({ name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerMonth: p.pricePerMonth, dailyImpressions: p.dailyImpressions, active: p.active, note: p.note || "" });
+  const cpm = +f.dailyImpressions > 0 ? Math.round(((+f.pricePerMonth / MONTH_DAYS) / +f.dailyImpressions) * 1000) : null;
   const ratio = cpm ? cpm / p.marketCpm : null;
-  const save = (e) => { e?.preventDefault(); run(() => api(`/admin/ads/placements/${p.key}`, { method: "PUT", body: { ...f, width: +f.width, height: +f.height, slots: +f.slots, pricePerDay: +f.pricePerDay, dailyImpressions: +f.dailyImpressions || 0, note: f.note || null } }), `حفظ الموضع ${f.name}`).then((ok) => ok && onSaved()); };
+  const save = (e) => { e?.preventDefault(); run(() => api(`/admin/ads/placements/${p.key}`, { method: "PUT", body: { ...f, width: +f.width, height: +f.height, slots: +f.slots, pricePerMonth: +f.pricePerMonth, dailyImpressions: +f.dailyImpressions || 0, note: f.note || null } }), `حفظ الموضع ${f.name}`).then((ok) => ok && onSaved()); };
   const dis = !can("ads.manage");
   return (
     <form className="card" onSubmit={save} style={{ display: "grid", gap: 10 }}>
@@ -454,7 +493,7 @@ function PlacementRow({ p, can, onSaved }) {
         <label className="f">العرض (px)<input className="inp" type="number" min="50" max="4000" disabled={dis} value={f.width} onChange={(e) => setF({ ...f, width: e.target.value })} /></label>
         <label className="f">الارتفاع (px)<input className="inp" type="number" min="50" max="4000" disabled={dis} value={f.height} onChange={(e) => setF({ ...f, height: e.target.value })} /></label>
         <label className="f">عدد الأماكن/يوم<input className="inp" type="number" min="1" max="20" disabled={dis} value={f.slots} onChange={(e) => setF({ ...f, slots: e.target.value })} /></label>
-        <label className="f">سعر اليوم (ج.م)<input className="inp" type="number" min="0" step="0.01" disabled={dis} value={f.pricePerDay} onChange={(e) => setF({ ...f, pricePerDay: e.target.value })} /></label>
+        <label className="f">سعر الشهر (ج.م)<input className="inp" type="number" min="0" step="0.01" disabled={dis} value={f.pricePerMonth} onChange={(e) => setF({ ...f, pricePerMonth: e.target.value })} /></label>
         <label className="f">ظهور متوقع يوميًا للمكان<input className="inp" type="number" min="0" disabled={dis} value={f.dailyImpressions} onChange={(e) => setF({ ...f, dailyImpressions: e.target.value })} /></label>
       </div>
       <div role="note" style={{ fontSize: 12, color: !cpm ? "var(--muted)" : ratio > 3 ? "var(--bad)" : ratio < 0.7 ? "var(--warn)" : "var(--good)" }}>
@@ -493,7 +532,7 @@ function PlacementMap({ placements }) {
               <div style={{ width: w, height: h, borderRadius: wide ? 8 : 12, background: "linear-gradient(135deg,#5B2621,#14100F)", border: "1px solid var(--line)" }} />
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 <div><span dir="ltr">{n(p.width)}×{n(p.height)}</span> px</div>
-                <div style={{ color: "var(--muted)" }}>{n(p.slots)} أماكن في اليوم · {egp(p.pricePerDay)}/يوم</div>
+                <div style={{ color: "var(--muted)" }}>{n(p.slots)} أماكن في اليوم · {egp(p.pricePerMonth)}/شهر</div>
               </div>
             </div>
           );
@@ -650,7 +689,7 @@ export function LiveAds() {
         </>
       )}
       {tab === "campaigns" && <Campaigns can={can} mapKey={tick} reloadMap={bump} onNew={() => setForm(blank(start))}
-        onRepublish={(c) => { const len = c.days - 1; const st = c.end >= start && ["approved", "paused"].includes(c.status) ? addDays(c.end, 1) : start; setForm({ ...blank(st), advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", end: addDays(st, len), placements: c.placements.map((p) => p.key), imageUrl: c.imageUrl || "", images: { ...(c.images || {}) } }); act(`اتجهّزت نسخة جديدة من حملة ${c.advertiser} — راجعي التواريخ وأكدي الحجز`); }}
+        onRepublish={(c) => { const m = monthsOf(c.start, c.end) ?? 1; const st = c.end >= start && ["approved", "paused"].includes(c.status) ? addDays(c.end, 1) : start; setForm({ ...blank(st), advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", end: endOfMonths(st, m), placements: c.placements.map((p) => p.key), imageUrl: c.imageUrl || "", images: { ...(c.images || {}) } }); act(`اتجهّزت نسخة جديدة من حملة ${c.advertiser} — راجعي التواريخ وأكدي الحجز`); }}
         onEdit={(c) => setForm({ id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, grad: c.grad, audience: c.audience, priority: c.priority, dailyCap: c.dailyCap, note: c.note || "", start: c.start, end: c.end, placements: c.placements.map((p) => p.key), giftCode: c.giftCode || "", imageUrl: c.imageUrl || "", images: { ...(c.images || {}) }, offerPct: c.offerPct || 0, house: !!c.isHouse })} />}
       {tab === "gifts" && <Gifts placements={data.placements} can={can} />}
       {tab === "placements" && <Placements data={data} can={can} reload={bump} today={today} />}

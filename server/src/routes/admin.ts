@@ -5,7 +5,7 @@ import { z } from "zod";
 import { newSession, normalizeTarget, requireAuth, type AuthedRequest, validTarget } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, forbidden, notFound, wrap } from "../lib/errors.js";
-import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, priceBreakdown, vatOf, HOUSE_END, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
+import { GIFT_MONTHS, GIFT_MONTH_CHOICES, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, MAX_CAMPAIGN_MONTHS, MONTH_DAYS, monthsOf, endOfMonths, dayRate, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, priceBreakdown, vatOf, HOUSE_END, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
 import { randomToken, sha256 } from "../lib/tokens.js";
 import { emitToUsers } from "../realtime.js";
 import { getSettings, saveSettings } from "../lib/settings.js";
@@ -316,9 +316,11 @@ export function adminRoutes(ctx: Ctx) {
   // ================= الإعلانات: المواضع / المخزون / الحجز =================
   const Day = z.string().refine(isDay, "تاريخ غير صحيح (YYYY-MM-DD)");
   const Key = z.string().regex(/^[a-z0-9_]{2,24}$/);
-  const placementView = (p: { key: string; name: string; kind: string; width: number; height: number; slots: number; pricePerDay: unknown; active: boolean; note: string | null; dailyImpressions: number }) => ({
-    key: p.key, name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, pricePerDay: Number(p.pricePerDay), active: p.active, note: p.note,
-    dailyImpressions: p.dailyImpressions, effectiveCpm: p.dailyImpressions > 0 ? +((Number(p.pricePerDay) / p.dailyImpressions) * 1000).toFixed(0) : null, marketCpm: MARKET_CPM_EGP,
+  const placementView = (p: { key: string; name: string; kind: string; width: number; height: number; slots: number; pricePerMonth: unknown; active: boolean; note: string | null; dailyImpressions: number }) => ({
+    key: p.key, name: p.name, kind: p.kind, width: p.width, height: p.height, slots: p.slots, active: p.active, note: p.note,
+    pricePerMonth: Number(p.pricePerMonth), pricePerDay: Number(dayRate(p.pricePerMonth)),
+    // سعر الألف ظهور بيتقارن بسوق يومي، فبيتحسب من سعر اليوم المشتقّ
+    dailyImpressions: p.dailyImpressions, effectiveCpm: p.dailyImpressions > 0 ? +((Number(dayRate(p.pricePerMonth)) / p.dailyImpressions) * 1000).toFixed(0) : null, marketCpm: MARKET_CPM_EGP,
   });
   const phaseOf = (c: { status: string; startDate: string; endDate: string }) => {
     const t = todayCairo();
@@ -336,13 +338,13 @@ export function adminRoutes(ctx: Ctx) {
     id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, audience: c.audience,
     priority: c.priority, dailyCap: c.dailyCap, start: c.startDate, end: c.endDate, status: c.status, phase: phaseOf(c), total: Number(c.total), discount: Number(c.discount), gross: +(Number(c.total) + Number(c.discount)).toFixed(2), giftCode: c.giftCode, note: c.note,
     offerPct: c.offerPct, isHouse: c.isHouse, vat: vatOf(Number(c.total)),
-    days: dayCount(c.startDate, c.endDate), placements: c.bookings.map((b) => ({ key: b.placement.key, name: b.placement.name, pricePerDay: Number(b.pricePerDay) })), createdAt: c.createdAt.toISOString(),
+    days: dayCount(c.startDate, c.endDate), placements: c.bookings.map((b) => ({ key: b.placement.key, name: b.placement.name, pricePerMonth: Number(b.pricePerMonth), pricePerDay: Number(b.pricePerDay) })), createdAt: c.createdAt.toISOString(),
     // صورة كل موضع بمفتاحه — الواجهة بتعرضها وبتحذّر لو نسبتها مختلفة عن مقاس الموضع
     images: Object.fromEntries(c.bookings.filter((b) => b.imageUrl).map((b) => [b.placement.key, b.imageUrl!])) as Record<string, string>,
   });
   const normCode = (s: string) => s.trim().toUpperCase();
-  /** يحسب خصم كود الهدية: بيغطي min(مدة الحملة، مدة الهدية) من أيام المواضع المشمولة */
-  async function giftDiscount(codeIn: string, ps: { key: string; pricePerDay: unknown }[], start: string, end: string, campaignId?: string) {
+  /** يحسب خصم كود الهدية: بيغطي min(شهور الحملة، شهور الهدية) من المواضع المشمولة */
+  async function giftDiscount(codeIn: string, ps: { key: string; pricePerMonth: unknown }[], start: string, end: string, campaignId?: string) {
     const gift = await db.adGift.findUnique({ where: { code: normCode(codeIn) } });
     if (!gift || gift.voidedAt) throw bad("bad_gift", "كود الهدية غير صحيح");
     const mine = !!campaignId && gift.usedByCampaignId === campaignId;
@@ -350,8 +352,11 @@ export function adminRoutes(ctx: Ctx) {
     if (gift.expiresAt && gift.expiresAt < todayCairo() && !mine) throw bad("gift_expired", "كود الهدية انتهت صلاحيته");
     const covered = gift.placements.length ? ps.filter((p) => gift.placements.includes(p.key)) : ps;
     if (!covered.length) throw bad("gift_placement", "كود الهدية مش بيشمل المواضع المختارة");
-    const days = Math.min(dayCount(start, end), gift.days);
-    return { gift, discount: +(covered.reduce((a, p) => a + Number(p.pricePerDay), 0) * days).toFixed(2), coveredDays: days };
+    // الحملة شهور كاملة والهدية مددها مضاعفات الشهر، فالتغطية بالشهر —
+    // ومن غير كده الهدية بتغطي ٣٦٥ يوم على حملة ٣٦٠ وتسيب فرقًا بلا معنى
+    const months = Math.min(monthsOf(start, end) ?? 0, Math.round(gift.days / MONTH_DAYS));
+    const days = months * MONTH_DAYS;
+    return { gift, discount: +(covered.reduce((a, p) => a + Number(p.pricePerMonth), 0) * months).toFixed(2), coveredDays: days, coveredMonths: months };
   }
   /** نسبة العرض — صحيحة من ٠ لـ ١٠٠، و١٠٠ معناها إعلان مجاني بحملة (مقصود ومسموح) */
   const Pct = z.number().int().min(0).max(100);
@@ -381,8 +386,17 @@ export function adminRoutes(ctx: Ctx) {
     ).optional(),
     priority: z.number().int().min(1).max(3).default(2), dailyCap: z.number().int().min(1).max(10).default(3), note: z.string().trim().max(300).optional(),
   });
+  /**
+   * 🔴 **الفترة لازم تكون شهورًا كاملة** — البيع بالشهر مش باليوم.
+   * الحارس هنا في المخطّط عشان كل مسار بيستخدم `Range` ياخده تلقائيًا،
+   * ومعاه `priceOf` اللي بترمي كمان: مسار ينسى التحقق يقع بصوت عالٍ
+   * بدل ما يبيع بسعر مقسّط في سكوت.
+   */
+  const wholeMonths = (b: { start: string; end: string }) => monthsOf(b.start, b.end) !== null;
+  const MONTHS_MSG = `المدة لازم تكون شهورًا كاملة (الشهر = ${MONTH_DAYS} يوم)`;
   const Range = z.object({ start: Day, end: Day }).refine((b) => b.end >= b.start, { message: "تاريخ النهاية قبل البداية", path: ["end"] })
-    .refine((b) => dayCount(b.start, b.end) <= MAX_CAMPAIGN_DAYS, { message: "أقصى مدة سنة", path: ["end"] });
+    .refine(wholeMonths, { message: MONTHS_MSG, path: ["end"] })
+    .refine((b) => dayCount(b.start, b.end) <= MAX_CAMPAIGN_DAYS, { message: `أقصى مدة ${MAX_CAMPAIGN_MONTHS} شهر`, path: ["end"] });
   async function placementsByKeys(keys: string[]) {
     await ensureDefaultPlacements(ctx);
     const uniq = [...new Set(keys)];
@@ -400,7 +414,7 @@ export function adminRoutes(ctx: Ctx) {
     const s = S(req); const key = Key.parse(req.params.key);
     const b = z.object({
       name: z.string().trim().min(2).max(60), kind: z.enum(["modal", "banner", "story", "room"]), width: z.number().int().min(50).max(4000), height: z.number().int().min(50).max(4000),
-      slots: z.number().int().min(1).max(20), pricePerDay: z.number().min(0).max(1_000_000), dailyImpressions: z.number().int().min(0).max(100_000_000).default(0), active: z.boolean().default(true), note: z.string().trim().max(200).nullable().optional(),
+      slots: z.number().int().min(1).max(20), pricePerMonth: z.number().min(0).max(30_000_000), dailyImpressions: z.number().int().min(0).max(100_000_000).default(0), active: z.boolean().default(true), note: z.string().trim().max(200).nullable().optional(),
     }).parse(req.body);
     await ensureDefaultPlacements(ctx);
     const out = await withAdsLock(ctx, async () => {
@@ -412,10 +426,10 @@ export function adminRoutes(ctx: Ctx) {
         const worst = [...load.entries()].find(([, n]) => n > b.slots);
         if (worst) throw new HttpError(409, "slots_in_use", `فيه حجوزات أكتر من ${b.slots} يوم ${worst[0]}`);
       }
-      const data = { name: b.name, kind: b.kind, width: b.width, height: b.height, slots: b.slots, pricePerDay: b.pricePerDay.toFixed(2), dailyImpressions: b.dailyImpressions, active: b.active, note: b.note ?? null };
+      const data = { name: b.name, kind: b.kind, width: b.width, height: b.height, slots: b.slots, pricePerMonth: b.pricePerMonth.toFixed(2), pricePerDay: dayRate(b.pricePerMonth), dailyImpressions: b.dailyImpressions, active: b.active, note: b.note ?? null };
       return cur ? db.adPlacement.update({ where: { key }, data }) : db.adPlacement.create({ data: { key, sort: 100, ...data } });
     });
-    await audit(s, "عدّل موضع إعلاني", out.name, { slots: out.slots, price: Number(out.pricePerDay), active: out.active });
+    await audit(s, "عدّل موضع إعلاني", out.name, { slots: out.slots, pricePerMonth: Number(out.pricePerMonth), active: out.active });
     res.json(placementView(out));
   }));
 
@@ -455,11 +469,11 @@ export function adminRoutes(ctx: Ctx) {
     }
     const br = priceBreakdown(gross, discount, b.offerPct ?? 0);
     res.json({
-      days: n, gross, discount: br.discount, gift: br.gift, offer: br.offer, offerPct: br.offerPct,
-      giftDays, giftError, total: br.total, ok: conflicts.length === 0, conflicts,
+      days: n, months: monthsOf(b.start, b.end), gross, discount: br.discount, gift: br.gift, offer: br.offer, offerPct: br.offerPct,
+      giftDays, giftMonths: Math.round(giftDays / MONTH_DAYS), giftError, total: br.total, ok: conflicts.length === 0, conflicts,
       // الأسعار شاملة الضريبة، فالضريبة بتتخرج من المطلوب مش بتتزوّد عليه
       vat: vatOf(br.total),
-      lines: ps.map((p) => ({ key: p.key, name: p.name, pricePerDay: Number(p.pricePerDay), days: n, subtotal: +(Number(p.pricePerDay) * n).toFixed(2) })),
+      lines: ps.map((p) => ({ key: p.key, name: p.name, pricePerMonth: Number(p.pricePerMonth), months: monthsOf(b.start, b.end) ?? 0, subtotal: +(Number(p.pricePerMonth) * (monthsOf(b.start, b.end) ?? 0)).toFixed(2) })),
     });
   }));
 
@@ -492,7 +506,9 @@ export function adminRoutes(ctx: Ctx) {
     const start = b.house ? todayCairo() : b.start, end = b.house ? HOUSE_END : b.end;
     if (!start || !end) throw bad("bad_range", "لازم تاريخ بداية ونهاية");
     if (end < start) throw bad("bad_range", "تاريخ النهاية قبل البداية");
-    if (!b.house && dayCount(start, end) > MAX_CAMPAIGN_DAYS) throw bad("bad_range", "أقصى مدة سنة");
+    if (!b.house && dayCount(start, end) > MAX_CAMPAIGN_DAYS) throw bad("bad_range", `أقصى مدة ${MAX_CAMPAIGN_MONTHS} شهر`);
+    // الإعلان بدون حملة بلا سعر ولا حجز، فنهايته البعيدة مش شهورًا كاملة عن قصد
+    if (!b.house && monthsOf(start, end) === null) throw bad("bad_range", MONTHS_MSG);
     if (b.house && b.giftCode) throw bad("house_gift", "الإعلان بدون حملة مجاني أصلًا — مفيش كود هدية");
     if (!b.house && start < todayCairo()) throw bad("past_start", "تاريخ البداية فات");
     const ps = await placementsByKeys(b.placements);
@@ -508,7 +524,7 @@ export function adminRoutes(ctx: Ctx) {
           startDate: start, endDate: end, status: b.approve || b.house ? "approved" : "pending",
           total: br.total.toFixed(2), discount: br.discount.toFixed(2), offerPct: br.offerPct, isHouse: b.house,
           giftCode: g?.gift.code ?? null, createdById: s.userId,
-          bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerDay: b.house ? "0" : p.pricePerDay, imageUrl: b.images?.[p.key] ?? null })) },
+          bookings: { create: ps.map((p) => ({ placementId: p.id, pricePerMonth: b.house ? "0" : p.pricePerMonth, pricePerDay: b.house ? "0" : dayRate(p.pricePerMonth), imageUrl: b.images?.[p.key] ?? null })) },
         },
       });
       if (g) {
@@ -531,9 +547,15 @@ export function adminRoutes(ctx: Ctx) {
       if (cur.status === "rejected" || cur.status === "cancelled") throw bad("closed", "الحملة دي مقفولة ومينفعش تتعدل");
       const start = b.start ?? cur.startDate, end = b.end ?? cur.endDate;
       if (end < start) throw bad("bad_range", "تاريخ النهاية قبل البداية");
-      if (dayCount(start, end) > MAX_CAMPAIGN_DAYS) throw bad("bad_range", "أقصى مدة سنة");
+      if (dayCount(start, end) > MAX_CAMPAIGN_DAYS) throw bad("bad_range", `أقصى مدة ${MAX_CAMPAIGN_MONTHS} شهر`);
       const keys = b.placements ?? cur.bookings.map((x) => x.placement.key);
       const slotsChanged = !!b.start || !!b.end || !!b.placements;
+      /**
+       * 🔴 الشهور الكاملة بتتفرض **لما المواعيد تتغيّر بس**. فيه حملات
+       * اتعملت قبل القرار ده بمدد زي ٧ أيام — ولو فرضنا القاعدة على أي
+       * تعديل، تصليح غلطة إملائية في عنوانها يبقى مستحيل للأبد.
+       */
+      if ((b.start || b.end) && !cur.isHouse && monthsOf(start, end) === null) throw bad("bad_range", MONTHS_MSG);
       if (slotsChanged) {
         if (cur.endDate < todayCairo()) throw bad("ended", "الحملة انتهت، مينفعش تغيّر مواعيدها");
         if (b.start && b.start !== cur.startDate && b.start < todayCairo() && cur.startDate >= todayCairo()) throw bad("past_start", "تاريخ البداية فات");
@@ -553,8 +575,13 @@ export function adminRoutes(ctx: Ctx) {
       // الهدية **والعرض** مع بعض، وفصلهما بالعكس بيقسم على (١ − النسبة)
       // فـ١٠٠٪ بتقسم على صفر. و`g` مضمونة هنا طول ما فيه كود والسعر بيتغيّر.
       const gift = g ? g.discount : 0;
-      const br = priceBreakdown(cur.isHouse ? 0 : priceOf(ps, start, end), cur.isHouse ? 0 : gift, cur.isHouse ? 0 : pct);
-      await db.adCampaign.update({ where: { id }, data: { ...fields, startDate: start, endDate: end, ...(priceChanged ? { total: br.total.toFixed(2), discount: br.discount.toFixed(2), offerPct: br.offerPct, giftCode: g?.gift.code ?? cur.giftCode } : {}) } });
+      /**
+       * 🔴 التسعير بيتحسب **لما السعر يتغيّر بس**. `priceOf` بترمي على فترة
+       * مش شهورًا كاملة (البيع بالشهر)، فحسابها على طول كان معناه إن تصليح
+       * غلطة إملائية في حملة قديمة — أو إيقافها — يرجّع ٤٠٠ للأبد.
+       */
+      const br = priceChanged ? priceBreakdown(cur.isHouse ? 0 : priceOf(ps, start, end), cur.isHouse ? 0 : gift, cur.isHouse ? 0 : pct) : null;
+      await db.adCampaign.update({ where: { id }, data: { ...fields, startDate: start, endDate: end, ...(br ? { total: br.total.toFixed(2), discount: br.discount.toFixed(2), offerPct: br.offerPct, giftCode: g?.gift.code ?? cur.giftCode } : {}) } });
       if (g && !cur.giftCode) {
         const u = await db.adGift.updateMany({ where: { id: g.gift.id, usedByCampaignId: null }, data: { usedAt: new Date(), usedByCampaignId: id } });
         if (u.count !== 1) throw bad("gift_used", "كود الهدية ده اتستخدم قبل كده");
@@ -564,7 +591,7 @@ export function adminRoutes(ctx: Ctx) {
         await db.adBooking.deleteMany({ where: { campaignId: id, placementId: { notIn: [...keep] } } });
         const have = new Set(cur.bookings.map((x) => x.placementId));
         const add = ps.filter((p) => !have.has(p.id));
-        if (add.length) await db.adBooking.createMany({ data: add.map((p) => ({ campaignId: id, placementId: p.id, pricePerDay: p.pricePerDay })) });
+        if (add.length) await db.adBooking.createMany({ data: add.map((p) => ({ campaignId: id, placementId: p.id, pricePerMonth: p.pricePerMonth, pricePerDay: dayRate(p.pricePerMonth) })) });
       }
       // صور المواضع: بعد مزامنة الحجوزات عشان الموضع الجديد يلاقي صفّه
       if (b.images) {

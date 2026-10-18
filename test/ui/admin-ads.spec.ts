@@ -32,8 +32,8 @@ const TYPES: Record<string, string> = {
 
 const DAY = "2026-10-18";
 const PLACEMENTS = [
-  { key: "banner", name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: 150, active: true, note: "أعلى قائمة الدردشات", dailyImpressions: 1000, effectiveCpm: 150, marketCpm: 120 },
-  { key: "modal", name: "نافذة كاملة عند الدخول", kind: "modal", width: 1080, height: 1920, slots: 4, pricePerDay: 400, active: true, note: "شاشة كاملة 9:16", dailyImpressions: 1000, effectiveCpm: 400, marketCpm: 120 },
+  { key: "banner", name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerMonth: 4500, pricePerDay: 150, active: true, note: "أعلى قائمة الدردشات", dailyImpressions: 1000, effectiveCpm: 150, marketCpm: 120 },
+  { key: "modal", name: "نافذة كاملة عند الدخول", kind: "modal", width: 1080, height: 1920, slots: 4, pricePerMonth: 12000, pricePerDay: 400, active: true, note: "شاشة كاملة 9:16", dailyImpressions: 1000, effectiveCpm: 400, marketCpm: 120 },
 ];
 const INVENTORY = {
   from: DAY, to: DAY, days: [DAY], today: DAY,
@@ -52,17 +52,17 @@ const ME = { user: { id: "u1", name: "داليا" }, isOwner: true, role: null, 
  */
 const camp = (o: Record<string, unknown>) => ({
   id: "c1", advertiser: "شركة النور", headline: "عرض الشتا", body: "", cta: "اعرف أكتر", link: "https://x.test",
-  imageUrl: null, images: {}, grad: 0, start: "2026-10-10", end: "2026-10-30", days: 21,
+  imageUrl: null, images: {}, grad: 0, start: "2026-10-01", end: "2026-10-30", days: 30,
   status: "approved", phase: "running", total: 3000, discount: 0, gross: 3000, giftCode: null, offerPct: 0,
-  isHouse: false, shown: 1200, clicked: 30, placements: [{ key: "banner", name: "بانر الدردشات", pricePerDay: 150 }],
+  isHouse: false, shown: 1200, clicked: 30, placements: [{ key: "banner", name: "بانر الدردشات", pricePerMonth: 4500, pricePerDay: 150 }],
   ...o,
 });
 const CAMPAIGNS = [
   camp({}),
-  camp({ id: "c2", advertiser: "مطعم الشام", headline: "توصيل مجاني", phase: "upcoming", start: "2026-11-01", end: "2026-11-20" }),
-  camp({ id: "c3", advertiser: "معرض القاهرة", headline: "خصومات", phase: "ended", start: "2026-09-01", end: "2026-09-20" }),
+  camp({ id: "c2", advertiser: "مطعم الشام", headline: "توصيل مجاني", phase: "upcoming", start: "2026-11-01", end: "2026-11-30" }),
+  camp({ id: "c3", advertiser: "معرض القاهرة", headline: "خصومات", phase: "ended", start: "2026-09-01", end: "2026-09-30" }),
   // شغّالة من أيام ومفيش ولا ظهور — ده العطل الصامت اللي اللوحة لازم تصرخ عليه
-  camp({ id: "c4", advertiser: "صيدلية الشفا", headline: "خصم الأدوية", shown: 0, clicked: 0, start: "2026-10-12" }),
+  camp({ id: "c4", advertiser: "صيدلية الشفا", headline: "خصم الأدوية", shown: 0, clicked: 0, start: "2026-10-02", end: "2026-10-31" }),
 ];
 
 let server: http.Server | undefined;
@@ -185,6 +185,36 @@ test.describe("نموذج حملة الإعلانات في اللوحة", () => 
     // «الإشغال» كانت بتوحي إن ده اللي ظاهر للمستخدمين، وهي بتعدّ المحجوز
     await expect(page.getByText("نسبة الحجز في الفترة")).toBeVisible();
     await expect(page.getByText("شامل اللي بانتظار الموافقة والمتوقف")).toBeVisible();
+  });
+
+  /**
+   * 🔴 **البيع شهور كاملة بس** (قرار داليا ١٩ أكتوبر ٢٠٢٦). والفحص لازم يكون
+   * في متصفح حقيقي: حارس نصّي بيلاقي `endOfMonths` في الملف ويعدّي، بينما
+   * اللي بيكسر البيع هو إن خانة تاريخ **حرّة** لسه موجودة على الشاشة —
+   * فاللي بيحجز يكتب فترة مش شهورًا كاملة والسيرفر يرفضها بـ٤٠٠ **بعد** ما
+   * يملا النموذج كله.
+   */
+  test("🔴 مفيش خانة تاريخ نهاية حرّة — المدة بالشهور والنهاية محسوبة", async ({ page }) => {
+    const errs: string[] = [];
+    page.on("pageerror", (e) => errs.push(e.message));
+    await openForm(page);
+
+    await expect(page.getByText("عدد الشهور"), "مفيش اختيار شهور — البيع لسه باليوم").toBeVisible();
+    const dates = page.locator('input[type="date"]');
+    await expect(dates, "لسه فيه خانة تاريخ نهاية حرّة — بتسمح بفترة مش شهور").toHaveCount(1);
+
+    // والنهاية بتتحرّك مع المدة: شهر ← ٣ شهور
+    const start = dates.first();
+    await start.fill("2026-11-01");
+    const months = page.getByLabel("عدد الشهور");
+    await expect(months).toHaveValue("1");
+    await expect(page.getByText("30 نوفمبر 2026"), "نهاية الشهر الواحد مش معروضة").toBeVisible();
+    await months.selectOption("3");
+    await expect(page.getByText("29 يناير 2027"), "النهاية ما اتحسبتش على ٣ شهور").toBeVisible();
+
+    // والسعر بالشهر مش باليوم
+    await expect(page.getByText("/شهر").first(), "سعر الموضع لسه معروض باليوم").toBeVisible();
+    expect(errs, errs.join("\n")).toEqual([]);
   });
 
   test("«إلغاء» لسه بيمسح المسوّدة — الفرق بينه وبين الرجوع مقصود", async ({ page }) => {
