@@ -104,7 +104,7 @@ function Dashboard({ demo, me }) {
           </div>
           {fresh && <div role="status" className="card" style={{ marginBottom: 14, borderColor: "var(--gold)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span>فيه نسخة جديدة من اللوحة.</span>
-            <button className="btn sm pri" onClick={reloadNow}>حدّثي الآن</button>
+            <button className="btn sm pri" onClick={() => reloadNow()}>حدّثي الآن</button>
             <span style={{ color: "var(--muted)", fontSize: 12 }}>أو هتتحدّث لوحدها أول ما تسيبي التبويب.</span>
           </div>}
           {!demo && DEMO_SECTIONS.has(page) &&<div role="note" className="card" style={{ marginBottom: 14, borderColor: "var(--warn)", color: "var(--warn)" }}>القسم ده لسه ببيانات تجريبية، ومش متوصّل بالسيرفر بعد.</div>}

@@ -96,6 +96,18 @@ describe("اختبارات لوحة الإدارة في الـ CI", () => {
     expect(web, `البناء مش على المنفذ ${port}`).toContain(`127.0.0.1:${port}/api`);
   });
 
+  /**
+   * 🔴 إعادة التحميل لازم تفضل **على عنوان جديد**: `index.html` بيتقدّم بلا
+   * `Cache-Control`، فـ`location.reload()` بيرجّع نفس النسخة القديمة من الكاش
+   * وحارس اللفّة يسكت للأبد. والفحص ده في متصفح حقيقي — حارس نصّي بيلاقي
+   * `reloadNow` موجودة ويعدّي، والمكسور هو العنوان اللي الصفحة بتروح له.
+   */
+  it("واختبار التحديث بيفحص إن إعادة التحميل بتجيب الجديد فعلًا", () => {
+    const spec = fs.readFileSync(path.join(ROOT, "test/ui/admin-update.spec.ts"), "utf8");
+    expect(spec, "مفيش فحص على العنوان الجديد بعد التحديث").toMatch(/waitForURL\(\/\[\?&\]v=/);
+    expect(spec, "مفيش فحص إن قيمة v مش حدث الضغطة").toContain("object");
+  });
+
   it("والاختبارات موجودة فعلًا", () => {
     for (const s of ["admin-retry.spec.ts", "admin-update.spec.ts", "admin-ads.spec.ts"]) {
       expect(fs.existsSync(path.join(ROOT, "test/ui", s)), `${s} مش موجود`).toBe(true);

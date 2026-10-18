@@ -45,8 +45,30 @@ export function onUpdateFound(cb) {
   return () => subs.delete(cb);
 }
 
-export function reloadNow() {
-  location.reload();
+/**
+ * 🔴 **إعادة التحميل لازم تبقى على عنوان جديد، مش `location.reload()`.**
+ *
+ * `index.html` بيتقدّم **بلا أي `Cache-Control`** (لا من Caddy ولا نجنكس)،
+ * فالمتصفح بيكاشّه باجتهاده. و`location.reload()` بيعيد قراءته من الكاش —
+ * يعني بنرجع **نفس النسخة القديمة** بالظبط. وبعدها حارس اللفّة (`TRIED`)
+ * بيشوف إننا جرّبنا البصمة دي خلاص فيسكت **للأبد** في التاب ده.
+ *
+ * فالنتيجة كانت: الفحص بيشتغل صح، بيلاقي النشرة الجديدة صح، بيعمل reload…
+ * ويفضل على القديم — **من غير أي خطأ في أي مكان**. وده اللي اتبلّغ فعلًا في
+ * ١٩ أكتوبر ٢٠٢٦ (لوحة على نسخة نشرتين قديمة).
+ *
+ * الإصلاح: نروح لعنوان فيه بصمة النسخة — عنوان جديد يعني **مش في الكاش**،
+ * فالمتصفح مجبور يجيبه من السيرفر. و`replace` مش `assign` عشان مانزوّدش
+ * مدخلًا في تاريخ التصفّح يرجّع المستخدم للقديم.
+ */
+export function reloadNow(version) {
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set("v", version || String(Date.now()));
+    location.replace(u.toString());
+  } catch {
+    location.reload(); // عنوان غريب — الأفضل من مفيش
+  }
 }
 
 /** بصمة النسخة اللي اللوحة دي **مبنية منها** (بتتحقن وقت البناء) */
@@ -109,7 +131,7 @@ async function check() {
 
   const reloadWhenAway = () => {
     if (document.visibilityState === "visible" || wouldLoseWork()) return;
-    location.reload();
+    reloadNow(latest);
   };
   reloadWhenAway(); // لو هي أصلًا مش قدامه دلوقتي
   document.addEventListener("visibilitychange", reloadWhenAway);
