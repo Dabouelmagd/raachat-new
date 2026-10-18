@@ -54,6 +54,25 @@ const monthsOf = (start, end) => {
  */
 const OFFERS = [0, 5, 10, 15, 20, 25, 30, 50];
 
+/**
+ * 🔴 **الخريطة لازم تظلّل المحجوز قدّام كل موضع** (بطلب داليا ١٩ أكتوبر ٢٠٢٦).
+ *
+ * الأرقام في الخانات بتقول «فاضي كام» — بس **مين** حاجز و**من إمتى لإمتى**
+ * كان لازم يتجمّع بالعين من صفّ أرقام. الشريط بيقول الاتنين في نظرة.
+ *
+ * والشرايط المتداخلة بتتوزّع على سطور (الموضع فيه أكتر من مكان، فحملتان في
+ * نفس اليوم شيء طبيعي) — من غير التوزيع كانت هتركب على بعضها وتخفي واحدة.
+ */
+function packRows(items) {
+  const rows = [];
+  for (const it of items.slice().sort((a, b) => a.s - b.s || a.e - b.e)) {
+    let r = rows.find((row) => row[row.length - 1].e < it.s);
+    if (!r) { r = []; rows.push(r); }
+    r.push(it);
+  }
+  return rows;
+}
+
 /** صورة الصفّ في الطابور: أول صورة موضع موجودة، وإلا صورة الحملة (القديمة). */
 const rowImage = (c) => Object.values(c.images || {})[0] || c.imageUrl || "";
 const blank = (start) => ({ id: "", advertiser: "", headline: "", body: "", cta: "اعرف أكتر", link: "https://", grad: 0, audience: "كل المستخدمين", priority: 2, dailyCap: 3, note: "", start, end: endOfMonths(start, 1), placements: [], approve: false, giftCode: "", imageUrl: "", images: {}, offerPct: 0, house: false });
@@ -75,6 +94,31 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
     setSel({ key: p.key, a: c.day });
   };
   const inSel = (p, d) => sel && sel.key === p.key && d >= sel.a && d <= selEnd;
+  /**
+   * شرايط المحجوز لكل موضع: حملة لكل شريط + الأقفال. الحدود **بتتقصّ على
+   * الفترة المعروضة** (`clamp`) — الحملة اللي بدأت قبل النافذة لازم شريطها
+   * يبدأ من أولها مش من مكان سالب، وإلا الشريط يخرج برّه الجدول ويختفي.
+   */
+  const idx = (d) => data.days.indexOf(d);
+  const last = data.days.length - 1;
+  const bars = (p) => {
+    const span = (from, to) => {
+      const s = from <= data.days[0] ? 0 : idx(from);
+      const e = to >= data.days[last] ? last : idx(to);
+      return s < 0 || e < 0 || e < s ? null : { s, e };
+    };
+    const out = [];
+    for (const c of p.campaigns || []) {
+      const r = span(c.start, c.end);
+      if (r) out.push({ ...r, id: `c${c.id}`, kind: c.status === "approved" ? "ok" : c.status === "paused" ? "paused" : "hold", label: c.advertiser,
+        title: `${c.advertiser} — ${fdate(c.start)} إلى ${fdate(c.end)} · ${c.status === "approved" ? "معتمدة" : c.status === "paused" ? "متوقفة" : "بانتظار الموافقة"}` });
+    }
+    for (const b of p.blocks || []) {
+      const r = span(b.from, b.to);
+      if (r) out.push({ ...r, id: `b${b.id}`, kind: "blk", label: b.reason || "مقفول", title: `مقفول — ${fdate(b.from)} إلى ${fdate(b.to)}${b.reason ? ` · ${b.reason}` : ""}` });
+    }
+    return packRows(out);
+  };
   return (
     <Card title="خريطة المخزون" right={
       <div className="row">
@@ -87,7 +131,7 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
       {/* الشرح فوق الخريطة مش تحتها: الرقم في الخانة مابيشرحش نفسه، وقراءة
           ٣٠ خانة قبل ما توصلي لسطر في وسيلة الإيضاح بيخلّي الأرقام تتقري غلط */}
       <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 8 }}>
-        الرقم في كل خانة = <b>الأماكن الفاضية</b> في اليوم ده. اضغطي على <b>يوم البداية</b> واختاري عدد الشهور — البيع بالشهر، والشهر = {n(MONTH_DAYS)} يوم.
+        الرقم في كل خانة = <b>الأماكن الفاضية</b> في اليوم ده، والشريط تحته = <b>المحجوز</b> باسم المعلن ومدّته. اضغطي على <b>يوم البداية</b> واختاري عدد الشهور — البيع بالشهر، والشهر = {n(MONTH_DAYS)} يوم.
       </div>
       <div className="imap" role="region" aria-label="خريطة مخزون الإعلانات" tabIndex={0}>
         <table>
@@ -100,10 +144,10 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
                 {dnum(d)}
               </th>
             ))}
-            <th className="sumcol">متاح في الفترة</th>
+            <th className="sumcol">متاح للفترة كلها</th>
           </tr></thead>
           <tbody>
-            {data.placements.map((p) => (
+            {data.placements.flatMap((p) => [
               <tr key={p.key}>
                 <td className="pl">
                   <div className="row" style={{ flexWrap: "nowrap", gap: 8 }}><Size p={p} /><b>{p.name}</b></div>
@@ -118,12 +162,29 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
                     الموضع ده فيه مكان ولا لأ — وده السؤال اللي بيتباع عليه */}
                 <td className="sumcol">
                   {(() => {
-                    const open = p.cells.filter((c) => p.active && !c.blocked && c.free > 0).length;
-                    return <><b style={{ color: open ? "var(--good)" : "var(--bad)" }}>{n(open)}</b><span style={{ color: "var(--muted)" }}> / {n(p.cells.length)} يوم</span></>;
+                    // أقل عدد فاضي في الفترة = اللي ينفع يتباع للمدة كلها
+                    const open = p.active ? p.cells.reduce((m, c) => Math.min(m, c.free), p.slots) : 0;
+                    return <><b style={{ color: open ? "var(--good)" : "var(--bad)" }}>{n(open)}</b><span style={{ color: "var(--muted)" }}> / {n(p.slots)} مكان</span></>;
                   })()}
                 </td>
-              </tr>
-            ))}
+              </tr>,
+              ...bars(p).map((row, ri) => (
+                <tr key={`${p.key}-bar-${ri}`} className="barrow">
+                  <td className="pl">{ri === 0 && <span style={{ color: "var(--muted)", fontSize: 11 }}>المحجوز</span>}</td>
+                  <td colSpan={p.cells.length}>
+                    <div className="track">
+                      {row.map((b) => (
+                        <div key={b.id} className={`bar ${b.kind}`} title={b.title}
+                          style={{ insetInlineStart: `${(b.s / p.cells.length) * 100}%`, width: `${((b.e - b.s + 1) / p.cells.length) * 100}%` }}>
+                          <span>{b.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="sumcol" />
+                </tr>
+              )),
+            ])}
           </tbody>
         </table>
       </div>
@@ -133,6 +194,9 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
         <span><i style={{ background: "color-mix(in srgb,var(--bad) 46%,transparent)" }} />ممتلئ</span>
         <span><i className="c blk" style={{ width: 14 }} />مقفول</span>
         <span><i style={{ boxShadow: "inset 0 -3px 0 var(--warn)" }} />فيه حجز بانتظار الموافقة</span>
+        <span><i className="bar ok" style={{ width: 14, position: "static" }} />حجز معتمد</span>
+        <span><i className="bar hold" style={{ width: 14, position: "static" }} />بانتظار الموافقة</span>
+        <span><i className="bar paused" style={{ width: 14, position: "static" }} />متوقفة</span>
         <span><i style={{ background: "var(--panel2)" }} />الجمعة والسبت</span>
       </div>
       {sel && (
@@ -651,13 +715,27 @@ export function LiveAds() {
   const today = data?.today;
   useEffect(() => { if (data && !from) setFrom(data.from); }, [data, from]);
   const bump = () => { reload(); setTick((t) => t + 1); };
+  /**
+   * 🔴 **الأرقام أماكن مش مكان×يوم** (بطلب داليا ١٩ أكتوبر ٢٠٢٦: «عايزة أعرف
+   * إجمالي الإعلانات المتاحة في التطبيق قد إيه، يخصم المحجوز ويكتب الباقي»).
+   *
+   * كانت بتجمع `slots` على **كل يوم** في الفترة، فـ٢١ مكان في ٣٠ يوم بتطلع
+   * ٦٣٠ — رقم صحيح حسابيًا وبلا معنى للي بيبيع، **وبيتغيّر لما تغيّري المدة**
+   * فيبان كأن المخزون نفسه اتغيّر.
+   *
+   * والمتاح = **أقل عدد فاضي في الفترة كلها** (`min`) مش المتوسط: البيع بالشهر،
+   * فالمكان اللي فاضي ٢٩ يوم ومحجوز يوم واحد **مش متاح للبيع** — وجمع المتوسط
+   * كان هيعدّه متاحًا ويخلّينا نبيع مكانًا مش موجود.
+   */
   const stats = useMemo(() => {
     if (!data) return null;
-    let cap = 0, used = 0;
-    data.placements.forEach((p) => p.active && p.cells.forEach((c) => { if (!c.blocked) { cap += p.slots; used += p.slots - c.free; } }));
-    // أماكن اليوم الواحد — الرقم اللي المعلن بيفهمه، غير مجموع الفترة
-    const perDay = data.placements.reduce((a, p) => a + (p.active ? p.slots : 0), 0);
-    return { cap, used, perDay, pct: cap ? Math.round((used / cap) * 100) : 0 };
+    let total = 0, open = 0;
+    data.placements.forEach((p) => {
+      if (!p.active) return;
+      total += p.slots;
+      open += p.cells.reduce((m, c) => Math.min(m, c.free), p.slots);
+    });
+    return { total, open, taken: total - open, pct: total ? Math.round(((total - open) / total) * 100) : 0 };
   }, [data]);
 
   if (err && !data) return <Err msg={err} />;
@@ -676,13 +754,13 @@ export function LiveAds() {
       {tab === "map" && (
         <>
           <div className="grid kpis" style={{ marginBottom: 14 }}>
-            {/* 🔴 الأرقام دي **مكان×يوم** مش عدد أماكن: ٤ مواضع فيها ١٢ مكان
-                في اليوم × ٣٠ يوم = ٣٦٠. وتسميتها «أماكن محجوزة» كانت بتتقري
-                كأن فيه ٢٦١ حجز — والدليل إنها بتتغيّر لما تغيّري المدة. */}
-            <Kpi l="نسبة الحجز في الفترة" v={`${n(stats.pct)}٪`} d="شامل اللي بانتظار الموافقة والمتوقف" />
-            <Kpi l="محجوز (مكان × يوم)" v={n(stats.used)} d={`من ${n(stats.cap)} في ${n(data.days.length)} يوم`} />
-            <Kpi l="متاح (مكان × يوم)" v={n(stats.cap - stats.used)} d={`${n(stats.perDay)} مكان في اليوم الواحد`} />
-            <Kpi l="مواضع نشطة" v={`${n(data.placements.filter((p) => p.active).length)} من ${n(data.placements.length)}`} />
+            {/* الأرقام **أماكن** — عدد الإعلانات اللي التطبيق بيشيلها، ناقص
+                المحجوز = الباقي اللي ينفع يتباع. والمتاح بـ`min` على الفترة
+                كلها عشان مانعرضش مكانًا محجوزًا يوم واحد كأنه فاضي. */}
+            <Kpi l="أماكن الإعلانات في التطبيق" v={n(stats.total)} d={`في ${n(data.placements.filter((p) => p.active).length)} مواضع نشطة من ${n(data.placements.length)}`} />
+            <Kpi l="محجوز في الفترة" v={n(stats.taken)} d="شامل اللي بانتظار الموافقة والمتوقف والمقفول" />
+            <Kpi l="الباقي المتاح للبيع" v={n(stats.open)} d={`فاضي طول الفترة (${n(data.days.length)} يوم)`} />
+            <Kpi l="نسبة الحجز" v={`${n(stats.pct)}٪`} d={`${n(stats.taken)} من ${n(stats.total)} مكان`} />
           </div>
           <InventoryMap data={data} from={from || data.from} setFrom={setFrom} span={span} setSpan={setSpan} today={today} can={can}
             onPick={(s) => { setForm({ ...blank(s.start), end: s.end, placements: [s.key] }); act("اتفتح نموذج الحجز بالفترة المحددة"); }} />

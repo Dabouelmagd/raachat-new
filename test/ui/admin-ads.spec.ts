@@ -35,12 +35,28 @@ const PLACEMENTS = [
   { key: "banner", name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerMonth: 4500, pricePerDay: 150, active: true, note: "أعلى قائمة الدردشات", dailyImpressions: 1000, effectiveCpm: 150, marketCpm: 120 },
   { key: "modal", name: "نافذة كاملة عند الدخول", kind: "modal", width: 1080, height: 1920, slots: 4, pricePerMonth: 12000, pricePerDay: 400, active: true, note: "شاشة كاملة 9:16", dailyImpressions: 1000, effectiveCpm: 400, marketCpm: 120 },
 ];
+/**
+ * 🔴 **البيانات مظبوطة عشان تفرّق بين `min` والمتوسط** — والفرق ده وقعت فيه
+ * فعلًا: أول نسخة كانت ٣ أيام محجوزة من ٥، فالمتوسط (٢٫٤ → ٢) والـ`min` (٢)
+ * طلعوا **نفس الرقم**، والاختبار عدّى على ارتداد بيحسب المتوسط.
+ *
+ * دلوقتي البانر محجوز مكان واحد في **يومين من عشرة**: `min` = ٢ (الصح — ده
+ * اللي ينفع يتباع للشهر كله) والمتوسط = ٢٫٨ → ٣ (الغلط، بيبيع مكانًا محجوزًا).
+ */
+const DAYS = Array.from({ length: 10 }, (_, i) => `2026-10-${18 + i}`);
+const BOOKED = new Set(["2026-10-19", "2026-10-20"]);
 const INVENTORY = {
-  from: DAY, to: DAY, days: [DAY], today: DAY,
+  from: DAYS[0], to: DAYS[9], days: DAYS, today: DAY,
   placements: PLACEMENTS.map((p) => ({
     ...p,
-    cells: [{ day: DAY, booked: 0, held: 0, blocked: false, free: p.slots }],
-    campaigns: [], blocks: [],
+    cells: DAYS.map((d) => {
+      const booked = p.key === "banner" && BOOKED.has(d) ? 1 : 0;
+      return { day: d, booked, held: 0, blocked: false, free: p.slots - booked };
+    }),
+    campaigns: p.key === "banner"
+      ? [{ id: "c1", advertiser: "شركة النور", start: "2026-10-19", end: "2026-10-20", status: "approved" }]
+      : [],
+    blocks: [],
   })),
 };
 const ME = { user: { id: "u1", name: "داليا" }, isOwner: true, role: null, permissions: [], catalog: [] };
@@ -180,10 +196,61 @@ test.describe("نموذج حملة الإعلانات في اللوحة", () => 
     await expect(panel.getByRole("alert"), "حملة بتاخد فلوس ومفيش ولا ظهور عدّت في سكوت").toContainText("مفيش ولا ظهور");
   });
 
+  /**
+   * 🔴 **«إجمالي الإعلانات المتاحة» لازم يكون أماكن مش مكان×يوم** (بطلب داليا
+   * ١٩ أكتوبر ٢٠٢٦). الرقم القديم كان بيضرب في عدد الأيام، فـ٧ أماكن في ٥ أيام
+   * تطلع ٣٥ — صحيح حسابيًا وبلا معنى للي بيبيع، **وبيتغيّر مع تغيير المدة**
+   * فيبان كأن المخزون نفسه اتغيّر.
+   */
+  test("🔴 الأرقام أماكن: الإجمالي ناقص المحجوز = الباقي المتاح", async ({ page }) => {
+    const errs: string[] = [];
+    page.on("pageerror", (e) => errs.push(e.message));
+    await page.goto(`http://127.0.0.1:${PORT}/#ads`);
+
+    // بانر ٣ + نافذة ٤ = ٧ أماكن في التطبيق
+    const kpi = (label: string) => page.locator(".kpis .card, .kpis > *").filter({ hasText: label }).first();
+    await expect(kpi("أماكن الإعلانات في التطبيق"), "مفيش رقم لإجمالي أماكن الإعلانات").toContainText("7");
+    // مكان واحد محجوز على البانر
+    await expect(kpi("محجوز في الفترة")).toContainText("1");
+    // الباقي ٦ — وده **٧ ناقص ١** مش متوسط ولا مجموع أيام
+    await expect(kpi("الباقي المتاح للبيع"), "الباقي مش بيساوي الإجمالي ناقص المحجوز").toContainText("6");
+    // ولا رقم من أرقام مكان×يوم (٧×١٠=٧٠) موجود
+    await expect(page.locator(".kpis"), "لسه فيه رقم مكان×يوم").not.toContainText("70");
+    expect(errs, errs.join("\n")).toEqual([]);
+  });
+
+  test("🔴 الخريطة بتظلّل المحجوز قدّام الموضع باسم المعلن ومدّته", async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${PORT}/#ads`);
+    const bar = page.locator(".imap .bar", { hasText: "شركة النور" });
+    await expect(bar, "مفيش شريط للمحجوز — المحجوز لسه رقم في خانة بس").toHaveCount(1);
+
+    // الشريط على أيامه بالظبط: يومان من عشرة = ٢٠٪ من عرض الصفّ
+    const w = await bar.evaluate((el) => {
+      const t = el.parentElement as HTMLElement;
+      return Math.round((el.getBoundingClientRect().width / t.getBoundingClientRect().width) * 100);
+    });
+    expect(w, `عرض الشريط ${w}٪ — المفروض ٢٠٪ (يومان من عشرة)`).toBeGreaterThanOrEqual(16);
+    expect(w).toBeLessThanOrEqual(24);
+
+    // والموضع الفاضي مالوش شريط
+    await expect(page.locator(".imap .bar"), "طلع شريط على موضع مفيهوش حجز").toHaveCount(1);
+  });
+
+  test("وملخّص الصفّ بيقول الأماكن المتاحة للفترة كلها مش عدد الأيام", async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${PORT}/#ads`);
+    // البانر: محجوز مكان في يومين → المتاح **للفترة كلها** ٢ من ٣
+    const row = page.locator(".imap tbody tr").filter({ hasText: "بانر الدردشات" }).first();
+    await expect(row.locator(".sumcol")).toContainText("2");
+    await expect(row.locator(".sumcol")).toContainText("مكان");
+    await expect(row.locator(".sumcol"), "لسه بيعدّ أيام").not.toContainText("يوم");
+  });
+
   test("ونسبة الخريطة مابتدّعيش إنها الشغّال", async ({ page }) => {
     await page.goto(`http://127.0.0.1:${PORT}/#ads`);
-    // «الإشغال» كانت بتوحي إن ده اللي ظاهر للمستخدمين، وهي بتعدّ المحجوز
-    await expect(page.getByText("نسبة الحجز في الفترة")).toBeVisible();
+    // «الإشغال» كانت بتوحي إن ده اللي ظاهر للمستخدمين، وهي بتعدّ **المحجوز**
+    await expect(page.getByText("نسبة الحجز", { exact: true })).toBeVisible();
+    await expect(page.locator(".kpis"), "كلمة «إشغال» رجعت").not.toContainText("إشغال");
+    // والتحفّظ لازم يفضل مكتوب: المحجوز مش معناه الظاهر للناس
     await expect(page.getByText("شامل اللي بانتظار الموافقة والمتوقف")).toBeVisible();
   });
 

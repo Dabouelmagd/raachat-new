@@ -113,6 +113,17 @@ label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mu
 .imap button.c.we{box-shadow:inset 1px 0 0 var(--line),inset -1px 0 0 var(--line)}
 /* ملخّص الصفّ لاصق في آخر الجدول — الخريطة بتتزحلق أفقيًا والرقم ده لازم يفضل ظاهر */
 .imap .sumcol{position:sticky;inset-inline-end:0;background:var(--panel);z-index:1;min-width:104px;padding:8px 10px;text-align:center;border-inline-start:1px solid var(--line);white-space:nowrap}
+/* شرايط المحجوز — الصفّ ده تحت صفّ الأرقام ومالوش حدّ سفلي عشان يبان تابعًا له */
+.imap tr.barrow td{border-bottom:0;padding:0 0 3px}
+.imap tr.barrow+tr:not(.barrow) td{border-top:1px solid var(--line)}
+.imap .track{position:relative;height:16px}
+.imap .bar{position:absolute;top:0;height:16px;border-radius:4px;display:flex;align-items:center;padding:0 5px;font-size:10px;font-weight:700;overflow:hidden;white-space:nowrap;color:#1a1514}
+.imap .bar span{overflow:hidden;text-overflow:ellipsis}
+.imap .bar.ok{background:color-mix(in srgb,var(--bad) 55%,transparent)}
+.imap .bar.hold{background:color-mix(in srgb,var(--warn) 65%,transparent)}
+.imap .bar.paused{background:color-mix(in srgb,var(--muted) 45%,transparent)}
+.imap .bar.blk{background:repeating-linear-gradient(45deg,var(--line),var(--line) 4px,transparent 4px,transparent 8px);color:var(--fg)}
+.legend .bar{height:12px;border-radius:3px;padding:0}
 .imap button.c{width:34px;height:38px;border:0;border-radius:0;font-weight:700;font-size:11px;background:transparent;color:var(--fg)}
 .c.free{background:color-mix(in srgb,var(--good) 34%,transparent)}
 .c.part{background:color-mix(in srgb,var(--warn) 42%,transparent)}
