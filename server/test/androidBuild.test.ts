@@ -150,3 +150,54 @@ describe("عنوان الـ API في بناء الـ APK", () => {
     expect(run("https://api.example.com/v1/x"), "عنوان فيه مسار أطول عدّى").not.toBe(0);
   });
 });
+
+/**
+ * **🔴 المساحات الآمنة — الشرايط كانت بتغطّي التطبيق على أندرويد (بلاغ ١٨ أكتوبر ٢٠٢٦).**
+ *
+ * `targetSdkVersion = 35` معناه إن أندرويد ١٥ بيفرض **edge-to-edge**، فالـ WebView
+ * بترسم تحت شريط الحالة وشريط التنقّل. البلاغ: «سهم الرجوع وسهم الإرسال والبار
+ * اللي فوق واللي تحت مش واضحين».
+ *
+ * والعلاج **قطعتان مربوطتان**، وكل واحدة لوحدها بلا قيمة:
+ *   - `viewport-fit=cover` في `index.html` — من غيرها `env(safe-area-inset-*)`
+ *     بترجّع **صفر دايمًا**، فالحشو موجود في الـCSS ومابيعملش حاجة **في سكوت**.
+ *   - حشو `env(safe-area-inset-*)` على `#root` — من غيره مفيش حاجة بتبعد المحتوى
+ *     عن الشرايط أصلًا.
+ * فالحارس بيفحص الاتنين **مع بعض**: شيل أي واحدة والعطل يرجع بلا أي رسالة.
+ */
+describe("المساحات الآمنة على أندرويد وiOS", () => {
+  const html = read("index.html");
+  const css = read("src/index.css");
+  const manifest = read("mobile/android/app/src/main/AndroidManifest.xml");
+
+  it("viewport فيه viewport-fit=cover (من غيرها كل القيم صفر)", () => {
+    const meta = /<meta\s+name="viewport"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(meta, "مالقيتش وسم viewport").toContain("width=device-width");
+    expect(meta, "`viewport-fit=cover` ناقصة — env(safe-area-*) هترجّع صفر والحشو مابيعملش حاجة").toContain(
+      "viewport-fit=cover",
+    );
+  });
+
+  it("الحشو على #root للجهات الأربعة", () => {
+    for (const side of ["top", "bottom", "left", "right"]) {
+      expect(css, `حشو المساحة الآمنة ناقص: ${side}`).toContain(`env(safe-area-inset-${side}`);
+    }
+  });
+
+  /** الاحتياطي `0px` هو اللي بيضمن إن الويب مايتأثرش ولا يتكسر على متصفح قديم */
+  it("كل env فيها احتياطي 0px — فالويب مايتأثرش", () => {
+    const uses = css.match(/env\(safe-area-inset-[a-z]+[^)]*\)/g) ?? [];
+    expect(uses.length, "مفيش ولا استخدام لـ env(safe-area-*)").toBeGreaterThanOrEqual(4);
+    for (const u of uses) expect(u, `بلا احتياطي: ${u}`).toMatch(/,\s*0px\s*\)$/);
+  });
+
+  /**
+   * من غيرها الكيبورد بيطلع **فوق** المحتوى بدل ما يقلّص الـWebView، فصندوق
+   * الكتابة وسهم الإرسال يختفوا تحته — وهي تانية نصّ البلاغ.
+   */
+  it("المانيفست بيقلّص الشاشة للكيبورد مش بيغطّيها", () => {
+    expect(manifest, "windowSoftInputMode=adjustResize ناقصة — الكيبورد هيبلع زرار الإرسال").toMatch(
+      /android:windowSoftInputMode="adjustResize"/,
+    );
+  });
+});
