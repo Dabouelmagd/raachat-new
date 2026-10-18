@@ -288,6 +288,67 @@ function CampaignForm({ draft, placements, onDone, onCancel, onBack }) {
   );
 }
 
+/* ---------- الشغّال دلوقتي ---------- */
+/**
+ * 🔴 **«إيه الشغّال دلوقتي» مكانش له مكان في الشاشة خالص.**
+ *
+ * خريطة المخزون بتقول **إيه المحجوز** (والرقم في الخانة = الفاضي)، وطابور
+ * الحملات بيعرض كل الحالات مع بعض فاللي شغّال بيتعرف من **قراءة شارتين**
+ * (معتمدة + جارية) في جدول طويل. فاللي بيفتح الشاشة مايعرفش في لمحة مين
+ * ظاهر للمستخدمين دلوقتي.
+ *
+ * 🔴 **وأسوأ من كده: «نسبة الإشغال» كانت بتوحي إنها الشغّال وهي مش كده** —
+ * `occupancy` بيعدّ `HOLD` = معتمدة **وبانتظار الموافقة ومتوقفة**. يعني
+ * ٧٣٪ ممكن تكون كلها حجوزات لسه ماظهرتش لحد. فاللوحة دي بتقول الرقم
+ * الحقيقي، والـKPI اتسمّى «الحجز» بدل «الإشغال».
+ *
+ * والحكم على **`phase` الجايّة من السيرفر** (محسوبة بيوم القاهرة) مش بتاريخ
+ * المتصفح — الجهاز ممكن يكون على منطقة زمنية تانية فيقول «شغّالة» على حملة
+ * خلصت امبارح.
+ */
+function RunningNow({ mapKey, onAll }) {
+  const { data, err } = useLoad("/admin/ads/campaigns?status=approved", [mapKey]);
+  const live = (data || []).filter((c) => c.phase === "running");
+  const today = iso(new Date());
+  return (
+    <Card title={`شغّالة دلوقتي${data ? ` · ${n(live.length)}` : ""}`} right={<button className="btn sm" onClick={onAll}>كل الحملات</button>}>
+      <Err msg={err} />
+      {data && !live.length && <div className="empty">مفيش ولا إعلان ظاهر للمستخدمين دلوقتي — الحجز اللي بانتظار الموافقة أو المتوقف بيتحسب في خريطة المخزون إنما مابيظهرش لحد.</div>}
+      <div className="grid" style={{ gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(290px,1fr))" }}>
+        {live.map((c) => {
+          // إعلاننا بدون حملة نهايته ٢٠٩٩ — «باقي ٢٦٠٠٠ يوم» رقم بلا معنى
+          const left = c.isHouse ? null : Math.max(0, Math.round((+new Date(c.end + "T00:00:00Z") - +new Date(today + "T00:00:00Z")) / 864e5));
+          // ظهور صفر على حملة بدأت قبل النهاردة = الإعلان مش بيتعرض فعلًا،
+          // وده عطل صامت حصل قبل كده (موضع مباع ومفيش مكان بيعرضه)
+          const silent = c.shown === 0 && c.start < today;
+          return (
+            <div key={c.id} className="li" style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 10, border: "1px solid var(--line)", borderRadius: 12 }}>
+              {rowImage(c)
+                ? <img src={toAbs(rowImage(c))} alt="" style={{ width: 54, height: 54, borderRadius: 8, objectFit: "cover", flex: "none" }} />
+                : <span style={{ width: 54, height: 54, borderRadius: 8, background: GRADS[c.grad]?.[1] || GRADS[0][1], flex: "none" }} />}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="row" style={{ gap: 6 }}>
+                  <b style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.advertiser}</b>
+                  {c.isHouse && <span className="tag">إعلاننا</span>}
+                </div>
+                <div style={{ color: "var(--muted)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.headline}</div>
+                <div className="row" style={{ gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+                  {c.placements.map((p) => <span key={p.key} className="tag">{p.name}</span>)}
+                </div>
+                <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 5 }}>
+                  {c.isHouse ? "بلا تاريخ نهاية" : left === 0 ? "آخر يوم النهاردة" : `باقي ${n(left)} يوم · لحد ${fdate(c.end)}`}
+                  {" · "}<span dir="ltr">{n(c.shown)}</span> ظهور · <span dir="ltr">{n(c.clicked)}</span> نقرة
+                </div>
+                {silent && <div role="alert" style={{ color: "var(--bad)", fontSize: 11, marginTop: 4 }}>⚠ شغّالة من {fdate(c.start)} ومفيش ولا ظهور — اتأكدي إن الموضع بيتعرض فعلًا في التطبيق</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 /* ---------- الحملات ---------- */
 function Campaigns({ onEdit, onNew, onRepublish, can, reloadMap, mapKey }) {
   const run = useDo();
@@ -535,6 +596,9 @@ export function LiveAds() {
   const start = from && from > today ? from : today;
   return (
     <>
+      {/* فوق التبويبات عن قصد: ده السؤال الأول لأي حد بيفتح الشاشة، ولازم
+          يتجاوب من غير ما يدوس على تبويب ويقرا شارتين في جدول */}
+      <div style={{ marginBottom: 14 }}><RunningNow mapKey={tick} onAll={() => setTab("campaigns")} /></div>
       <div className="tabs">
         {[["map", "خريطة المخزون"], ["campaigns", "الحملات والحجوزات"], ["placements", "المواضع والمقاسات والأسعار"], ["gifts", "أكواد الهدايا"]].map(([k, l]) => <button key={k} className="tab" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>)}
         {can("ads.manage") && <button className="btn pri" style={{ marginInlineStart: "auto" }} onClick={() => setForm(blank(start))}>+ حجز حملة</button>}
@@ -542,7 +606,7 @@ export function LiveAds() {
       {tab === "map" && (
         <>
           <div className="grid kpis" style={{ marginBottom: 14 }}>
-            <Kpi l="نسبة الإشغال في الفترة" v={`${n(stats.pct)}٪`} /><Kpi l="أماكن محجوزة" v={n(stats.used)} /><Kpi l="أماكن متاحة" v={n(stats.cap - stats.used)} /><Kpi l="مواضع نشطة" v={n(data.placements.filter((p) => p.active).length)} />
+            <Kpi l="نسبة الحجز في الفترة" v={`${n(stats.pct)}٪`} d="شامل اللي بانتظار الموافقة والمتوقف" /><Kpi l="أماكن محجوزة" v={n(stats.used)} /><Kpi l="أماكن متاحة" v={n(stats.cap - stats.used)} /><Kpi l="مواضع نشطة" v={n(data.placements.filter((p) => p.active).length)} />
           </div>
           <InventoryMap data={data} from={from || data.from} setFrom={setFrom} span={span} setSpan={setSpan} today={today} can={can}
             onPick={(s) => { setForm({ ...blank(s.start), end: s.end, placements: [s.key] }); act("اتفتح نموذج الحجز بالفترة المحددة"); }} />

@@ -45,6 +45,26 @@ const INVENTORY = {
 };
 const ME = { user: { id: "u1", name: "داليا" }, isOwner: true, role: null, permissions: [], catalog: [] };
 
+/**
+ * حملات بحالات مختلفة — لوحة «شغّالة دلوقتي» لازم تعرض **الجارية المعتمدة بس**.
+ * و`phase` جايّة من السيرفر عن قصد (محسوبة بيوم القاهرة)، فالاختبار بيبعتها
+ * زي ما السيرفر بيبعتها.
+ */
+const camp = (o: Record<string, unknown>) => ({
+  id: "c1", advertiser: "شركة النور", headline: "عرض الشتا", body: "", cta: "اعرف أكتر", link: "https://x.test",
+  imageUrl: null, images: {}, grad: 0, start: "2026-10-10", end: "2026-10-30", days: 21,
+  status: "approved", phase: "running", total: 3000, discount: 0, gross: 3000, giftCode: null, offerPct: 0,
+  isHouse: false, shown: 1200, clicked: 30, placements: [{ key: "banner", name: "بانر الدردشات", pricePerDay: 150 }],
+  ...o,
+});
+const CAMPAIGNS = [
+  camp({}),
+  camp({ id: "c2", advertiser: "مطعم الشام", headline: "توصيل مجاني", phase: "upcoming", start: "2026-11-01", end: "2026-11-20" }),
+  camp({ id: "c3", advertiser: "معرض القاهرة", headline: "خصومات", phase: "ended", start: "2026-09-01", end: "2026-09-20" }),
+  // شغّالة من أيام ومفيش ولا ظهور — ده العطل الصامت اللي اللوحة لازم تصرخ عليه
+  camp({ id: "c4", advertiser: "صيدلية الشفا", headline: "خصم الأدوية", shown: 0, clicked: 0, start: "2026-10-12" }),
+];
+
 let server: http.Server | undefined;
 
 test.describe("نموذج حملة الإعلانات في اللوحة", () => {
@@ -60,7 +80,8 @@ test.describe("نموذج حملة الإعلانات في اللوحة", () => 
       if (url.pathname.startsWith("/api/")) {
         if (url.pathname === "/api/admin/me") return json(ME);
         if (url.pathname === "/api/admin/ads/inventory") return json(INVENTORY);
-        if (url.pathname === "/api/admin/ads/campaigns") return json({ items: [], total: 0 });
+        // المسار بيرجّع **مصفوفة** مش كائن — الواجهة بتعمل عليها `.filter`
+        if (url.pathname === "/api/admin/ads/campaigns") return json(CAMPAIGNS);
         return json({ code: "not_found", message: "مش موجود" }, 404);
       }
       const file = path.join(DIST, url.pathname === "/" ? "/index.html" : url.pathname);
@@ -133,6 +154,37 @@ test.describe("نموذج حملة الإعلانات في اللوحة", () => 
     // وأهم حاجة: اللي اتكتب لسه موجود
     await page.getByRole("button", { name: "+ حجز حملة" }).click();
     await expect(page.locator(".inp").first(), "الرجوع ضيّع اللي اتكتب — ده بقى نفس «إلغاء»").toHaveValue("شركة النور");
+  });
+
+  test("«شغّالة دلوقتي» بتبان من أول الشاشة وبتعرض الجارية بس", async ({ page }) => {
+    const errs: string[] = [];
+    page.on("pageerror", (e) => errs.push(e.message));
+    await page.goto(`http://127.0.0.1:${PORT}/#ads`);
+
+    // من غير ما ندوس على أي تبويب — دي الشاشة الافتراضية (خريطة المخزون)
+    const panel = page.locator(".card").filter({ hasText: "شغّالة دلوقتي" }).first();
+    await expect(panel, "مفيش لوحة بتقول إيه الشغّال — السؤال الأول بلا إجابة").toBeVisible();
+    await expect(panel).toContainText("شركة النور");
+    await expect(panel).toContainText("بانر الدردشات");
+
+    // والمش شغّال مايتعرضش: الجايّة والمنتهية
+    await expect(panel, "حملة لسه ما بدأتش ظاهرة كأنها شغّالة").not.toContainText("مطعم الشام");
+    await expect(panel, "حملة منتهية ظاهرة كأنها شغّالة").not.toContainText("معرض القاهرة");
+    expect(errs, errs.join("\n")).toEqual([]);
+  });
+
+  test("وبتحذّر من الحملة الشغّالة اللي مفيش ليها ولا ظهور", async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${PORT}/#ads`);
+    const panel = page.locator(".card").filter({ hasText: "شغّالة دلوقتي" }).first();
+    await expect(panel).toContainText("صيدلية الشفا");
+    await expect(panel.getByRole("alert"), "حملة بتاخد فلوس ومفيش ولا ظهور عدّت في سكوت").toContainText("مفيش ولا ظهور");
+  });
+
+  test("ونسبة الخريطة مابتدّعيش إنها الشغّال", async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${PORT}/#ads`);
+    // «الإشغال» كانت بتوحي إن ده اللي ظاهر للمستخدمين، وهي بتعدّ المحجوز
+    await expect(page.getByText("نسبة الحجز في الفترة")).toBeVisible();
+    await expect(page.getByText("شامل اللي بانتظار الموافقة والمتوقف")).toBeVisible();
   });
 
   test("«إلغاء» لسه بيمسح المسوّدة — الفرق بينه وبين الرجوع مقصود", async ({ page }) => {
