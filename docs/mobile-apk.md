@@ -18,17 +18,34 @@ GitHub ← تاب **Actions** ← **«APK للموبايل»** ← آخر تشغ
 فلازم يبقى في `CORS_ORIGIN` وإلا **كل نداء من الـ APK بيترفض** والتطبيق يفتح
 ويبان شغّال بس مفيش ولا رسالة بتتحمّل.
 
-على السيرفر، شوفي القيمة الحالية:
+**و`CORS_ORIGIN` مش في `.env.production`** — مبنيّ جوه `docker-compose.prod.yml`
+من `DOMAIN`. فالإضافة بتحصل بمفتاح `CORS_EXTRA` (اتضاف ١٨ أكتوبر ٢٠٢٦، لازم يبدأ
+بفاصلة):
 
 ```
-grep ^CORS_ORIGIN= /opt/rachat/.env.production
+cd /opt/rachat
+grep -q '^CORS_EXTRA=' .env.production || printf 'CORS_EXTRA=,https://localhost\n' >> .env.production
+grep -n CORS_EXTRA .env.production
 ```
 
-وبعدين ضيفي `,https://localhost` **في آخر** القيمة (مش في أولها) وأعيدي تشغيل
-الـ api. والترتيب كان مهم: `APP_URL` الفاضي بياخد أصلًا من القايمة، فلو المحلي
-بقى أول واحد كان كل إيميل تحقق رابطه `https://localhost`. **الكود بقى بيعدّي
-المحلي** (`firstPublicOrigin` في `senders.ts`، محمي باختبار سقط على السلوك
-القديم) — فالترتيب بقى مش فارق، إنما الإضافة في الآخر تفضل الأنضف.
+وبعدها نشرة عادية (`deploy-rachat.sh`) — بتعيد إنشاء الحاوية فالقيمة توصل
+للعملية. والفحص الحاسم بعدها:
+
+```
+cd /opt/rachat
+docker compose -f docker-compose.prod.yml --env-file .env.production exec -T api printenv CORS_ORIGIN
+```
+
+لازم يطلع فيه `https://localhost` **في الآخر**. والترتيب مهم: `APP_URL` الفاضي
+بياخد أول أصل **غير محلّي** (`firstPublicOrigin` في `senders.ts`) — فلو الأصل
+المحلي بقى الأول، كل إيميل تحقق لكل المستخدمين رابطه `https://localhost` واللوجو
+مايظهرش، **والعطل صامت** لأن الإيميل بيوصل عادي. محمي باختبارين: واحد على قالب
+الإيميل نفسه (`otp-email.test.ts`) وواحد على سطر compose (`composeEnv.test.ts`).
+
+**⚠️ ودرس تشغيلي:** `docker compose up -d api` بيطلّع `Running` لما الإعداد ما
+يتغيّرش — فـ`Running` بعد تعديل إعداد معناها إن التعديل **ما وصلش**، و`Started`
+معناها إعادة إنشاء فعلية. والحكم النهائي هو `printenv` جوه الحاوية مش وجود
+السطر في ملف.
 
 ## إيه اللي يستاهل تتجرّب هنا بالتحديد
 

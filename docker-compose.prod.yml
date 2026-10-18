@@ -25,7 +25,13 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://rachat:${POSTGRES_PASSWORD}@db:5432/rachat?schema=public
       JWT_SECRET: ${JWT_SECRET:?ضع JWT_SECRET (٣٢ حرف عشوائي على الأقل)}
-      CORS_ORIGIN: https://app.${DOMAIN:?ضع DOMAIN},https://admin.${DOMAIN}
+      # `CORS_EXTRA` = أصول زيادة تتضاف **في الآخر** (لازم تبدأ بفاصلة)، والافتراضي
+      # فاضي فمين مايضبطهاش مايتغيّر عنده حاجة. لزومها: تطبيق Capacitor أصله
+      # `https://localhost` ومفيش دومين يولّده، والمفتاح ده بيحكم الطلبات
+      # (`app.ts`) **والسوكت** (`realtime.ts`) — فمن غيره الـ APK يفتح ويبان
+      # شغّال ومفيش ولا رسالة بتتحمّل ومفيش ولا خطأ. وفي الآخر عن قصد: `APP_URL`
+      # الفاضي بياخد أول أصل **غير محلّي** (`firstPublicOrigin`).
+      CORS_ORIGIN: https://app.${DOMAIN:?ضع DOMAIN},https://admin.${DOMAIN}${CORS_EXTRA:-}
       OWNER_CONTACTS: ${OWNER_CONTACTS:?ضع OWNER_CONTACTS (رقمك أو إيميلك)}
       TWILIO_SID: ${TWILIO_SID:-}
       TWILIO_TOKEN: ${TWILIO_TOKEN:-}

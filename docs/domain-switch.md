@@ -10,7 +10,7 @@
 | المكان | إزاي بياخده |
 |---|---|
 | نجنكس | `deploy/nginx-rachat.conf.template` فيه `__DOMAIN__`، و`scripts/add-nginx-site.sh` بيبدّله ويطلب الشهادات لـ `app.` و`api.` و`admin.` |
-| الـ API والواجهة | `CORS_ORIGIN` · `APP_URL` · `PUBLIC_URL` في `.env.production` |
+| الـ API والواجهة | **`CORS_ORIGIN` مش في `.env.production`** — مبنيّ جوه `docker-compose.prod.yml` من `DOMAIN` (`https://app.$DOMAIN,https://admin.$DOMAIN`)، وأي أصل زيادة بيتضاف بـ `CORS_EXTRA` في `.env.production` (لازم يبدأ بفاصلة). و`APP_URL` · `PUBLIC_URL` اختياريان في `.env.production` |
 | الإيميلات | `EMAIL_FROM` (لازم دومين **متحقَّق في Resend**) و`APP_URL` (اللوجو والروابط في قالب الكود) |
 | TURN | `TURN_URLS` — بيتضبط بـ `bash scripts/set-turn.sh` اللي **بيدوّر على اسم بيتحلّ** وبيفحص بـ Allocate حقيقي قبل الكتابة |
 | الصفحات القانونية | مفيش فيها الدومين خالص (متحقَّق) |
@@ -27,9 +27,13 @@
    certbot بيفشل والشهادة تتعلّق.
 2. **توثيق الدومين في Resend** وتحديث `EMAIL_FROM`. لو الدومين مش متحقَّق،
    أكواد التحقق بالإيميل **بتوقف** — ودي القناة الوحيدة الشغّالة حاليًا.
-3. **تعديل `.env.production`:** `DOMAIN` · `CORS_ORIGIN` · `APP_URL`
-   (و`PUBLIC_URL` لو مستخدَم). **من غير ما تلمسي `JWT_SECRET`** — تغييره =
-   تسجيل خروج كل المستخدمين.
+3. **تعديل `.env.production`:** `DOMAIN` **وبس** — `CORS_ORIGIN` بيتولّد منه جوه
+   compose فمفيش حاجة تتعدّل له (و`APP_URL`/`PUBLIC_URL` لو مضبوطين صريح، و
+   `CORS_EXTRA` يفضل زي ما هو — مش مربوط بدومين). **من غير ما تلمسي
+   `JWT_SECRET`** — تغييره = تسجيل خروج كل المستخدمين.
+   > ⚠️ كان مكتوب هنا غلط إن `CORS_ORIGIN` في `.env.production` (اتصحّح ١٨ أكتوبر
+   > ٢٠٢٦). الغلط ده كلّف أربع لفّات تعديل على الإنتاج **مابتعملش حاجة في سكوت**،
+   > لأن `sed` كان بيدوّر على سطر مش موجود. محمي دلوقتي بـ `composeEnv.test.ts`.
 4. `sudo bash scripts/add-nginx-site.sh` — نجنكس + certbot للتلات نطاقات
    (بيعمل `nginx -t` قبل الـ reload ومابيلمسش مواقع المشاريع التانية).
 5. `bash scripts/set-turn.sh` — يعيد ضبط `TURN_URLS` على الدومين الجديد.
