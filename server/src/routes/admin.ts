@@ -5,7 +5,7 @@ import { z } from "zod";
 import { newSession, normalizeTarget, requireAuth, type AuthedRequest, validTarget } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, forbidden, notFound, wrap } from "../lib/errors.js";
-import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, priceBreakdown, HOUSE_END, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
+import { GIFT_MONTHS, MARKET_CPM_EGP, MAX_CAMPAIGN_DAYS, newGiftCode, addDays, conflictError, dayCount, ensureDefaultPlacements, findConflicts, isDay, occupancy, priceOf, priceBreakdown, vatOf, HOUSE_END, startOfCairoDay, todayCairo, withAdsLock, daysBetween, HOLD } from "../lib/adsInventory.js";
 import { randomToken, sha256 } from "../lib/tokens.js";
 import { emitToUsers } from "../realtime.js";
 import { getSettings, saveSettings } from "../lib/settings.js";
@@ -335,7 +335,7 @@ export function adminRoutes(ctx: Ctx) {
     shown: tot?.get(c.id)?.shown ?? 0, clicked: tot?.get(c.id)?.clicked ?? 0,
     id: c.id, advertiser: c.advertiser, headline: c.headline, body: c.body, cta: c.cta, link: c.link, imageUrl: c.imageUrl, grad: c.grad, audience: c.audience,
     priority: c.priority, dailyCap: c.dailyCap, start: c.startDate, end: c.endDate, status: c.status, phase: phaseOf(c), total: Number(c.total), discount: Number(c.discount), gross: +(Number(c.total) + Number(c.discount)).toFixed(2), giftCode: c.giftCode, note: c.note,
-    offerPct: c.offerPct, isHouse: c.isHouse,
+    offerPct: c.offerPct, isHouse: c.isHouse, vat: vatOf(Number(c.total)),
     days: dayCount(c.startDate, c.endDate), placements: c.bookings.map((b) => ({ key: b.placement.key, name: b.placement.name, pricePerDay: Number(b.pricePerDay) })), createdAt: c.createdAt.toISOString(),
     // صورة كل موضع بمفتاحه — الواجهة بتعرضها وبتحذّر لو نسبتها مختلفة عن مقاس الموضع
     images: Object.fromEntries(c.bookings.filter((b) => b.imageUrl).map((b) => [b.placement.key, b.imageUrl!])) as Record<string, string>,
@@ -457,6 +457,8 @@ export function adminRoutes(ctx: Ctx) {
     res.json({
       days: n, gross, discount: br.discount, gift: br.gift, offer: br.offer, offerPct: br.offerPct,
       giftDays, giftError, total: br.total, ok: conflicts.length === 0, conflicts,
+      // الأسعار شاملة الضريبة، فالضريبة بتتخرج من المطلوب مش بتتزوّد عليه
+      vat: vatOf(br.total),
       lines: ps.map((p) => ({ key: p.key, name: p.name, pricePerDay: Number(p.pricePerDay), days: n, subtotal: +(Number(p.pricePerDay) * n).toFixed(2) })),
     });
   }));

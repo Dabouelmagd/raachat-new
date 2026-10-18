@@ -4,6 +4,7 @@ import { GRADS } from "./data.js";
 import { api, toAbs } from "./api.js";
 import { AdPreview } from "./adPreview.jsx";
 import { useMe, useLoad, Err, Confirm, useDo } from "./live.jsx";
+import { clearDraft, draftHasWork, draftKey, loadDraft, saveDraft } from "./draft.js";
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const addDays = (s, k) => iso(new Date(+new Date(s + "T00:00:00Z") + k * 864e5));
@@ -99,11 +100,26 @@ function InventoryMap({ data, from, setFrom, span, setSpan, today, onPick, can }
 /* ---------- نموذج الحجز / التعديل ---------- */
 function CampaignForm({ draft, placements, onDone, onCancel }) {
   const run = useDo();
-  const [c, setC] = useState(draft);
+  /**
+   * المسوّدة بترجع من `localStorage` **قبل أول رسم** — من غير كده النموذج
+   * بيبان فاضيًا لحظة ثم يتملا، والمستخدم يبدأ يكتب فوق حاجة لسه جاية.
+   * وبنبدأ من `draft` الجايّة من السيرفر وندمج فوقها، فأي حقل جديد في
+   * النموذج ياخد قيمته الافتراضية بدل `undefined` من مسوّدة قديمة.
+   */
+  const key = draftKey(draft.id);
+  const [c, setC] = useState(() => {
+    const saved = loadDraft(key);
+    return saved && draftHasWork(saved, draft) ? { ...draft, ...saved, id: draft.id } : draft;
+  });
+  const [restored] = useState(() => c !== draft);
   const [q, setQ] = useState(null);
   const [err, setErr] = useState("");
   const isNew = !draft.id;
   const set = (k, v) => setC((x) => ({ ...x, [k]: v }));
+  // الحفظ مع كل تغيير: الكتابة في `localStorage` متزامنة وسريعة، والتأجيل
+  // بمؤقّت كان معناه إن إعادة تحميل في اللحظة الغلط تضيّع آخر تعديل
+  useEffect(() => { if (draftHasWork(c, draft)) saveDraft(key, c); }, [c, key, draft]);
+  const reset = () => { clearDraft(key); setC(draft); setQ(null); setErr(""); };
   const toggle = (k) => set("placements", c.placements.includes(k) ? c.placements.filter((x) => x !== k) : [...c.placements, k]);
   useEffect(() => {
     if (!c.placements.length || !c.start || !c.end || c.end < c.start) { setQ(null); return; }
@@ -121,7 +137,7 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
       // المواضع اللي اتشالت من الحملة مش بيتبعت لها صورة — السيرفر بيرفض موضع مش منها
       images: Object.fromEntries(c.placements.map((k) => [k, c.images?.[k] ?? null])) };
     const r = await run(() => isNew ? api("/admin/ads/campaigns", { method: "POST", body: { ...body, approve: c.approve, house: !!c.house, ...(c.house ? { start: undefined, end: undefined, giftCode: undefined, offerPct: 0 } : {}) } }) : api(`/admin/ads/campaigns/${c.id}`, { method: "PATCH", body }), isNew ? `تم حجز حملة ${c.advertiser}` : `تم تعديل حملة ${c.advertiser}`);
-    if (r) onDone();
+    if (r) { clearDraft(key); onDone(); }
   };
   return (
     <div className="grid two">
@@ -196,8 +212,17 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
           {!c.house && <label className="f">كود هدية (اختياري)<input className="inp" dir="ltr" placeholder="RA-XXXX-XXXX" value={c.giftCode || ""} onChange={(e) => set("giftCode", e.target.value.toUpperCase())} disabled={!isNew && !!draft.giftCode} />{q?.giftError && <span role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>{q.giftError}</span>}</label>}
           <label className="f">ملاحظات داخلية<input className="inp" maxLength={300} value={c.note || ""} onChange={(e) => set("note", e.target.value)} /></label>
           {isNew && <div className="li" style={{ border: 0, padding: 0 }}><div><div className="t">اعتماد فوري</div><div className="s">من غير مراجعة (لو سبته مقفول الحملة بتستنى الموافقة وتحجز المكان مؤقتًا)</div></div><Switch on={c.approve} label="اعتماد فوري" onChange={(v) => set("approve", v)} /></div>}
+          {restored && (
+            <div className="li" style={{ alignItems: "center", background: "var(--card2, transparent)" }}>
+              <div>
+                <div className="t">رجّعنا اللي كنتِ كاتباه</div>
+                <div className="s">المسوّدة بتتحفظ على جهازك مع كل تعديل، فإعادة تحميل الصفحة مابتضيّعهاش.</div>
+              </div>
+              <button type="button" className="btn sm" onClick={reset}>ابدأ من جديد</button>
+            </div>
+          )}
           {err && <div role="alert" style={{ color: "var(--bad)", fontWeight: 700 }}>{err}</div>}
-          <div className="row"><button className="btn pri" type="submit" disabled={(q && q.ok === false) || !!q?.giftError}>{isNew ? "احجز" : "حفظ التعديلات"}</button><button type="button" className="btn" onClick={onCancel}>إلغاء</button></div>
+          <div className="row"><button className="btn pri" type="submit" disabled={(q && q.ok === false) || !!q?.giftError}>{isNew ? "احجز" : "حفظ التعديلات"}</button><button type="button" className="btn" onClick={() => { clearDraft(key); onCancel(); }}>إلغاء</button></div>
         </form>
       </Card>
       <div className="grid" style={{ gap: 14, alignContent: "start" }}>
@@ -228,7 +253,17 @@ function CampaignForm({ draft, placements, onDone, onCancel }) {
                   </button>
                 </div>
               )}
-              <div className="li"><div className="t">المطلوب دفعه</div><div style={{ fontWeight: 800, fontSize: 18 }}>{egp(q.total)}</div></div>
+              {/*
+                الأسعار شاملة الضريبة، فالصافي والضريبة **مستخرجان** من
+                المطلوب — والمطلوب هو الرقم الكبير لأنه اللي المعلن بيدفعه.
+              */}
+              {q.vat && q.total > 0 && (
+                <>
+                  <div className="li"><div className="t">الصافي قبل الضريبة</div><div>{egp(q.vat.net)}</div></div>
+                  <div className="li"><div className="t">ضريبة القيمة المضافة {n(q.vat.pct)}٪</div><div>{egp(q.vat.vat)}</div></div>
+                </>
+              )}
+              <div className="li"><div><div className="t">المطلوب دفعه</div><div className="s">شامل ضريبة القيمة المضافة</div></div><div style={{ fontWeight: 800, fontSize: 18 }}>{egp(q.total)}</div></div>
               {q.ok ? <div style={{ color: "var(--good)", fontWeight: 700 }}>✓ كل المواضع متاحة في الفترة دي</div>
                 : <div role="alert" style={{ color: "var(--bad)", fontWeight: 700 }}>✕ مش متاح:{q.conflicts.map((x) => <div key={x.key}>{x.name} — {WHY[x.reason]} من {fdate(x.day)}</div>)}</div>}
             </>

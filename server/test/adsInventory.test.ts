@@ -526,3 +526,87 @@ describe("إعلان بدون حملة", () => {
     expect(ok.start).toBe(todayCairo());
   });
 });
+
+/**
+ * **الأسعار شاملة ضريبة القيمة المضافة** (قرار داليا ١٨ أكتوبر ٢٠٢٦).
+ *
+ * 🔴 الفحص الحاسم هنا إن الضريبة **مستخرجة** من الإجمالي مش مزوّدة عليه:
+ * على ١٥٠٠ ج الاستخراج ضريبته ١٨٤٫٢١، والإضافة بتطلّع ٢١٠ وإجمالي ١٧١٠ —
+ * يعني مطالبة المعلن بـ٢١٠ ج **زيادة على سعر متفق عليه**.
+ */
+describe("ضريبة القيمة المضافة", () => {
+  it("🔴 الضريبة مستخرجة من الإجمالي مش مزوّدة عليه، ومجموع الصافي والضريبة = الإجمالي", async () => {
+    const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner"], start: d(200), end: d(209) }).expect(200)).body;
+    expect(q.total).toBe(1500);
+    expect(q.vat.pct).toBe(14);
+    expect(q.vat.net).toBe(1315.79);
+    expect(q.vat.vat).toBe(184.21);
+    // الإجمالي ما اتغيّرش — دي الفرضية اللي بتحمي المعلن من مطالبة زايدة
+    expect(+(q.vat.net + q.vat.vat).toFixed(2)).toBe(q.total);
+    expect(q.vat.total).toBe(q.total);
+  });
+
+  it("الضريبة بتتحسب على المطلوب بعد الخصم والهدية، وبتفضل متسقة في الحملة المحفوظة", async () => {
+    const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ placements: ["banner"], start: d(220), end: d(229), offerPct: 20 })).expect(201)).body;
+    expect(c.total).toBe(1200); // ١٥٠٠ − ٢٠٪
+    expect(+(c.vat.net + c.vat.vat).toFixed(2)).toBe(1200);
+    expect(c.vat.vat).toBe(147.37);
+  });
+});
+
+/**
+ * **مسوّدة نموذج الحملة بتعيش بعد إعادة تحميل الصفحة** (بطلب داليا:
+ * «لما اكون عاملة حملة واعمل ريفرش للابلكشن يتم حفظ كل البيانات»).
+ *
+ * المنطق في `admin/src/draft.js` **خالص وبلا استيراد** عشان يتجرّب لوحده
+ * من غير بيئة Vite — ومعاه حارس إن النموذج بيستخدمه فعلًا، لأن مودیول
+ * موجود ومحدش بينادیه بيبوظ في سكوت.
+ */
+describe("مسوّدة نموذج الحملة", () => {
+  const mem = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) }; };
+
+  it("بتتحفظ وبترجع بالحرف، والمفتاح مختلف بين الجديدة والتعديل", async () => {
+    const { draftKey, loadDraft, saveDraft, clearDraft } = await import("../../admin/src/draft.js");
+    expect(draftKey()).not.toBe(draftKey("c1"));
+    const st = mem();
+    const d1 = { advertiser: "كافيه النيل", placements: ["banner"], images: { banner: "/uploads/a.png" }, offerPct: 20 };
+    saveDraft(draftKey(), d1, st);
+    expect(loadDraft(draftKey(), st)).toEqual(d1);
+    expect(loadDraft(draftKey("c1"), st)).toBe(null); // مسوّدة التعديل مش بتشوف مسوّدة الجديدة
+    clearDraft(draftKey(), st);
+    expect(loadDraft(draftKey(), st)).toBe(null);
+  });
+
+  it("🔴 مابتكسرش لو التخزين مقفول أو السطر تالف", async () => {
+    const { loadDraft, saveDraft } = await import("../../admin/src/draft.js");
+    const dead = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); }, removeItem: () => {} };
+    // التصفّح الخاص بيرمي — ومسوّدة ضايعة أهون من لوحة مابتفتحش
+    expect(loadDraft("k", dead)).toBe(null);
+    expect(saveDraft("k", { a: 1 }, dead)).toBe(false);
+    const bad = { getItem: () => "{ليس json", setItem: () => {}, removeItem: () => {} };
+    expect(loadDraft("k", bad)).toBe(null);
+    const arr = { getItem: () => "[1,2]", setItem: () => {}, removeItem: () => {} };
+    expect(loadDraft("k", arr)).toBe(null); // مصفوفة مش شكل النموذج
+  });
+
+  it("النموذج الفاضي مش مسوّدة، وأي حرف أو صورة بيبقى شغلًا", async () => {
+    const { draftHasWork } = await import("../../admin/src/draft.js");
+    const blank = { advertiser: "", headline: "", placements: [], images: {}, offerPct: 0, start: "2026-10-18", end: "2026-10-24", approve: false, house: false };
+    expect(draftHasWork({ ...blank }, blank)).toBe(false);
+    // التواريخ لوحدها مش شغل — ليها قيم افتراضية
+    expect(draftHasWork({ ...blank, start: "2026-11-01", end: "2026-11-30" }, blank)).toBe(false);
+    expect(draftHasWork({ ...blank, advertiser: "ك" }, blank)).toBe(true);
+    expect(draftHasWork({ ...blank, placements: ["banner"] }, blank)).toBe(true);
+    expect(draftHasWork({ ...blank, images: { banner: "/uploads/a.png" } }, blank)).toBe(true);
+    expect(draftHasWork({ ...blank, offerPct: 10 }, blank)).toBe(true);
+  });
+
+  it("🔴 نموذج الحملة بيستخدم المسوّدة فعلًا (مودیول محدش بينادیه بيبوظ في سكوت)", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const src = fs.readFileSync(path.resolve(import.meta.dirname, "../../admin/src/liveAds.jsx"), "utf8");
+    for (const fn of ["loadDraft(", "saveDraft(", "clearDraft(", "draftKey("]) expect(src, `النموذج مش بينادي ${fn}`).toContain(fn);
+    // والتنضيف بعد الحفظ الناجح — من غيره المسوّدة القديمة بترجع فوق حملة اتعملت
+    expect(src).toMatch(/if \(r\) \{ clearDraft\(key\); onDone\(\); \}/);
+  });
+});
