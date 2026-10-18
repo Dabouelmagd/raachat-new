@@ -37,6 +37,8 @@ type Action =
   | { type: "HYDRATE"; contacts: Contact[]; threads: Thread[]; messages: Message[]; stories: Story[] }
   | { type: "UPSERT_THREAD"; thread: Thread }
   | { type: "MARK_READ"; threadId: string }
+  /** علامة التسليم على رسايلي في محادثة: الطرف التاني وصلته أو قراها لحد وقت `at` */
+  | { type: "MARK_STATE"; threadId: string; at: string; kind: "delivered" | "read" }
   | { type: "SET_PINNED"; threadId: string; pinned: boolean }
   | { type: "MERGE_MESSAGES"; messages: Message[] }
   | { type: "UPSERT_MESSAGE"; message: Message }
@@ -87,6 +89,26 @@ function reducer(state: AppState, action: Action): AppState {
     case "UPSERT_THREAD": {
       const has = state.threads.some((t) => t.id === action.thread.id);
       return { ...state, threads: has ? state.threads.map((t) => (t.id === action.thread.id ? action.thread : t)) : [action.thread, ...state.threads] };
+    }
+    /**
+     * رسايلي **اللي اتبعتت قبل** الوقت اللي الطرف التاني وصله/قراه بتتعلّم.
+     *
+     * والقراءة بتضبط الاتنين — **اللي اتقرت وصلت بالضرورة**. من غير كده لو حدث
+     * القراءة وصل قبل حدث التسليم (وده بيحصل: الواحد يفتح التطبيق والمحادثة
+     * في نفس اللحظة) العلامة تطلع زرقا وبعدين ترجع رمادية.
+     */
+    case "MARK_STATE": {
+      const at = Date.parse(action.at);
+      let hit = false;
+      const messages = state.messages.map((m) => {
+        // `authorId === "me"` هو نفس اللي الفقاعة بتحكم بيه (`asMe` في المحوّلات)،
+        // و`at` بالملّي ثانية. والرسالة اللي مالهاش `at` (الديمو) مابتتلمسش.
+        if (m.threadId !== action.threadId || m.authorId !== "me" || !m.at || m.at > at) return m;
+        if (action.kind === "read" ? m.read : m.delivered) return m;
+        hit = true;
+        return action.kind === "read" ? { ...m, read: true, delivered: true } : { ...m, delivered: true };
+      });
+      return hit ? { ...state, messages } : state; // مفيش تغيير = مفيش رسم جديد
     }
     case "MERGE_MESSAGES": {
       // دمج بالمعرّف: الجاي من السيرفر يحدّث اللي عندنا، والجديد بيتضاف.
@@ -359,6 +381,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sock?.on("notice", (n: { title: string; body: string }) => notify(n.title, n.body, true));
         sock?.on("thread:removed", (t: { id: string }) => dispatch({ type: "LEAVE_THREAD", threadId: t.id }));
         sock?.on("thread:updated", (t: ApiThread) => dispatch({ type: "UPSERT_THREAD", thread: mapThread(t) }));
+        // 🔴 الحدثان دول كانوا **مش متسمَّعين خالص**: السيرفر بيبثّ `delivered`
+        // ومحدش بياخده، والقراءة مكانش لها بثّ أصلًا. فعلامة التسليم عند
+        // الباعت كانت بتفضل ✓ لحد ما يعمل تحديث — بيبعت، والطرف التاني يقرا
+        // قدامه، وهو شايف إن الرسالة لسه ما وصلتش.
+        sock?.on("delivered", (p: { threadId: string; at: string }) => dispatch({ type: "MARK_STATE", threadId: p.threadId, at: p.at, kind: "delivered" }));
+        sock?.on("read", (p: { threadId: string; at: string }) => dispatch({ type: "MARK_STATE", threadId: p.threadId, at: p.at, kind: "read" }));
       } catch (e) {
         console.error("تحميل البيانات فشل:", e);
       }

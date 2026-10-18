@@ -22,7 +22,9 @@ const fmt = (n: number) => n.toLocaleString(loc(), { minimumFractionDigits: 2, m
 export default function ServicesScreen() {
   const t = useT();
   const navigate = useNavigate();
-  const { balance, txns, limits } = useWallet();
+  const { balance, txns, limits, topupReady } = useWallet();
+  // `undefined` = الرد لسه ما جاش، فمانكتبش «قريبًا» على حاجة ممكن تكون شغّالة
+  const topupSoon = topupReady === false;
   const adult = useIsAdult();
   const [copied, setCopied] = useState("");
 
@@ -51,6 +53,19 @@ export default function ServicesScreen() {
             <div>
               <div className="text-[11px] text-[#d8c896]">{t("محفظتك · كنز الملوك", "Your wallet · Kings' Treasure")}</div>
               <div className="mt-1 text-2xl font-extrabold">{fmt(balance)} <span className="text-sm">{t("ج.م", "EGP")}</span></div>
+              {/*
+                **بوابة الدفع متأجّلة (قرار داليا ١٨ أكتوبر ٢٠٢٦) — ومكتوب «قريبًا».**
+                والقرار جايّ من السيرفر (`topupReady`) مش مكتوب هنا، فأول ما
+                البوابة تتوصّل السطر يختفي لوحده بلا نشر واجهة. وقبل كده كان
+                المستخدم يشوف رصيدًا صفر ومفيش أي طريق يشحن بيه ولا أي كلام
+                يقول له السبب — يدخل الخدمة ويكتب رقمه ورقمه السري ويرتدّ على
+                «الرصيد غير كافي» في آخر خطوة.
+              */}
+              {API_ON && topupSoon && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rachat-gold/25 px-2.5 py-1 text-[10.5px] font-bold">
+                  {t("الشحن والدفع · قريبًا", "Top-up & payments · coming soon")}
+                </div>
+              )}
               {API_ON && import.meta.env.DEV && (
                 <button onClick={() => void api("/wallet/topup", { body: { amount: 500 } }).then(refreshWallet)} className="mt-2 rounded-lg bg-rachat-gold/25 px-2.5 py-1 text-[10.5px] font-bold">{t("+٥٠٠ رصيد تجريبي (تطوير فقط)", "+500 test credit (dev only)")}</button>
               )}
@@ -74,13 +89,23 @@ export default function ServicesScreen() {
           </div>
         )}
 
-        <h2 className="mb-2 text-sm font-extrabold">{t("ادفع فواتيرك", "Pay your bills")}</h2>
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-extrabold">
+          {t("ادفع فواتيرك", "Pay your bills")}
+          {topupSoon && <span className="rounded bg-rachat-gold/25 px-1.5 py-0.5 text-[10px] font-bold text-rachat-gold">{t("قريبًا", "Soon")}</span>}
+        </h2>
+        {/*
+          الدفع بيخصم من المحفظة، والمحفظة مالهاش بوابة شحن — فالخدمات
+          **مقفولة بوضوح** بدل ما المستخدم يمشي خطوتين ويرتدّ على «الرصيد غير
+          كافي»، وده أسوأ من «قريبًا» لأنه بيبان كأنه عطل في حسابه.
+        */}
+        {topupSoon && <p className="mb-2 text-[11.5px] leading-5 text-neutral-400">{t("دفع الفواتير وشحن المحفظة بيتجهّزوا مع شريك دفع مرخّص، ولسه مش متاحين.", "Bill payment and wallet top-up are being set up with a licensed payment partner, and are not available yet.")}</p>}
         <div className="grid grid-cols-4 gap-2">
           {SERVICES.map((s) => {
             const Icon = ICONS[s.key];
             return (
-              <button key={s.key} onClick={() => navigate(`/pay/${s.key}`)}
-                className="flex flex-col items-center gap-1.5 rounded-xl bg-rachat-card py-3 active:scale-95">
+              <button key={s.key} onClick={() => navigate(`/pay/${s.key}`)} disabled={topupSoon}
+                aria-label={topupSoon ? `${s.label} — ${t("قريبًا", "Soon")}` : undefined}
+                className={`flex flex-col items-center gap-1.5 rounded-xl bg-rachat-card py-3 ${topupSoon ? "opacity-45" : "active:scale-95"}`}>
                 <Icon size={20} className="text-rachat-red" />
                 <span className="text-[10.5px]">{s.label}</span>
               </button>

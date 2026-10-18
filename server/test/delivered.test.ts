@@ -118,3 +118,45 @@ describe("عدّاد غير المقروء", () => {
     expect(await unreadA()).toBe(0);
   });
 });
+
+/**
+ * 🔴 **البثّ اللحظي لحالات الرسالة — العطل اللي الأعمدة وحدها مابتكشفوش.**
+ *
+ * الاختبارات اللي فوق بتفحص الأعمدة والردود، فكانت كلها خضراء و**العلامة عند
+ * الباعت مابتتحرّكش**: السيرفر بيبثّ `delivered` و**الواجهة مش سامعاه**،
+ * والقراءة **مكانش لها بثّ خالص**. يعني تبعت، الطرف التاني يقرا قدامك، وانت
+ * شايف ✓ لحد ما تعمل تحديث — ومفيش أي خطأ في أي مكان.
+ *
+ * اتكشف بتجربة حقيقية بمتصفحين (`test/manual/message-states.ts`، في الـ CI)
+ * في ١٨ أكتوبر ٢٠٢٦. والاختبار ده بيثبّت جهة السيرفر **على السوكت نفسه** —
+ * مش على عمود في القاعدة، لأن العمود كان صح والبثّ هو اللي ناقص.
+ */
+describe("بثّ حالات الرسالة على السوكت", () => {
+  it("🔴 فتح المحادثة بيبثّ `read` للباعت — وصاحب القراءة مابيوصلوش", async () => {
+    const a = await env.login("01099000041", "داليا");
+    const b = await env.login("01099000042", "مريم");
+    const th = (await request(env.app).post("/threads").set(a.auth).send({ type: "dm", memberIds: [b.user.id] }).expect(201)).body;
+    await request(env.app).post(`/threads/${th.id}/messages`).set(a.auth).send({ text: "علامة" }).expect(201);
+
+    const socks = await Promise.all([a, b].map(async (who) => {
+      const sk = client(`http://localhost:${env.port}`, { auth: { token: who.token } });
+      await new Promise<void>((r) => sk.on("connect", () => r()));
+      return sk;
+    }));
+    const got: Record<string, { threadId: string; at: string }[]> = { a: [], b: [] };
+    socks[0]!.on("read", (p: { threadId: string; at: string }) => got.a.push(p));
+    socks[1]!.on("read", (p: { threadId: string; at: string }) => got.b.push(p));
+
+    await request(env.app).post(`/threads/${th.id}/read`).set(b.auth).expect(204);
+    await new Promise<void>((r) => {
+      const t = setInterval(() => { if (got.a.length) { clearInterval(t); r(); } }, 20);
+      setTimeout(() => { clearInterval(t); r(); }, 4000); // مايعلّقش الطقم لو البثّ مش موجود
+    });
+    socks.forEach((sk) => sk.close());
+
+    expect(got.a.length, "القراءة مابتتبثّش للباعت — علامته هتفضل ✓ لحد التحديث").toBeGreaterThan(0);
+    expect(got.a[0]!.threadId).toBe(th.id);
+    expect(Date.parse(got.a[0]!.at)).toBeGreaterThan(0);
+    expect(got.b.length, "صاحب القراءة مش محتاج يعرف إنه قرا بنفسه").toBe(0);
+  });
+});

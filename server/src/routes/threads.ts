@@ -321,7 +321,18 @@ export function threadRoutes(ctx: Ctx) {
     const me = (req as AuthedRequest).userId;
     const id = String(req.params.id);
     await assertMember(ctx, id, me);
-    await ctx.db.membership.update({ where: { threadId_userId: { threadId: id, userId: me } }, data: { lastReadAt: new Date() } });
+    const at = new Date();
+    await ctx.db.membership.update({ where: { threadId_userId: { threadId: id, userId: me } }, data: { lastReadAt: at } });
+    /**
+     * 🔴 البثّ ده كان **ناقص خالص**: القراءة بتتسجّل في القاعدة والطرف التاني
+     * علامته بتفضل ✓ لحد ما يعمل تحديث للصفحة. يعني تبعت، الطرف التاني يقرا
+     * قدامك، وانت شايف إن الرسالة لسه ما وصلتش — ومفيش أي خطأ في أي مكان.
+     * (اتكشف بتجربة حقيقية بمتصفحين في ١٨ أكتوبر ٢٠٢٦.)
+     *
+     * ولباقي الأعضاء بس — صاحب القراءة مش محتاج يعرف إنه قرا بنفسه.
+     */
+    const others = await ctx.db.membership.findMany({ where: { threadId: id, userId: { not: me } }, select: { userId: true } });
+    if (others.length) emitToUsers(ctx, others.map((o) => o.userId), "read", { threadId: id, at: at.toISOString() });
     res.status(204).end();
   }));
 

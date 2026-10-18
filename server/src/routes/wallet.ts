@@ -89,6 +89,8 @@ export function walletRoutes(ctx: Ctx) {
     const L = limitsOf(req);
     res.json({
       balance: money(w.balance), currency: w.currency, hasPin: !!w.pinHash, txns: txs.map(txView),
+      // الواجهة بتكتب «قريبًا» وتمنع المستخدم يمشي لطريق مسدود
+      topupReady: topupReady(),
       // الواجهة بتعرض السقوف للمستخدم؛ null = مفيش سقوف
       limits: L ? { ...L, monthUsed: await billsThisMonth(me) } : null,
     });
@@ -110,10 +112,19 @@ export function walletRoutes(ctx: Ctx) {
     res.status(204).end();
   }));
 
-  // شحن المحفظة: في production لازم بوابة دفع حقيقية (لسه مش متوصّلة) — في التطوير رصيد تجريبي
+  /**
+   * **بوابة الدفع متأجّلة (قرار داليا ١٨ أكتوبر ٢٠٢٦) — والواجهة بتكتب «قريبًا».**
+   *
+   * 🔴 ومصدر واحد عن قصد: الرد بتاع `/wallet` والمسار ده لازم **مايختلفوش**.
+   * لو الرد قال «الشحن متاح» والمسار رفض، المستخدم بيمشي الطريق كله —
+   * يدخل الرقم والمبلغ والرقم السري — ويرتدّ في آخر خطوة. ولو العكس، بوابة
+   * شغّالة تفضل مكتوب عليها «قريبًا».
+   */
+  const topupReady = () => ctx.config.NODE_ENV !== "production";
+
   r.post("/wallet/topup", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
-    if (ctx.config.NODE_ENV === "production") throw new HttpError(501, "no_gateway", "شحن المحفظة محتاج بوابة دفع (غير متوصّلة بعد)");
+    if (!topupReady()) throw new HttpError(501, "no_gateway", "شحن المحفظة محتاج بوابة دفع (غير متوصّلة بعد)");
     const b = z.object({ amount: z.number().positive().max(10000) }).parse(req.body);
     capTx(req, b.amount);
     const w0 = await ensureWallet(me);

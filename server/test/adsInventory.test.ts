@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { startTestEnv } from "./helpers.js";
 import { DEFAULT_PLACEMENTS, addDays, todayCairo } from "../src/lib/adsInventory.js";
+// @ts-expect-error دالة خالصة بـ JS عادي — مفيش types ولا تبعيات (نفس `uploadUrl.test.ts`)
+import { clearDraft, draftHasWork, draftKey, loadDraft, saveDraft } from "../../admin/src/draft.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 let owner: Awaited<ReturnType<typeof env.login>>;
@@ -566,7 +568,6 @@ describe("مسوّدة نموذج الحملة", () => {
   const mem = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) }; };
 
   it("بتتحفظ وبترجع بالحرف، والمفتاح مختلف بين الجديدة والتعديل", async () => {
-    const { draftKey, loadDraft, saveDraft, clearDraft } = await import("../../admin/src/draft.js");
     expect(draftKey()).not.toBe(draftKey("c1"));
     const st = mem();
     const d1 = { advertiser: "كافيه النيل", placements: ["banner"], images: { banner: "/uploads/a.png" }, offerPct: 20 };
@@ -578,7 +579,6 @@ describe("مسوّدة نموذج الحملة", () => {
   });
 
   it("🔴 مابتكسرش لو التخزين مقفول أو السطر تالف", async () => {
-    const { loadDraft, saveDraft } = await import("../../admin/src/draft.js");
     const dead = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); }, removeItem: () => {} };
     // التصفّح الخاص بيرمي — ومسوّدة ضايعة أهون من لوحة مابتفتحش
     expect(loadDraft("k", dead)).toBe(null);
@@ -590,7 +590,6 @@ describe("مسوّدة نموذج الحملة", () => {
   });
 
   it("النموذج الفاضي مش مسوّدة، وأي حرف أو صورة بيبقى شغلًا", async () => {
-    const { draftHasWork } = await import("../../admin/src/draft.js");
     const blank = { advertiser: "", headline: "", placements: [], images: {}, offerPct: 0, start: "2026-10-18", end: "2026-10-24", approve: false, house: false };
     expect(draftHasWork({ ...blank }, blank)).toBe(false);
     // التواريخ لوحدها مش شغل — ليها قيم افتراضية

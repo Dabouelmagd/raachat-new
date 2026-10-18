@@ -7,7 +7,15 @@ import { useEffect } from "react";
 
 // متجر محفظة تجريبي — يُستبدل بنداءات الباك إند (رصيد + سجل عمليات) عند الربط
 export interface Txn { id: string; title: string; amount: number; date: string; ref: string }
-interface WalletState { balance: number; txns: Txn[]; hasPin?: boolean; limits?: WalletLimits | null }
+interface WalletState {
+  balance: number; txns: Txn[]; hasPin?: boolean; limits?: WalletLimits | null;
+  /**
+   * هل بوابة الدفع متوصّلة؟ **جايّة من السيرفر** مش مكتوبة هنا — فأول ما
+   * البوابة تتوصّل الشحن يفتح لوحده **من غير نشر واجهة** (نفس نمط `ready()`
+   * في الـ SMS و501 في الترجمة). و`undefined` = لسه ما جابناش الرد.
+   */
+  topupReady?: boolean;
+}
 
 let state: WalletState = API_ON ? { balance: 0, txns: [] } : {
   balance: 1240,
@@ -27,8 +35,8 @@ const toTxn = (t: ApiTx): Txn => ({
 });
 
 export async function refreshWallet() {
-  const w = await api<{ balance: number; hasPin: boolean; txns: ApiTx[]; limits: WalletLimits | null }>("/wallet");
-  state = { balance: w.balance, hasPin: w.hasPin, txns: w.txns.map(toTxn), limits: w.limits };
+  const w = await api<{ balance: number; hasPin: boolean; txns: ApiTx[]; limits: WalletLimits | null; topupReady?: boolean }>("/wallet");
+  state = { balance: w.balance, hasPin: w.hasPin, txns: w.txns.map(toTxn), limits: w.limits, topupReady: w.topupReady };
   emit();
 }
 

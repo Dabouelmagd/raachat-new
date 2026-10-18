@@ -210,6 +210,41 @@ describe("wallet", () => {
 describe("الإنتاج: مفيش شحن محفظة بلا بوابة دفع مرخّصة", () => {
   const prodApp = () => createApp({ ...env.ctx, config: { ...env.ctx.config, NODE_ENV: "production" } });
 
+  /**
+   * 🔴 **الرد والمسار لازم مايختلفوش** (بوابة الدفع متأجّلة بقرار داليا ١٨
+   * أكتوبر ٢٠٢٦، والواجهة بتكتب «قريبًا» من `topupReady`).
+   *
+   * لو الرد قال «الشحن متاح» والمسار رفض، المستخدم بيمشي الطريق كله — يكتب
+   * رقم العدّاد والمبلغ والرقم السري — ويرتدّ في آخر خطوة على «الرصيد غير
+   * كافي»، وده بيبان كأنه عطل في حسابه مش ميزة مش جاهزة. والعكس أهون بس
+   * غلط كمان: بوابة شغّالة ومكتوب عليها «قريبًا».
+   */
+  it("🔴 `topupReady` في رد `/wallet` بيطابق اللي المسار بيعمله فعلًا", async () => {
+    const a = await login("01070000023", "سارة");
+    // الإنتاج: الرد بيقول «مش جاهز» والمسار بيرفض
+    const prod = (await request(prodApp()).get("/wallet").set(a.auth).expect(200)).body;
+    expect(prod.topupReady).toBe(false);
+    await request(prodApp()).post("/wallet/topup").set(a.auth).send({ amount: 10 }).expect(501);
+    // والتطوير: الرد بيقول «جاهز» والمسار بينفّذ
+    const dev = (await request(env.app).get("/wallet").set(a.auth).expect(200)).body;
+    expect(dev.topupReady).toBe(true);
+    await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 10 }).expect(201);
+  });
+
+  it("🔴 الواجهة بتقرا `topupReady` فعلًا وبتقفل الخدمات (مفتاح محدش بيقراه بيبوظ في سكوت)", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const root = path.resolve(import.meta.dirname, "../..");
+    expect(fs.readFileSync(path.join(root, "src/store/wallet.ts"), "utf8"), "المخزن مش بياخد المفتاح من الرد").toContain("topupReady");
+    const scr = fs.readFileSync(path.join(root, "src/screens/ServicesScreen.tsx"), "utf8");
+    expect(scr, "الشاشة مش بتقرا المفتاح").toContain("topupReady");
+    // `=== false` مش `!topupReady` — `undefined` معناها الرد لسه ما جاش،
+    // ومانكتبش «قريبًا» على حاجة ممكن تكون شغّالة
+    expect(scr).toContain("topupReady === false");
+    expect(scr, "الخدمات مش مقفولة — المستخدم هيمشي لطريق مسدود").toContain("disabled={topupSoon}");
+    expect(scr, "مفيش كلمة «قريبًا» في الشاشة").toContain("قريبًا");
+  });
+
   it("`POST /wallet/topup` بيرجّع 501 no_gateway في الإنتاج", async () => {
     const a = await login("01070000020", "منى");
     const r = await request(prodApp()).post("/wallet/topup").set(a.auth).send({ amount: 500 }).expect(501);

@@ -102,3 +102,25 @@ describe("اختبارات لوحة الإدارة في الـ CI", () => {
     }
   });
 });
+
+/**
+ * 🔴 **حالات الرسالة لازم تتجرّب في وضع الـ API** — الاختبار اللي مابيتشغّلش
+ * بيبوظ في سكوت، وده بالظبط اللي حصل: الأعمدة كانت متفحوصة والعلامة اللي
+ * المستخدم بيشوفها مكانتش بتتحرّك لأن مفيش حاجة بتجرّب الطريق كله.
+ */
+describe("حالات الرسالة في الـ CI", () => {
+  it("السكربت بيتشغّل ومعاه بناء بوضع الـ API", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const yml = fs.readFileSync(path.resolve(import.meta.dirname, "../../.github/workflows/ci.yml"), "utf8");
+    const job = yml.slice(yml.indexOf("api-mode:"), yml.indexOf("\n  admin:"));
+    expect(job, "سكربت حالات الرسالة مش في الـ CI").toContain("test/manual/message-states.ts");
+    // المنفذ لازم يطابق اللي السكربت سامع عليه، وإلا الواجهة بتبني على عنوان
+    // تاني والسكربت يعدّي على لا شيء
+    const script = fs.readFileSync(path.resolve(import.meta.dirname, "manual/message-states.ts"), "utf8");
+    const port = /const API = (\d+)/.exec(script)![1]!;
+    expect(job, `البناء مش على نفس منفذ السكربت (${port})`).toContain(`VITE_API_URL=http://localhost:${port}`);
+    // وبيحكم بكود خروج — مش بيطبع للمراجعة البشرية (درس send-failure.ts)
+    expect(script).toContain("process.exit(2)");
+  });
+});
