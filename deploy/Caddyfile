@@ -16,6 +16,12 @@ http://app.{$DOMAIN} {
 		Permissions-Policy "camera=(self), microphone=(self), geolocation=()"
 		Strict-Transport-Security "max-age=31536000"
 	}
+	# 🔴 index.html مايتكاشّش. من غير السطر ده المتصفح بيكاشّه باجتهاده (مفيش
+	# Cache-Control خالص)، فإعادة التحميل بعد أي نشر بتقرا **نفس النسخة
+	# القديمة** من الكاش والتحديث التلقائي يسكت للأبد. والـ assets تحتها
+	# بأسماء فيها بصمة فبتفضل immutable — فالتكلفة طلب تحقّق واحد صغير.
+	@html path / /index.html
+	header @html Cache-Control "no-cache"
 	# الـ service worker ماينفعش يتكاش (عشان التحديثات توصل)
 	@sw path /sw.js
 	header @sw Cache-Control "no-cache"
@@ -37,6 +43,12 @@ http://admin.{$DOMAIN} {
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Strict-Transport-Security "max-age=31536000"
 	}
+	# 🔴 index.html مايتكاشّش. من غير السطر ده المتصفح بيكاشّه باجتهاده (مفيش
+	# Cache-Control خالص)، فإعادة التحميل بعد أي نشر بتقرا **نفس النسخة
+	# القديمة** من الكاش والتحديث التلقائي يسكت للأبد. والـ assets تحتها
+	# بأسماء فيها بصمة فبتفضل immutable — فالتكلفة طلب تحقّق واحد صغير.
+	@html path / /index.html
+	header @html Cache-Control "no-cache"
 }
 
 http://api.{$DOMAIN} {
