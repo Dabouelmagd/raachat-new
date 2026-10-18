@@ -8,6 +8,18 @@
       مابيعملش حاجة **في سكوت** والشرايط تفضل فوق المحتوى.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      ملف الـ manifest هو اللي بيخلّي التطبيق **يتثبّت** على شاشة الموبايل
+      باسمه ولوجوه: من غيره المتصفح بيحطّ أيقونة عامة أو لقطة من الصفحة،
+      و**علامة العدّاد على الأيقونة مابتشتغلش أصلًا** (الـ Badging API
+      للتطبيقات المثبّتة بس).
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#14100F" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="رع شات" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;700&display=swap"

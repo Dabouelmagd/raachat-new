@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">رع شات</string>
     <string name="title_activity_main">رع شات</string>
-    <string name="package_name">com.YOURCOMPANY.raachat</string>
-    <string name="custom_url_scheme">com.YOURCOMPANY.raachat</string>
+    <string name="package_name">com.datalifeai.raachat</string>
+    <string name="custom_url_scheme">com.datalifeai.raachat</string>
 </resources>

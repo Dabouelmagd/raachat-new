@@ -33,6 +33,7 @@ import SearchScreen from "./screens/SearchScreen";
 import { LogoutContext } from "./auth";
 import { IncomingCall } from "./rtc/IncomingCall";
 import { PushBridge } from "./push/PushBridge";
+import { AppBadge } from "./push/AppBadge";
 import { API_ON, clearMaintenance, logoutApi, useMaintenance, useSession } from "./api/client";
 import { useLang, useT } from "./i18n";
 
@@ -178,6 +179,7 @@ export default function App() {
             <button onClick={() => { clearMaintenance(); location.reload(); }} className="rounded-full bg-rachat-red px-5 py-2 text-sm font-bold text-white">{lang === "ar" ? "إعادة المحاولة" : "Try again"}</button>
           </div>
         )}
+        {authed && <AppBadge />}
         {authed && <AdHost />}
         {authed && <NotificationToast />}
         {authed && API_ON && <IncomingCall />}

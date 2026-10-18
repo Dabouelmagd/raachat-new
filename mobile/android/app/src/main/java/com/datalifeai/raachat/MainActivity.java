@@ -1,4 +1,4 @@
-package com.YOURCOMPANY.raachat;
+package com.datalifeai.raachat;
 
 import com.getcapacitor.BridgeActivity;
 

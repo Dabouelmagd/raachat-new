@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.YOURCOMPANY.raachat"
+    namespace "com.datalifeai.raachat"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.YOURCOMPANY.raachat"
+        applicationId "com.datalifeai.raachat"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

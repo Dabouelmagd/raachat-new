@@ -20,14 +20,37 @@ self.addEventListener("push", (event) => {
       vibrate: call ? [400, 200, 400, 200, 400] : [120],
       data: { threadId: d.threadId || "", callId: d.callId || "", kind: d.kind || "message" },
     });
+    await syncBadge();
   })());
 });
+
+/**
+ * **علامة العدّاد على أيقونة التطبيق والتطبيق مقفول.**
+ *
+ * الـ service worker مايعرفش عدد الرسايل المش مقروءة (مفيش جلسة ولا توكن
+ * هنا)، فبنعدّ **الإشعارات المعلّقة** — ودي أقرب حاجة لعدد اللي لسه
+ * محصلش عليه رد. والتطبيق لما يتفتح بيكتب الرقم الصحيح فوقه فورًا من
+ * حالته هو (`src/push/badge.ts`)، فأي فرق بيتصلّح من أول فتحة.
+ *
+ * وكل حاجة جوه `try`: الـ Badging API مش موجود في كل متصفح، وفشلها
+ * **مايصحّش** يوقف عرض الإشعار نفسه.
+ */
+async function syncBadge() {
+  try {
+    const ns = await self.registration.getNotifications();
+    if (ns.length) await self.navigator.setAppBadge?.(ns.length);
+    else await self.navigator.clearAppBadge?.();
+  } catch { /* مش مدعّم */ }
+}
+
+self.addEventListener("notificationclose", (event) => event.waitUntil(syncBadge()));
 
 self.addEventListener("notificationclick", (event) => {
   const n = event.notification;
   n.close();
   const { threadId, callId } = n.data || {};
   event.waitUntil((async () => {
+    await syncBadge();
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const msg = { type: "rachat-open", threadId, callId };
     if (wins.length) {

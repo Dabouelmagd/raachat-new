@@ -57,6 +57,38 @@ describe("بناء الـ APK", () => {
   });
 
   /**
+   * 🔴 **الـ APK بياخد اسم الحزمة من `build.gradle` مش من `capacitor.config.ts`.**
+   *
+   * `cap sync` بينسخ بناء الواجهة والإضافات بس — **مابيعيدش تسمية حزمة
+   * أندرويد**؛ الاسم بيتحدّد مرة واحدة وقت `cap add android` ويفضل. فحصل
+   * فعلًا (اتكشف ١٨ أكتوبر ٢٠٢٦) إن `capacitor.config.ts` اتغيّر لـ
+   * `com.datalifeai.raachat` والمشروع كله فاضل على `com.YOURCOMPANY.raachat`
+   * — والحارس القديم كان بيقرا الملف اللي اتغيّر بس فعدّى، والـ APK
+   * المثبَّت على الجهاز اسم حزمته placeholder.
+   *
+   * واسم الحزمة **مابيتغيّرش بعد أول رفع للمتجر**، فالفحص لازم يبقى على
+   * الملفات اللي البناء بيقراها فعلًا.
+   */
+  it("🔴 اسم الحزمة في ملفات البناء نفسها مطابق لـ capacitor.config", () => {
+    const appId = /appId:\s*"([^"]+)"/.exec(read("mobile/capacitor.config.ts"))?.[1];
+    expect(appId, "مفيش appId").toBeTruthy();
+    const files = [
+      "mobile/android/app/build.gradle",
+      "mobile/android/app/src/main/res/values/strings.xml",
+      "mobile/android/app/src/main/assets/capacitor.config.json",
+      `mobile/android/app/src/main/java/${appId!.replace(/\./g, "/")}/MainActivity.java`,
+    ];
+    for (const f of files) {
+      const s = read(f);
+      expect(s, `${f} لسه فيه placeholder`).not.toContain("YOURCOMPANY");
+      expect(s, `${f} مافيهوش ${appId}`).toContain(appId!);
+    }
+    const g = read("mobile/android/app/build.gradle");
+    expect(g).toContain(`applicationId "${appId}"`);
+    expect(g).toContain(`namespace "${appId}"`);
+  });
+
+  /**
    * الصلاحيات: من غيرها الميزة بتفشل **بلا رسالة** على الجهاز — وجهات الاتصال
    * بالظبط هي سبب وجود «الأصدقاء» وهي اللي عايزين نجرّبها.
    */
