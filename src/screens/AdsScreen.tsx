@@ -1,12 +1,23 @@
 import { Megaphone } from "lucide-react";
 import { Header } from "../components/Header";
-import { useCatalog } from "../ads/ads";
+import { trackBanner, useCatalog } from "../ads/ads";
 import { useT } from "../i18n";
+import { useEffect } from "react";
 
-/** عروض ممولة شغّالة النهارده (من حملات الإعلانات المعتمدة) */
+/**
+ * عروض ممولة شغّالة النهارده.
+ *
+ * **موضع مباع زي أي موضع تاني (`adsfeed`)** — قبل كده كانت بتعرض **كل**
+ * الحملات المعتمدة مهما كانت المواضع اللي اشترتها، وبلا تتبّع ظهور ولا نقر:
+ * يعني ظهور مجاني وغير محسوب، والمعلن اللي اشترى الستوري بس كان بيظهر هنا
+ * كمان من غير ما يدفع.
+ */
 export default function AdsScreen() {
   const t = useT();
-  const { list, err } = useCatalog();
+  const { list, err } = useCatalog("adsfeed");
+  // الظهور بيتسجّل لكل إعلان في القايمة — `trackBanner` بيمنع التكرار في اليوم
+  useEffect(() => { (list ?? []).forEach((ad) => trackBanner(ad.id, "adsfeed", "shown")); }, [list]);
+
   return (
     <div className="flex h-full flex-col bg-rachat-black">
       <Header title={t("الإعلانات", "Ads")} right={<Megaphone size={20} />} />
@@ -22,7 +33,7 @@ export default function AdsScreen() {
             <h2 className="text-lg font-extrabold leading-8">{ad.headline}</h2>
             <p className="mt-1 text-sm text-white/85">{ad.body}</p>
             {ad.link && /^https:\/\//.test(ad.link)
-              ? <a href={ad.link} target="_blank" rel="noopener noreferrer sponsored" className="mt-3 block rounded-xl bg-rachat-cream py-2.5 text-center font-extrabold text-rachat-ink">{ad.cta}</a>
+              ? <a href={ad.link} target="_blank" rel="noopener noreferrer sponsored" onClick={() => trackBanner(ad.id, "adsfeed", "clicked")} className="mt-3 block rounded-xl bg-rachat-cream py-2.5 text-center font-extrabold text-rachat-ink">{ad.cta}</a>
               : <div className="mt-3 rounded-xl bg-rachat-cream py-2.5 text-center font-extrabold text-rachat-ink">{ad.cta}</div>}
           </article>
         ))}

@@ -15,7 +15,9 @@ const camp = (o: Record<string, unknown> = {}) => ({ advertiser: "كافيه ا�
 describe("خريطة الإعلانات", () => {
   it("المواضع الافتراضية بمقاساتها وأسعارها، والتسعير = سعر اليوم × الأيام × المواضع", async () => {
     const ps = (await api().get("/admin/ads/placements").set(owner.auth).expect(200)).body;
-    expect(ps.map((p: { key: string }) => p.key)).toEqual(["modal", "banner", "services", "story"]);
+    // من المصدر مش قايمة مكتوبة بالإيد — إضافة موضع جديد مايكسرش الاختبار،
+    // وفي نفس الوقت الترتيب والعدد لسه متفحوصين
+    expect(ps.map((p: { key: string }) => p.key)).toEqual(DEFAULT_PLACEMENTS.map((p) => p.key));
     expect(ps[1]).toMatchObject({ width: 1200, height: 300, slots: 3, pricePerDay: 150 });
     const q = (await api().post("/admin/ads/quote").set(owner.auth).send({ placements: ["banner", "services"], start: d(1), end: d(3) }).expect(200)).body;
     expect(q.days).toBe(3); expect(q.total).toBe((150 + 120) * 3); expect(q.ok).toBe(true);
@@ -326,5 +328,26 @@ describe("مفيش موضع مباع بلا عارض في التطبيق", () =>
       .map((p) => p.key)
       .filter((k) => !new RegExp(`placement=["'{]?["']?${k}\\b|useCatalog\\(["']${k}["']\\)|adsFor\\(["']${k}["']\\)`).test(code));
     expect(missing, `مواضع مباعة ومفيش في التطبيق حاجة بتعرضها: ${missing.join(" · ")}`).toEqual([]);
+  });
+});
+
+/**
+ * 🔴 **كل موضع لازم يقبل تسجيل الظهور والنقر.**
+ *
+ * `/ads/events` بيتحقق من `placement` بقايمة مسموحة. ولو موضع جديد اتضاف
+ * للمخزون وما اتضافش للقايمة، كل ظهور ونقرة عليه بترجع **٤٠٠** —
+ * و`trackBanner` في الواجهة بيبلع الخطأ (`.catch(() => {})`) — فالمعلن
+ * يدفع، والإعلان يظهر فعلًا، و**الإحصاءات تفضل صفرًا بلا أي أثر**.
+ */
+describe("تتبّع الظهور شغّال لكل موضع", () => {
+  it("🔴 كل مفتاح موضع مقبول في /ads/events", async () => {
+    const a = (await api().post("/admin/ads/campaigns").set(owner.auth)
+      .send(camp({ placements: ["banner"], start: d(200), end: d(201), approve: true })).expect(201)).body;
+    const day = T;
+    for (const key of DEFAULT_PLACEMENTS.map((p) => p.key)) {
+      const r = await api().post("/ads/events").set(owner.auth)
+        .send({ day, adId: a.id, kind: "shown", placement: key });
+      expect(r.status, `الموضع ${key} مرفوض في تسجيل الأحداث`).toBe(204);
+    }
   });
 });

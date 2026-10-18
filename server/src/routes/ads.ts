@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { wrap } from "../lib/errors.js";
-import { todayCairo } from "../lib/adsInventory.js";
+import { PLACEMENT_KEYS, todayCairo } from "../lib/adsInventory.js";
 import { isAdult } from "../lib/age.js";
 
 const Day = z.string().regex(/^\d{4}-\d{1,2}-\d{1,2}$/);
@@ -61,7 +61,9 @@ export function adRoutes(ctx: Ctx) {
     const me = (req as AuthedRequest).userId;
     const b = z.object({
       day: Day, slot: z.number().int().min(0).max(23).optional(), adId: z.string().max(40), kind: z.enum(["shown", "clicked", "closed"]),
-      placement: z.enum(["modal", "banner", "services", "story"]).optional(),
+      // 🔴 مشتقة من المخزون: الموضع الجديد اللي مش هنا بيرجّع ٤٠٠ على كل
+      // نقرة وظهور — و`trackBanner` بيبلع الخطأ، فالإحصاءات تفضل صفرًا في سكوت.
+      placement: z.enum(PLACEMENT_KEYS).optional(),
     }).parse(req.body);
     const pl = b.placement ?? "modal";
 

@@ -6,6 +6,7 @@ import { RoomParticipant } from "../types";
 import { useT, tr, num } from "../i18n";
 import { API_ON } from "../api/client";
 import { useRoomAudio } from "../rtc/roomAudio";
+import { SponsoredCard } from "../ads/SponsoredCard";
 
 const TEMP_NAMES: { name: string; color: string }[] = [
   { get name() { return tr("المسافر الليلي", "Night Traveler"); }, color: "#C9A227" },
@@ -160,6 +161,7 @@ export default function RoomsScreen() {
         }
       />
       <div className="flex-1 overflow-y-auto px-3.5">
+        <SponsoredCard index={2} placement="rooms" />
         {rooms.length === 0 && <p className="py-10 text-center text-xs text-neutral-500">{t("مفيش غرف مفتوحة دلوقتي — اعمل غرفة بزرار +", "No open rooms right now — create one with +")}</p>}
         {rooms.map((r) => (
           <div key={r.id} className="mb-2.5 rounded-2xl bg-rachat-card p-3.5">

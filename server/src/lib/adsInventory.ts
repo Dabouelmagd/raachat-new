@@ -13,7 +13,18 @@ export const DEFAULT_PLACEMENTS = [
   { key: "banner", name: "بانر الدردشات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: "150", dailyImpressions: 1000, sort: 2, note: "أعلى قائمة الدردشات، يدور بين المعلنين" },
   { key: "services", name: "بانر الخدمات", kind: "banner", width: 1200, height: 300, slots: 3, pricePerDay: "120", dailyImpressions: 800, sort: 3, note: "أعلى شاشة الخدمات والمحفظة" },
   { key: "story", name: "إعلان بين الستوريز", kind: "story", width: 1080, height: 1920, slots: 2, pricePerDay: "250", dailyImpressions: 1000, sort: 4, note: "ستوري ممول بين القصص" },
+  { key: "rooms", name: "بانر الغرف الصوتية", kind: "room", width: 1200, height: 300, slots: 3, pricePerDay: "100", dailyImpressions: 500, sort: 5, note: "أعلى قائمة الغرف الصوتية" },
+  { key: "adsfeed", name: "قائمة العروض", kind: "banner", width: 1200, height: 300, slots: 6, pricePerDay: "80", dailyImpressions: 400, sort: 6, note: "شاشة «الإعلانات» — المستخدم داخلها بإرادته" },
 ] as const;
+
+/**
+ * مفاتيح المواضع المتاحة — **مصدر واحد**.
+ * بتتستخدم في التحقق من `placement` في `/ads/events`: لو موضع جديد اتضاف
+ * هنا ومش في قايمة التحقق، كل ظهور ونقرة عليه بترجع ٤٠٠ — و`trackBanner`
+ * في الواجهة بيبلع الخطأ، فالإحصاءات تفضل صفرًا **في سكوت**.
+ */
+type PlacementKey = (typeof DEFAULT_PLACEMENTS)[number]["key"];
+export const PLACEMENT_KEYS = DEFAULT_PLACEMENTS.map((p) => p.key) as [PlacementKey, ...PlacementKey[]];
 
 export const GIFT_MONTHS: Record<number, number> = { 1: 30, 3: 90, 6: 180, 12: 365 };
 const GIFT_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

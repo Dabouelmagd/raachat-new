@@ -7,7 +7,7 @@ import { useT, num } from "../i18n";
 // يدور تلقائيًا بين الإعلانات، ويمكن إغلاقه أو التنقل بالنقاط.
 let dismissed = false; // يُستبدل بإعداد من الباك إند / تفضيل المستخدم
 
-export function SponsoredCard({ index = 0, rotate = true, placement = "banner" }: { index?: number; rotate?: boolean; placement?: "banner" | "services" }) {
+export function SponsoredCard({ index = 0, rotate = true, placement = "banner" }: { index?: number; rotate?: boolean; placement?: string }) {
   const t = useT();
   const { list } = useCatalog(placement);
   const ADS = list ?? [];

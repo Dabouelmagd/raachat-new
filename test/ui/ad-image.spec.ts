@@ -99,3 +99,27 @@ test("🔴 نفس الإعلان بيعرض صورة مختلفة في كل مو
     .not.toBe(banner);
   expectNoPageErrors(page);
 });
+
+/**
+ * **المواضع الجديدة: الغرف الصوتية وشاشة العروض.**
+ *
+ * الاتنين كانوا أماكن في التطبيق **بلا موضع مباع**: الغرف مفيهاش إعلان
+ * خالص، وشاشة «الإعلانات» كانت بتعرض **كل** الحملات المعتمدة مجانًا وبلا
+ * تتبّع — يعني المعلن اللي اشترى موضعًا واحدًا كان بيظهر فيها كمان.
+ */
+test("🔴 بانر الغرف الصوتية بيظهر في شاشة الغرف", async ({ page }) => {
+  await openApp(page);
+  await tab(page, /الغرف|Rooms/);
+  await expect(page.getByRole("region", { name: /^إعلان$/ }).first(),
+    "مفيش بانر في الغرف — الموضع مباع ومش بيتعرض").toBeVisible();
+  expectNoPageErrors(page);
+});
+
+test("🔴 شاشة العروض بتعرض الإعلانات", async ({ page }) => {
+  await openApp(page);
+  // من الشريط السفلي — التنقّل بالـURL بيعيد تحميل الصفحة فالجلسة التجريبية بتضيع
+  await tab(page, /^الإعلانات$|^Ads$/);
+  await expect(page.getByRole("heading", { name: /^الإعلانات$/ })).toBeVisible();
+  await expect(page.locator("article").first(), "الشاشة فاضية").toBeVisible();
+  expectNoPageErrors(page);
+});
