@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { firstPublicOrigin } from "../src/lib/senders.js";
 
@@ -91,5 +92,61 @@ describe("أصل التطبيق المحلي مابيكسرش روابط الإ�
     expect(firstPublicOrigin("https://localhost.evil.com,https://app.example.com")).toBe(
       "https://localhost.evil.com",
     );
+  });
+});
+
+/**
+ * **🔴 عنوان الـ API في بناء الـ APK — لاحقة واحدة بتكسر التطبيق كله (١٨ أكتوبر ٢٠٢٦).**
+ *
+ * أول APK حقيقي اتبنى بـ `https://api.kenoz.org/api`، وبناء الواجهة في compose
+ * بياخد `https://api.${DOMAIN}` **بلا مسار**. ونجنكس وCaddy بيمرّروا المسار زي
+ * ما هو، فExpress بيستلم `/api/auth/otp/request` — مايطابقش أي راوت في
+ * `/auth`، فيكمّل لراوتر فيه `r.use(requireAuth(ctx))` على **كل** المسارات
+ * (١٠ راوترات كده) ويرجّع **401 `unauthorized` «غير مصرّح»**.
+ *
+ * **والعطل مضلّل مرتين:** الرد مش 404 فمفيش حاجة تقول «المسار غلط»، والرسالة
+ * بتقول «غير مصرّح» — فالبلاغ جه «كود الإيميل بيقول غير مصرّح» والمطاردة بدأت
+ * في المصادقة وResend، والسبب حرفان في عنوان.
+ *
+ * فالحكم هنا **على سلوك الحارس نفسه** مش على وجود نصّه: بناخد كتلة `case` من
+ * الوظيفة ونشغّلها بـ`sh` على عنوان سليم وعنوان فيه مسار.
+ */
+describe("عنوان الـ API في بناء الـ APK", () => {
+  const wf = read(".github/workflows/android.yml");
+  const compose = read("docker-compose.prod.yml");
+
+  /** الافتراضي في الوظيفة (آخر بديل في تعبير `||`) */
+  const wfDefault = /\|\|\s*'([^']+)'\s*\}\}/.exec(wf)?.[1] ?? "";
+  /** اللي بناء الواجهة بياخده فعلًا */
+  const webBase = /VITE_API_URL:\s*(\S+)/.exec(compose)?.[1] ?? "";
+
+  it("الافتراضي أصل بلا مسار — زي اللي الواجهة بتستخدمه", () => {
+    expect(wfDefault, "مالقيتش الافتراضي في الوظيفة").toMatch(/^https:\/\//);
+    expect(wfDefault.replace(/^https?:\/\//, ""), `فيه مسار: ${wfDefault}`).not.toContain("/");
+  });
+
+  it("نفس شكل عنوان الواجهة في compose (ما يتفرّقوش في سكوت)", () => {
+    expect(webBase, "مالقيتش VITE_API_URL في compose").toMatch(/^https:\/\/api\./);
+    expect(webBase.replace(/^https?:\/\//, ""), `عنوان الواجهة فيه مسار: ${webBase}`).not.toContain("/");
+    expect(wfDefault).toMatch(/^https:\/\/api\./);
+  });
+
+  /**
+   * الحارس نفسه: `vars.MOBILE_API_URL` أو مدخل التشغيل اليدوي يقدروا يحطّوا
+   * عنوانًا فيه مسار، والاختبار فوق مابيشوفهومش — فلازم الوظيفة **تفشل** عندها
+   * بدل ما تطلّع APK مكسورًا شكله سليم.
+   */
+  it("الوظيفة بترفض أي عنوان فيه مسار (متجرَّب بالتشغيل)", () => {
+    const block = /case "\$\{VITE_API_URL#\*:\/\/\}" in[\s\S]*?esac/.exec(wf)?.[0];
+    expect(block, "حارس الأصل مش موجود في الوظيفة — عنوان فيه /api هيعدّي").toBeTruthy();
+
+    const script = `VITE_API_URL="$1"\nVITE_API_URL="\${VITE_API_URL%/}"\n${block}\nexit 0\n`;
+    const run = (url: string) =>
+      spawnSync("sh", ["-c", script, "sh", url], { encoding: "utf8" }).status;
+
+    expect(run("https://api.example.com"), "عنوان سليم اترفض").toBe(0);
+    expect(run("https://api.example.com/"), "الشرطة الأخيرة لوحدها مش مسار").toBe(0);
+    expect(run("https://api.example.com/api"), "عنوان فيه /api عدّى — ده اللي كسر أول APK").not.toBe(0);
+    expect(run("https://api.example.com/v1/x"), "عنوان فيه مسار أطول عدّى").not.toBe(0);
   });
 });

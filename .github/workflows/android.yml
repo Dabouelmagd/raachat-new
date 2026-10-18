@@ -15,8 +15,8 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: "عنوان الـ API اللي التطبيق هيكلّمه"
-        default: "https://api.kenoz.org/api"
+        description: "أصل الـ API بلا أي مسار (زي https://api.kenoz.org)"
+        default: "https://api.kenoz.org"
         required: true
   push:
     branches: [main]
@@ -42,9 +42,19 @@ jobs:
       # بناء الديمو اللي مابيعملش ولا نداء شبكة (نفس درس api-mode في CI).
       - name: بناء الواجهة
         env:
-          VITE_API_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://api.kenoz.org/api' }}
+          VITE_API_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://api.kenoz.org' }}
         run: |
           test -n "$VITE_API_URL"
+          export VITE_API_URL="${VITE_API_URL%/}"
+          # 🔴 لازم يكون **أصلًا بلا مسار** — ولازم نفس اللي بناء الواجهة بياخده في
+          # compose (`VITE_API_URL: https://api.${DOMAIN}`). أي لاحقة زي `/api`
+          # تخلّي Express مايطابقش أي راوت، فالطلب يعدّي راوترات `/auth` ويوصل
+          # لراوتر فيه `r.use(requireAuth)` على كل المسارات ويرجّع **401 «غير
+          # مصرّح» على كل نداء** — شكله عطل مصادقة أو إيميل، والحقيقة عنوان غلط.
+          # حصل فعلًا في أول APK (١٨ أكتوبر ٢٠٢٦): الافتراضي كان فيه `/api`.
+          case "${VITE_API_URL#*://}" in
+            */*) echo "VITE_API_URL must be an origin with no path: $VITE_API_URL"; exit 1;;
+          esac
           npm ci
           npx vite build
           test -f dist/index.html
