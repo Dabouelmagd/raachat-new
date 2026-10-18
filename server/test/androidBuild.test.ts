@@ -72,10 +72,12 @@ describe("بناء الـ APK", () => {
   it("🔴 اسم الحزمة في ملفات البناء نفسها مطابق لـ capacitor.config", () => {
     const appId = /appId:\s*"([^"]+)"/.exec(read("mobile/capacitor.config.ts"))?.[1];
     expect(appId, "مفيش appId").toBeTruthy();
+    // ملحوظة: `assets/capacitor.config.json` **متجاهل في git** (بيتولّد من
+    // `cap sync` في كل بناء) — فمش في القايمة، وإلا الاختبار يسقط في الـCI
+    // على ملف مش موجود أصلًا.
     const files = [
       "mobile/android/app/build.gradle",
       "mobile/android/app/src/main/res/values/strings.xml",
-      "mobile/android/app/src/main/assets/capacitor.config.json",
       `mobile/android/app/src/main/java/${appId!.replace(/\./g, "/")}/MainActivity.java`,
     ];
     for (const f of files) {
