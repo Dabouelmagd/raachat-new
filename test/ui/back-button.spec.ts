@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoPageErrors, openApp, tab } from "../helpers";
+import { expectNoPageErrors, openApp, stubCapacitor, tab } from "../helpers";
 
 /**
  * **زرار الرجوع في أندرويد** (بطلب داليا ١٨ أكتوبر ٢٠٢٦: «الباك بوطن بتاع
@@ -9,12 +9,15 @@ import { expectNoPageErrors, openApp, tab } from "../helpers";
  * اللي فاتح شيت أو داخل محادثة ويدوس رجوع كان بيلاقي التطبيق اتقفل، وأي حاجة
  * كان بيكتبها تضيع.
  *
- * **إزاي نجرّبه في المتصفح:** بنحقن `window.Capacitor.Plugins.App` وهمي —
- * نفس الطريق اللي التطبيق بياخد منه الإضافة وقت التشغيل جوه الـAPK — ونخزّن
- * المستمع عشان ندوس «رجوع» بإيدينا، ونعدّ نداءات `minimizeApp`.
+ * **إزاي نجرّبه في المتصفح:** بنحقن جسر Capacitor وهمي **بنفس شكل الحقيقي**
+ * (`Plugins` فاضي + `registerPlugin` + `PluginHeaders`)، ونخزّن المستمع عشان
+ * ندوس «رجوع» بإيدينا، ونعدّ نداءات `minimizeApp`.
  *
- * وعلى الكود القديم المستمع **مكانش بيتسجّل خالص**، فالدوسة مابتعملش حاجة
- * والتلات اختبارات بيسقطوا.
+ * 🔴 **والشكل ده هو التصحيح (١٩ أكتوبر ٢٠٢٦):** النسخة الأولى كانت بتحقن
+ * `Plugins: { App: … }` **مملوءًا** — وده مش شكل الجسر الحقيقي، فالاختبارات
+ * التلاتة كانت خضرا والزرار **ميت على الجهاز** لأن `Capacitor.Plugins.App`
+ * بترجّع `undefined` دايمًا هناك. دلوقتي الوكيل مابيتخلقش إلا بـ`registerPlugin`
+ * زي الواقع، فالتلاتة بيسقطوا على الكود اللي بيقرا `Plugins` مباشرةً.
  */
 type BackWin = Window & {
   __rcBack?: (d: { canGoBack: boolean }) => void;
@@ -22,24 +25,23 @@ type BackWin = Window & {
   __rcExit?: number;
 };
 
-async function stubCapacitor(page: Page) {
+async function stubApp(page: Page) {
   await page.addInitScript(() => {
-    const w = window as unknown as BackWin & { Capacitor?: unknown };
+    const w = window as unknown as BackWin & { __rcPlugins?: Record<string, unknown> };
     w.__rcMin = 0;
     w.__rcExit = 0;
-    w.Capacitor = {
-      Plugins: {
-        App: {
-          addListener: (ev: string, cb: (d: { canGoBack: boolean }) => void) => {
-            if (ev === "backButton") w.__rcBack = cb;
-            return { remove() {} };
-          },
-          minimizeApp: () => { w.__rcMin = (w.__rcMin ?? 0) + 1; },
-          exitApp: () => { w.__rcExit = (w.__rcExit ?? 0) + 1; },
+    w.__rcPlugins = {
+      App: {
+        addListener: (ev: string, cb: (d: { canGoBack: boolean }) => void) => {
+          if (ev === "backButton") w.__rcBack = cb;
+          return { remove() {} };
         },
+        minimizeApp: () => { w.__rcMin = (w.__rcMin ?? 0) + 1; },
+        exitApp: () => { w.__rcExit = (w.__rcExit ?? 0) + 1; },
       },
     };
   });
+  await stubCapacitor(page, ["App"]);
 }
 
 /** يدوس «رجوع» زي النظام بالظبط، وبيفشل لو المستمع مش متسجّل */
@@ -52,7 +54,7 @@ async function pressBack(page: Page) {
 const minimized = (page: Page) => page.evaluate(() => (window as unknown as BackWin).__rcMin ?? 0);
 
 test("الرجوع بيقفل النافذة المفتوحة ومابيقفلش التطبيق", async ({ page }) => {
-  await stubCapacitor(page);
+  await stubApp(page);
   await openApp(page);
 
   await page.getByRole("button", { name: /بدء جديد|^New$/ }).click();
@@ -67,7 +69,7 @@ test("الرجوع بيقفل النافذة المفتوحة ومابيقفلش
 });
 
 test("الرجوع من جوه محادثة بيرجع لقايمة الدردشات", async ({ page }) => {
-  await stubCapacitor(page);
+  await stubApp(page);
   await openApp(page);
 
   await page.locator("button.w-full.rounded-2xl.bg-rachat-card").first().click();
@@ -81,7 +83,7 @@ test("الرجوع من جوه محادثة بيرجع لقايمة الدردش
 });
 
 test("الرجوع من شاشة الشريط السفلي بيصغّر التطبيق مش بيقفله", async ({ page }) => {
-  await stubCapacitor(page);
+  await stubApp(page);
   await openApp(page);
 
   // تبويب الجروبات — كان ناقصًا من قايمة الجذور المكتوبة بالإيد، فالرجوع منه

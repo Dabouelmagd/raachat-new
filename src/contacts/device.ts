@@ -1,4 +1,5 @@
 import { API_ON, api } from "../api/client";
+import { capPlugin } from "../mobile/capPlugin";
 
 export interface DeviceContact { name: string; phone: string }
 export interface Friend { id: string; name: string; color?: string; contactPhone: string }
@@ -17,10 +18,13 @@ export const hideBanner = () => { try { localStorage.setItem(BKEY, "off"); } cat
 export const shouldRemind = () => consentAsked() && !consentGiven() && !bannerHidden();
 
 type CapContacts = { requestPermissions(): Promise<{ contacts: string }>; getContacts(o: unknown): Promise<{ contacts: { name?: { display?: string }; phones?: { number?: string }[] }[] }> };
-const capPlugin = (): CapContacts | undefined => (window as unknown as { Capacitor?: { Plugins?: { Contacts?: CapContacts } } }).Capacitor?.Plugins?.Contacts;
+// 🔴 عبر `capPlugin` مش من `Capacitor.Plugins.Contacts` مباشرةً — الأخيرة بترجّع
+// `undefined` **دايمًا** في الـAPK لأن وكيل الـJS بيتخلق بـ`registerPlugin` بس.
+// ده كان سبب «جهازك مش بيسمح بقراءة جهات الاتصال» على جهاز الإضافة متركّبة فيه.
+const contactsPlugin = (): CapContacts | undefined => capPlugin<CapContacts>("Contacts");
 
 /** هل الجهاز يقدر يقرا جهات الاتصال (تطبيق موبايل أو متصفح أندرويد بيدعم Contact Picker). */
-export const canReadContacts = () => !!capPlugin() || (typeof navigator !== "undefined" && "contacts" in navigator && "ContactsManager" in window);
+export const canReadContacts = () => !!contactsPlugin() || (typeof navigator !== "undefined" && "contacts" in navigator && "ContactsManager" in window);
 
 /** أرقام تجريبية للديمو (بدون باك إند) */
 const DEMO: DeviceContact[] = [
@@ -29,7 +33,7 @@ const DEMO: DeviceContact[] = [
 ];
 
 export async function readDeviceContacts(): Promise<DeviceContact[]> {
-  const cap = capPlugin();
+  const cap = contactsPlugin();
   if (cap) {
     const p = await cap.requestPermissions();
     if (p.contacts !== "granted") throw new Error("denied");

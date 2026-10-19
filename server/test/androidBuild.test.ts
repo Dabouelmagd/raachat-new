@@ -235,3 +235,51 @@ describe("المساحات الآمنة على أندرويد وiOS", () => {
     );
   });
 });
+
+/**
+ * **إضافات Capacitor بتتاخد بـ`registerPlugin` مش من `Capacitor.Plugins` مباشرةً.**
+ *
+ * 🔴 العطل (١٩ أكتوبر ٢٠٢٦، من أول تجربة حقيقية لجهات الاتصال على جهاز):
+ * `window.Capacitor.Plugins.X` بترجّع **`undefined` دايمًا** في الـAPK — الجسر
+ * بيبدأ `Plugins` فاضي و`Plugins[name]` بيتحطّ **جوه `registerPlugin` بس**
+ * (`@capacitor/core/dist/index.js`). فالإضافة متركّبة ومسجَّلة في
+ * `capacitor.plugins.json` والواجهة **مش شايفاها** — جهات الاتصال بتقول «جهازك
+ * مش بيسمح»، وزرار الرجوع ميت في سكوت.
+ *
+ * الحارس ده على **كل** `src/` عشان أي إضافة جديدة تاخد نفس الطريق من أول يوم.
+ */
+describe("إضافات Capacitor في الواجهة", () => {
+  const SRC = path.join(ROOT, "src");
+
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? walk(p) : /\.tsx?$/.test(e.name) ? [p] : [];
+    });
+
+  it("مفيش ملف بيقرا Capacitor.Plugins مباشرةً غير المصدر الواحد", () => {
+    const files = walk(SRC);
+    expect(files.length, "الحارس لازم يلفّ على ملفات فعلًا").toBeGreaterThan(50);
+    // التعليقات بتشرح العطل نفسه فبتذكر `Capacitor.Plugins` — الحكم على الكود
+    const code = (f: string) => fs.readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const bad = files.filter((f) => path.basename(f) !== "capPlugin.ts" && /Capacitor\s*\??\.\s*Plugins/.test(code(f)));
+    expect(bad.map((f) => path.relative(ROOT, f)), "استخدمي capPlugin() — القراءة المباشرة ميتة في الـAPK").toEqual([]);
+  });
+
+  it("المصدر الواحد بيسجّل الإضافة بالاسم", () => {
+    const src = fs.readFileSync(path.join(SRC, "mobile/capPlugin.ts"), "utf8");
+    expect(src).toMatch(/registerPlugin\?\.\(name\)/);
+  });
+
+  it("صلاحية جهات الاتصال معلنة في المانيفست", () => {
+    const m = fs.readFileSync(path.join(ROOT, "mobile/android/app/src/main/AndroidManifest.xml"), "utf8");
+    expect(m).toContain("android.permission.READ_CONTACTS");
+  });
+
+  it("إضافة جهات الاتصال مسجَّلة في مشروع أندرويد", () => {
+    const plugins = fs.readFileSync(path.join(ROOT, "mobile/android/app/src/main/assets/capacitor.plugins.json"), "utf8");
+    expect(plugins).toContain("@capacitor-community/contacts");
+    const gradle = fs.readFileSync(path.join(ROOT, "mobile/android/app/capacitor.build.gradle"), "utf8");
+    expect(gradle).toContain("capacitor-community-contacts");
+  });
+});

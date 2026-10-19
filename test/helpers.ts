@@ -63,3 +63,32 @@ export async function setBirthDate(page: Page, day: string) {
 
 /** سنة ميلاد لعمر معيّن */
 export const yearForAge = (age: number) => new Date().getUTCFullYear() - age;
+
+/**
+ * **جسر Capacitor وهمي بنفس شكل الحقيقي.**
+ *
+ * 🔴 الشكل هو بيت القصيد: الجسر الحقيقي بيبدأ بـ`Plugins` **فاضي** وبيعرّض
+ * `registerPlugin` و`PluginHeaders` — ووكيل الـJS مابيتخلقش إلا لما الواجهة
+ * تنادي `registerPlugin`. والنسخة القديمة من الاختبار كانت بتحقن
+ * `Plugins: { App: … }` **مملوءًا**، فكانت بتعدّي على كود **ميت** في الجهاز
+ * الحقيقي. نفس درس «البيانات لازم تفرّق بين الصح والغلط القريب».
+ *
+ * الإضافات نفسها بيحطّها كل اختبار في `window.__rcPlugins` بـ`addInitScript`
+ * بتاعه قبل النداء ده.
+ */
+export async function stubCapacitor(page: Page, names: string[]) {
+  await page.addInitScript((list: string[]) => {
+    const w = window as unknown as { Capacitor?: unknown; __rcPlugins?: Record<string, unknown> };
+    w.Capacitor = {
+      Plugins: {}, // فاضي زي الحقيقي
+      PluginHeaders: list.map((name) => ({ name })),
+      isNativePlatform: () => true,
+      registerPlugin: (name: string) => {
+        const cap = (window as unknown as { Capacitor: { Plugins: Record<string, unknown> } }).Capacitor;
+        const made = w.__rcPlugins?.[name];
+        cap.Plugins[name] = made;
+        return made;
+      },
+    };
+  }, names);
+}

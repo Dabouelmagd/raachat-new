@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, type NavigateFunction } from "react-router-dom";
 import { TAB_PATHS } from "../components/BottomNav";
+import { capPlugin } from "./capPlugin";
 
 /**
  * **زرار الرجوع في أندرويد — يرجّع جوه التطبيق مش يقفله.**
@@ -16,9 +17,8 @@ import { TAB_PATHS } from "../components/BottomNav";
  *      والمستخدم مستنّي يلاقيه زي ما سابه لما يرجع.
  *
  * **ومفيش `import` من `@capacitor/app`** عن قصد: الحزمة في `mobile/` مش في
- * تبعيات الواجهة، فاستيرادها كان هيكسر بناء الويب. Capacitor بيعرّض الإضافات
- * وقت التشغيل على `window.Capacitor.Plugins` — فالكود ده بيشتغل في الـAPK
- * وبيسكت تمامًا في المتصفح.
+ * تبعيات الواجهة، فاستيرادها كان هيكسر بناء الويب. الإضافة بتتاخد وقت التشغيل
+ * عبر `capPlugin` — فالكود ده بيشتغل في الـAPK وبيسكت تمامًا في المتصفح.
  */
 type Listener = { remove: () => void } | Promise<{ remove: () => void }>;
 type CapApp = {
@@ -26,7 +26,6 @@ type CapApp = {
   minimizeApp?: () => void;
   exitApp?: () => void;
 };
-type CapWindow = Window & { Capacitor?: { Plugins?: { App?: CapApp } } };
 
 /** نافذة مفتوحة = طبقة `fixed inset-0` ظاهرة (كل الشيتات والعارضين بالشكل ده). */
 export const hasOverlay = () =>
@@ -51,7 +50,10 @@ export function useAndroidBack(nav: NavigateFunction) {
   at.current = path;
 
   useEffect(() => {
-    const app = (window as CapWindow).Capacitor?.Plugins?.App;
+    // 🔴 عبر `capPlugin`: `Capacitor.Plugins.App` بترجّع `undefined` دايمًا في
+    // الـAPK (الوكيل بيتخلق بـ`registerPlugin` بس) — فالمستمع مكانش بيتسجّل
+    // ولا مرة والزرار ميت في سكوت. التفاصيل في `capPlugin.ts`.
+    const app = capPlugin<CapApp>("App");
     if (!app?.addListener) return; // متصفح عادي — الرجوع بيشتغل لوحده
 
     const onBack = () => {
