@@ -19,7 +19,7 @@ PY
 ask() { local v; read -r -p "$1: " v; echo "$v"; }
 asks() { local v; read -r -s -p "$1 (مش هيظهر وانتي بتكتبي، Enter لو هتسيبيه فاضي): " v; echo >&2; echo "$v"; }
 
-set_kv DOMAIN "${DOMAIN:-kenoz.org}"
+set_kv DOMAIN "${DOMAIN:-raachateg.com}"
 set_kv POSTGRES_PASSWORD "$(openssl rand -hex 24)"
 set_kv JWT_SECRET "$(openssl rand -hex 32)"
 set_kv TURN_SECRET "$(openssl rand -hex 24)"
