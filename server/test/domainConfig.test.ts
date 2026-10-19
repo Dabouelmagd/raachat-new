@@ -68,6 +68,20 @@ function codeOf(file: string): string {
   return out;
 }
 
+/**
+ * الدومين الشغّال من **وظيفة بناء الـAPK** (`VITE_API_URL` الافتراضي في
+ * `.github/workflows/android.yml`) — لازم يكون صح وإلا الـAPK بيكلّم API ميت
+ * (عطل ١٨ أكتوبر: كل نداء بيرجّع ٤٠١ «غير مصرّح»). فهو أضمن مصدر في الريبو
+ * لاسم الدومين الحقيقي، على عكس `.env.production.example` اللي مافيهوش غير
+ * `example.com` عن قصد.
+ */
+function liveDomain(): string {
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/android.yml"), "utf8");
+  const m = wf.match(/'https:\/\/api\.([A-Za-z0-9.-]+)'/);
+  if (!m) throw new Error("مش لاقي VITE_API_URL الافتراضي في وظيفة بناء الـAPK");
+  return m[1];
+}
+
 describe("اسم الدومين مش مكتوب في الكود", () => {
   it("بيلفّ على كود التطبيق فعلًا (الحارس نفسه مش فاضي)", () => {
     const files = APP_DIRS.flatMap(walk);
@@ -95,12 +109,33 @@ describe("اسم الدومين مش مكتوب في الكود", () => {
    * `.env.production.example` اللي مافيهوش غير `example.com` عن قصد.
    */
   it("الدومين اللي الـAPK بيتبني عليه مغطّى في القايمة", () => {
-    const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/android.yml"), "utf8");
-    const m = wf.match(/'https:\/\/api\.([A-Za-z0-9.-]+)'/);
-    expect(m, "مش لاقي VITE_API_URL الافتراضي في وظيفة بناء الـAPK").toBeTruthy();
+    const live = liveDomain();
     expect(
       OUR_DOMAINS,
-      `الدومين الشغّال ${m?.[1]} مش في OUR_DOMAINS — الحارس بيحرس دومينًا تاني، فأي كتابة بالإيد للشغّال بتعدّي في سكوت`,
-    ).toContain(m![1]);
+      `الدومين الشغّال ${live} مش في OUR_DOMAINS — الحارس بيحرس دومينًا تاني، فأي كتابة بالإيد للشغّال بتعدّي في سكوت`,
+    ).toContain(live);
+  });
+
+  /**
+   * 🔴 روابط الصفحات القانونية في إقرارات المتاجر **مش أمثلة** — دي القيم اللي
+   * بتتلزق في Play Console وApp Store Connect، والمتاجر بتفحص رابط سياسة
+   * الخصوصية **دوريًا بعد النشر**. فرابط على الدومين القديم يعدّي النهاردة
+   * (شغّال بـ`OLD_DOMAIN`) ويبقى صفحة ميتة يوم ما المفتاح ده يتشال —
+   * **وسياسة خصوصية ميتة سبب إزالة من المتجر**، مش ملحوظة تنسيق.
+   *
+   * وده حصل فعلًا: بعد انتقال ١٩ أكتوبر الصفّان فضلوا على `app.kenoz.org`.
+   * الحارس بيقرا الدومين من **نفس** مصدر فوق (وظيفة بناء الـAPK).
+   */
+  it("روابط الصفحات القانونية في إقرارات المتاجر على الدومين الشغّال", () => {
+    const file = "docs/legal/store-declarations.md";
+    const text = fs.readFileSync(path.join(ROOT, file), "utf8");
+    const urls = [...text.matchAll(/https:\/\/app\.([A-Za-z0-9.-]+)\/legal\/[A-Za-z0-9.-]+/g)];
+    expect(urls.length, `مفيش ولا رابط صفحة قانونية في ${file} — الحارس بيعدّي بلا معنى`).toBeGreaterThan(0);
+    const live = liveDomain();
+    const stale = urls.filter((u) => u[1] !== live).map((u) => u[0]);
+    expect(
+      stale,
+      `رابط إقرار متجر على دومين مش الشغّال (${live}) — المتاجر بتفحصه بعد النشر:\n  ${stale.join("\n  ")}`,
+    ).toEqual([]);
   });
 });
