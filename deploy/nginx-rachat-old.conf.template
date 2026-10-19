@@ -1,0 +1,65 @@
+# رع شات: الدومين **القديم** أثناء الانتقال — بيتضاف بس لو `OLD_DOMAIN` مضبوط
+# في `.env.production`، وبيتلزق بعد البلوك الأساسي بـ`scripts/add-nginx-site.sh`.
+#
+# 🔴 الفكرة كلها في سطر `proxy_set_header Host`: Caddy الداخلي بيوجّه **بالاسم**
+# (`http://app.{$DOMAIN}` في `deploy/Caddyfile`) و`DOMAIN` قيمة **واحدة** جايّة من
+# compose. فلو بعتنا الاسم القديم زي ما هو (`Host $host` زي البلوك الأساسي)،
+# Caddy مايلاقيش موقعًا بالاسم ده و**يردّ بصفحة خطأ** — فالدومين القديم يبان
+# شغّالًا في نجنكس وهو مكسور. فبنحوّل الـ Host للاسم الجديد، وCaddy يخدم نفس
+# الموقع بالظبط. ده اللي خلّى الانتقال التدريجي ممكنًا **بلا لمس الـ Caddyfile**.
+#
+# والنتيجة: اللي بيفتح الدومين القديم بياخد **نفس النسخة الجديدة** من التطبيق،
+# و**الـ APK القديم** (عنوان الـ API متبنّي جوّاه على الدومين القديم) يفضل شغّالًا.
+# ⚠️ وبتتطلّب `CORS_EXTRA` فيه أصول الدومين القديم، وإلا الطلبات تترفض: الأصل
+# اللي المتصفح بيبعته هو **القديم**، و`CORS_ORIGIN` مبنيّ من `DOMAIN` الجديد بس.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name app.__OLD_DOMAIN__;
+    client_max_body_size 50m;
+    location / {
+        proxy_pass http://127.0.0.1:8085;
+        proxy_http_version 1.1;
+        proxy_set_header Host app.__DOMAIN__;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.__OLD_DOMAIN__;
+    client_max_body_size 50m;
+    location / {
+        proxy_pass http://127.0.0.1:8085;
+        proxy_http_version 1.1;
+        proxy_set_header Host api.__DOMAIN__;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name admin.__OLD_DOMAIN__;
+    client_max_body_size 50m;
+    location / {
+        proxy_pass http://127.0.0.1:8085;
+        proxy_http_version 1.1;
+        proxy_set_header Host admin.__DOMAIN__;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+    }
+}
