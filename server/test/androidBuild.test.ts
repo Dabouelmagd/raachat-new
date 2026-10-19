@@ -40,7 +40,11 @@ describe("بناء الـ APK", () => {
     expect(s).toContain("app-debug.apk");
     expect(s, "حجم معقول — أقل من ميجا معناه بناء فاضي").toContain('test "$SIZE" -gt 1000000');
     expect(s, "والواجهة لازم تكون جوه الأرشيف فعلًا").toContain("unzip -l");
-    expect(s).not.toMatch(/\|\|\s*true/);
+    // الحكم على الأوامر بعد شيل التعليقات: تعليق بيشرح **ليه** مفيش `|| true`
+    // لازم يذكرها، وهو مش بيخفي أي فشل. نفس درس حارس `Capacitor.Plugins`،
+    // اللي سقط على الملفين المتصلّحين لأن تعليقاتهم بتسمّي العطل.
+    const commands = s.replace(/^\s*#.*$/gm, "");
+    expect(commands, "`|| true` بيبلع الفشل فالوظيفة تخلص خضرا بناتج مكسور").not.toMatch(/\|\|\s*true/);
   });
 
   it("مابيتشغّلش على كل commit توثيق", () => {
@@ -281,5 +285,42 @@ describe("إضافات Capacitor في الواجهة", () => {
     expect(plugins).toContain("@capacitor-community/contacts");
     const gradle = fs.readFileSync(path.join(ROOT, "mobile/android/app/capacitor.build.gradle"), "utf8");
     expect(gradle).toContain("capacitor-community-contacts");
+  });
+
+  /**
+   * 🔴 زرار «نزّل ملف APK» في الموقع التعريفي بيودّي على
+   * `releases/latest/download/raachat.apk` — فالوسم والاسم دول **عقد مع
+   * الموقع**، مش تفصيلة داخلية. أي تغيير فيهم بيخلّي الزرار **٤٠٤** والموقع
+   * مش هيعرف، لأن الموقع صفحة ثابتة مابتفحصش الرابط.
+   *
+   * والـartifact العادي مش بديل: تنزيله **محتاج تسجيل دخول في GitHub**،
+   * فالزائر كان هيلاقي صفحة دخول مكان الملف.
+   */
+  describe("نشر الـAPK كـRelease", () => {
+    const wf = () => read(".github/workflows/android.yml");
+
+    it("الاسم والوسم ثابتان زي ما الموقع بيتوقّع", () => {
+      const s = wf();
+      expect(s, "الاسم ده مكتوب في رابط الموقع").toContain("raachat.apk");
+      expect(s, "الوسم ده جزء من الرابط الثابت").toContain("apk-latest");
+      expect(s).toMatch(/gh release create apk-latest raachat\.apk/);
+      expect(s, "لازم يحدّث الأصل لو الإصدار موجود بدل ما يفشل").toMatch(/gh release upload apk-latest raachat\.apk --clobber/);
+    });
+
+    it("الوظيفة لها صلاحية كتابة (من غيرها الـRelease بيرجّع 403)", () => {
+      const s = wf();
+      expect(s).toMatch(/permissions:\s*\n\s*contents:\s*write/);
+    });
+
+    /**
+     * من غير الفحص ده الوظيفة ممكن تخلص **خضرا** والأصل مرفوع ناقص أو الرابط
+     * بيرجّع صفحة — فالزرار مكسور ومفيش حاجة بتقول كده.
+     */
+    it("بيتأكد إن الرابط العام بيردّ ٢٠٠ وبحجم معقول", () => {
+      const s = wf();
+      expect(s).toContain("releases/latest/download/raachat.apk");
+      expect(s).toMatch(/test "\$CODE" = "200"/);
+      expect(s).toMatch(/stat -c%s \/tmp\/dl\.apk\)" -gt 1000000/);
+    });
   });
 });

@@ -26,6 +26,9 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    # لازمة لخطوة الـRelease — من غيرها `gh release create` بيرجّع 403.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -87,3 +90,38 @@ jobs:
           name: raachat-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # نشر الـ APK كـRelease عشان الموقع التعريفي يقدر يوديله برابط عام.
+      #
+      # ليه Release مش الـartifact اللي فوق: تنزيل الـartifact **محتاج تسجيل
+      # دخول في GitHub**، فزرار «نزّل» في الموقع كان هيودّي الزائر لصفحة دخول.
+      # وأصل الـRelease رابط مباشر بلا أي حساب.
+      #
+      # والوسم ثابت (`apk-latest`) والاسم ثابت (`raachat.apk`) عن قصد: الرابط
+      # `releases/latest/download/raachat.apk` مكتوب في الموقع، فلو الاسم اتغيّر
+      # الزرار يبقى ٤٠٤ **في سكوت** — الموقع مش هيعرف. محمي باختبار.
+      #
+      # ⚠️ والرابط ده عام لأن الريبو عام. لو الريبو بقى خاص، الزرار يموت.
+      - name: نشر الـ APK كـ Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk raachat.apk
+          NOTE="بناء تجريبي موقَّع بمفتاح تطوير — مش نسخة متجر. الكوميت: ${GITHUB_SHA::7}"
+          # `if` مش `|| true`: الشرط ده بيسأل هل الإصدار موجود، وأي فشل حقيقي
+          # جوه الفرعين لسه بيفشّل الخطوة. (`|| true` ممنوع هنا بحارس.)
+          if gh release view apk-latest > /dev/null 2>&1; then
+            gh release upload apk-latest raachat.apk --clobber
+          else
+            gh release create apk-latest raachat.apk \
+              --title "رع شات — آخر نسخة تجريبية لأندرويد" \
+              --notes "$NOTE" \
+              --latest
+          fi
+          # فحص إيجابي: الرابط العام بيردّ فعلًا ومش صفحة دخول
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/raachat.apk"
+          CODE=$(curl -sL -o /tmp/dl.apk -w '%{http_code}' "$URL")
+          echo "تنزيل عام: $CODE · $(stat -c%s /tmp/dl.apk) بايت"
+          test "$CODE" = "200"
+          test "$(stat -c%s /tmp/dl.apk)" -gt 1000000
