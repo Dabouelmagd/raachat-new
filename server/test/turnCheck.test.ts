@@ -87,6 +87,25 @@ describe("فاحص TURN على coturn حقيقي", () => {
     expect(sh).not.toMatch(/check "\$TURN_HOST".*\|\|\s*true/);
   });
 
+  it("🔴 ترتيب المرشّحين: `api.` قبل الدومين المجرّد", async () => {
+    // الدومين المجرّد هو أكتر اسم معرّض إنه يتحوّل لصفحة تعريفية عند مزوّد تاني،
+    // ولحظة ما يتحوّل كل مكالمة بتوزّع عنوان TURN بيتحلّ لمكان مفيهوش coturn —
+    // فتستنى اتصالًا ميتًا قبل ما تبدأ **بلا أي خطأ في أي مكان**. و`api.` مربوط
+    // بالـAPI فعمره ما يتفرق عن السيرفر. (اتكشف ١٩ أكتوبر ٢٠٢٦ عند الانتقال:
+    // `raachateg.com` المجرّد **بيتحلّ**، على عكس `kenoz.org`، فالترتيب القديم
+    // كان هيختاره.)
+    const sh = await import("node:fs/promises").then((fs) =>
+      fs.readFile(path.resolve("../scripts/set-turn.sh"), "utf8"),
+    );
+    const line = /for cand in ([^;]+); do/.exec(sh)?.[1];
+    expect(line, "مش لاقي سطر المرشّحين في set-turn.sh").toBeTruthy();
+    const api = line!.indexOf('"api.$DOMAIN"');
+    const bare = line!.indexOf('"$DOMAIN"');
+    expect(api).toBeGreaterThan(0);
+    expect(bare).toBeGreaterThan(0);
+    expect(api, "الدومين المجرّد قبل api. — عطل صامت في المكالمات لو اتحوّل").toBeLessThan(bare);
+  });
+
   it("كلمة السر اللي الفاحص بيستخدمها هي نفسها اللي السيرفر بيولّدها", () => {
     // الفاحص والسيرفر لازم يتفقوا: base64(HMAC-SHA1(secret, "<exp>:<user>"))
     const username = `${Math.floor(Date.now() / 1000) + 600}:setup`;

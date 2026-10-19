@@ -80,7 +80,11 @@ fi
 
 echo "↪ بندوّر على اسم بيتحلّ لـ TURN…"
 TURN_HOST=""
-for cand in "turn.$DOMAIN" "$DOMAIN" "api.$DOMAIN"; do
+# 🔴 الترتيب مقصود: `api.` **قبل** الدومين المجرّد. الدومين المجرّد هو أكتر اسم
+# معرّض إنه يتحوّل بعدين لصفحة تعريفية عند مزوّد تاني — ولحظة ما يتحوّل، كل مكالمة
+# بتوزّع عنوان TURN بيتحلّ لمكان مفيهوش coturn، فتستنى اتصالًا ميتًا قبل ما تبدأ
+# **بلا أي خطأ**. و`api.` مربوط بالـAPI نفسه فعمره ما يتفرق عن السيرفر ده.
+for cand in "turn.$DOMAIN" "api.$DOMAIN" "$DOMAIN"; do
   if resolves "$cand"; then TURN_HOST=$cand; echo "   ✔ $cand بيتحلّ"; break; fi
   echo "   ✗ $cand مالوش سجل DNS"
 done

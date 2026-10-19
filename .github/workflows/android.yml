@@ -15,8 +15,8 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: "أصل الـ API بلا أي مسار (زي https://api.kenoz.org)"
-        default: "https://api.kenoz.org"
+        description: "أصل الـ API بلا أي مسار (زي https://api.raachateg.com)"
+        default: "https://api.raachateg.com"
         required: true
   push:
     branches: [main]
@@ -42,7 +42,7 @@ jobs:
       # بناء الديمو اللي مابيعملش ولا نداء شبكة (نفس درس api-mode في CI).
       - name: بناء الواجهة
         env:
-          VITE_API_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://api.kenoz.org' }}
+          VITE_API_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://api.raachateg.com' }}
         run: |
           test -n "$VITE_API_URL"
           export VITE_API_URL="${VITE_API_URL%/}"
