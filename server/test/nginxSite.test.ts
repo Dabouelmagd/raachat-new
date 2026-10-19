@@ -29,7 +29,7 @@ const OLD = "kenoz.org";
 type Run = { code: number; out: string; conf: string; certbot: string[] };
 
 /** بيشغّل السكربت فعلًا. `resolve` = الأسماء اللي `getent` بيلاقيها */
-function run(env: Record<string, string>, resolve: string[]): Run {
+function run(env: Record<string, string>, resolve: string[], runningDomain?: string): Run {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rachat-nginx-"));
   const bin = path.join(dir, "bin");
   const enabled = path.join(dir, "sites-enabled");
@@ -59,6 +59,8 @@ function run(env: Record<string, string>, resolve: string[]): Run {
   stub("systemctl", "exit 0");
   // certbot بيسجّل مُعاملاته سطرًا سطرًا عشان نحكم عليها
   stub("certbot", `for a in "$@"; do echo "$a" >> ${cbLog}; done\nexit 0`);
+  // docker بيحكي عن الدومين اللي Caddy الشغّال عليه؛ بلا قيمة = مفيش حاويات
+  stub("docker", runningDomain ? `echo ${runningDomain}` : "exit 1");
 
   const r = spawnSync("bash", [path.join(ROOT, "scripts/add-nginx-site.sh")], {
     cwd: ROOT,
@@ -168,6 +170,23 @@ describe("add-nginx-site.sh", () => {
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("OLD_DOMAIN");
     expect(r.certbot).toEqual([]);
+  });
+
+  it("🔴 Caddy الشغّال لسه على الدومين القديم: بيحذّر إن النشرة الأول", () => {
+    const r = run(
+      { DOMAIN: NEW, OLD_DOMAIN: OLD, LETSENCRYPT_EMAIL: "a@b.com" },
+      [...allNames(NEW), ...allNames(OLD)],
+      OLD,
+    );
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("deploy-rachat.sh");
+    expect(r.out).toContain(OLD);
+  });
+
+  it("Caddy الشغّال على نفس الدومين: مفيش تحذير", () => {
+    const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, allNames(NEW), NEW);
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain("deploy-rachat.sh");
   });
 
   it("DOMAIN فاضي: مرفوض قبل أي حاجة", () => {

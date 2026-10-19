@@ -27,6 +27,15 @@ if [ -n "$OLD_DOMAIN" ]; then
     getent hosts "$h.$OLD_DOMAIN" >/dev/null || { echo "❌ $h.$OLD_DOMAIN مالوش A record — شيلي OLD_DOMAIN أو ظبّطي الـ DNS"; exit 1; }
   done
 fi
+# ⚠️ Caddy الداخلي بيوجّه بالاسم و`DOMAIN` بيوصله من compose، فلو الحاوية الشغّالة
+# لسه على الدومين القديم والسكربت ده ظبّط نجنكس على الجديد، Caddy مايلاقيش أي موقع
+# والموقع ينزل لحد ما النشرة تشتغل. فالترتيب الصح: نشرة **الأول** ثم السكربت ده على
+# طول. تحذير مش رفض — أول تنصيب مفيهوش حاويات أصلًا.
+RUNNING_DOMAIN=$(docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" exec -T caddy printenv DOMAIN 2>/dev/null | tr -d '\r\n' || true)
+if [ -n "$RUNNING_DOMAIN" ] && [ "$RUNNING_DOMAIN" != "$DOMAIN" ]; then
+  echo "⚠️  Caddy الشغّال على $RUNNING_DOMAIN والإعداد بقى $DOMAIN"
+  echo "⚠️  الترتيب الصح: bash scripts/deploy-rachat.sh الأول ثم السكربت ده على طول — وإلا الموقع ينزل لحد النشرة"
+fi
 # $connection_upgrade لازم map مرة واحدة في http{} — نضيفه لو مش موجود
 if ! grep -rqs 'connection_upgrade' "$NGINX_CONF" "$CONFD_DIR" "$ENABLED_DIR"; then
   printf 'map $http_upgrade $connection_upgrade { default upgrade; "" close; }\n' > "$CONFD_DIR/rachat-upgrade-map.conf"
