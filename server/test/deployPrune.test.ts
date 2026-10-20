@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const sh = fs.readFileSync(path.join(ROOT, "scripts/deploy-rachat.sh"), "utf8");
@@ -72,5 +73,50 @@ describe("تنضيف القرص في سكربت النشر", () => {
     expect(i, "حارس PRUNE مش موجود").toBeGreaterThan(-1);
     expect(code.indexOf("docker image prune")).toBeGreaterThan(i);
     expect(code.indexOf("docker builder prune")).toBeGreaterThan(i);
+  });
+});
+
+/**
+ * اختيار اللي يتبني: `site/` ما يبنيش حاجة.
+ *
+ * 🔴 الموقع التعريفي ملفات ثابتة نجنكس بيقراها من نسخة الريبو — مش جوه أي
+ * صورة. والشرط في السكربت «أي حاجة برّه server/ و docs/ و *.md → ابنِ caddy»،
+ * فمن غير استثناء `site/` أي تعديل كلمة في الموقع بيعيد بناء الواجهة كلها:
+ * دقايق، و~٥ جيجا كاش على سيرفر مشترك، **بلا أي أثر على الناتج**.
+ *
+ * والحكم بتشغيل الشرط نفسه بـ`sh` على مجموعات ملفات حقيقية — مش على شكل النصّ.
+ */
+describe("deploy-rachat.sh — اختيار الخدمات", () => {
+  const SH = fs.readFileSync(path.join(ROOT, "scripts/deploy-rachat.sh"), "utf8");
+  const rule = /grep -qvE '([^']+)' && SVC="\$SVC caddy"/.exec(SH);
+
+  it("الشرط موجود (وإلا الاختبارات تحته بلا معنى)", () => {
+    expect(rule, "مش لاقي شرط بناء caddy في السكربت").toBeTruthy();
+  });
+
+  /** بيشغّل نفس الشرط على قايمة ملفات ويقول: هيتبني caddy ولا لأ */
+  const buildsCaddy = (files: string[]) => {
+    const r = spawnSync(
+      "sh",
+      ["-c", `printf '%s\\n' "$@" | grep -qvE '${rule![1]}'`, "sh", ...files],
+      { encoding: "utf8" },
+    );
+    return r.status === 0;
+  };
+
+  it("تعديل الموقع التعريفي وحده: مفيش بناء", () => {
+    expect(buildsCaddy(["site/index.html"])).toBe(false);
+    expect(buildsCaddy(["site/index.html", "site/logo.png", "docs/x.md"])).toBe(false);
+  });
+
+  it("الواجهة واللوحة والـCaddyfile: بناء", () => {
+    expect(buildsCaddy(["src/App.tsx"])).toBe(true);
+    expect(buildsCaddy(["admin/src/api.js"])).toBe(true);
+    // deploy/ فيه الـCaddyfile وهو **جوه** صورة caddy — فلازم يفضل بيبني
+    expect(buildsCaddy(["deploy/Caddyfile"])).toBe(true);
+  });
+
+  it("الموقع مع الواجهة: بناء (الواجهة هي السبب)", () => {
+    expect(buildsCaddy(["site/index.html", "src/App.tsx"])).toBe(true);
   });
 });

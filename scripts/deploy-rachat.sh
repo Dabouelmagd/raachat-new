@@ -53,7 +53,10 @@ fi
 SVC=""
 if [ "${FORCE:-0}" = "1" ] || [ "$KNOWN" = 0 ]; then SVC="api caddy"; else
   echo "$CHANGED" | grep -q '^server/' && SVC="$SVC api"
-  echo "$CHANGED" | grep -qvE '^(server/|docs/|.*\.md$)' && SVC="$SVC caddy"
+  # `site/` مستثنى: الموقع التعريفي **ملفات ثابتة نجنكس بيقراها من نسخة الريبو
+  # مباشرةً** ومش جوه أي صورة — فتعديله `git pull` وخلاص. من غير الاستثناء ده
+  # أي تغيير كلمة فيه بيعيد بناء الواجهة (دقايق و~٥ جيجا كاش) بلا أي أثر.
+  echo "$CHANGED" | grep -qvE '^(server/|docs/|site/|.*\.md$)' && SVC="$SVC caddy"
 fi
 [ -z "$SVC" ] && { echo "✅ تغييرات وثائق بس — مفيش حاجة تتبني"; echo "$NEW" > "$STATE"; exit 0; }
 echo "↪ بناء وتشغيل:$SVC"

@@ -153,3 +153,34 @@ describe("حالات الرسالة في الـ CI", () => {
     expect(script).toContain("process.exit(2)");
   });
 });
+
+/**
+ * الموقع التعريفي في الـCI.
+ *
+ * 🔴 الفحص ده بيمسك حالة **شكلها سليم على الديسكتوب**: الملف من غير doctype
+ * أو meta viewport بيتعرض عادي على شاشة كبيرة، وعلى الموبايل بس بيشتغل
+ * quirks بنافذة ٩٨٠px ويموت التخطيط الريسبونسف كله. فلو الخطوة اتشالت،
+ * الارتداد بيعدّي من عين أي حد بيراجع على لابتوب.
+ */
+describe("الموقع التعريفي في الـCI", () => {
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+
+  it("الفحص بيتشغّل على الملف اللي نجنكس بيقدّمه", () => {
+    expect(wf).toMatch(/node site-check\.mjs .*site\/index\.html/);
+  });
+
+  it("ملف الفحص موجود، وفحوصه الحاسمة جوّاه", () => {
+    const src = fs.readFileSync(path.join(ROOT, "test/site-check.mjs"), "utf8");
+    // الاتنين دول هما سبب وجوده — الباقي تفاصيل
+    expect(src).toContain("compatMode");
+    expect(src).toContain("layoutWidth");
+    expect(src).toMatch(/process\.exit\(2\)/);
+  });
+
+  it("الموقع موجود فعلًا وقائم بذاته", () => {
+    const html = fs.readFileSync(path.join(ROOT, "site/index.html"), "utf8");
+    expect(html.startsWith("<!doctype html>")).toBe(true);
+    expect(html).toContain('<meta charset="utf-8">');
+    expect(html).toMatch(/<meta name="viewport"[^>]*width=device-width/);
+  });
+});

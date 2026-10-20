@@ -1,0 +1,31 @@
+
+# الموقع التعريفي على الدومين المجرّد (و www لو ليه DNS).
+#
+# 🔴 ملفات ثابتة من نسخة الريبو مباشرةً — **مش بيمرّ على Caddy ولا على أي
+# حاوية**. يعني مفيش أي طريق منه للتطبيق ولا للـAPI ولا للسوكت، ونشره =
+# `git pull` وخلاص: بلا بناء، بلا إعادة تشغيل، وبلا أي لحظة التطبيق ينزل فيها.
+#
+# __SITE_NAMES__ و __SITE_ROOT__ بيتبدّلوا بـ scripts/add-nginx-site.sh.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __SITE_NAMES__;
+    root __SITE_ROOT__;
+    index index.html;
+    # الصفحة عربية — الهيدر بيحسم الترميز بدل ما نسيبه لاجتهاد المتصفح
+    charset utf-8;
+
+    # الصور مش بأسماء فيها بصمة، فيوم واحد — **مش** immutable: لو اتبدّلت صورة
+    # بنفس الاسم، الزائر لازم يشوف الجديدة في يوم مش في سنة.
+    location ~* \.(png|jpg|jpeg|svg|webp|ico|woff2?)$ {
+        add_header Cache-Control "public, max-age=86400";
+    }
+
+    # كل اللي باقي (html · robots · sitemap) مايتكاشّش — نفس درس الـCaddyfile:
+    # من غير السطر ده المتصفح بيكاشّ الصفحة باجتهاده، فأي تعديل مايوصلش للزائر
+    # اللي فتحها قبل كده.
+    location / {
+        try_files $uri $uri/ =404;
+        add_header Cache-Control "no-cache";
+    }
+}

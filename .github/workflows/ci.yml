@@ -80,6 +80,12 @@ jobs:
       - name: اختبارات الواجهة
         working-directory: test
         run: npx playwright test
+      # الموقع التعريفي بيتقدّم من نجنكس كملف ثابت — من غير doctype أو
+      # meta viewport المتصفح بيشتغل quirks بنافذة ٩٨٠px وكل التخطيط
+      # الريسبونسف يموت على الموبايل، **والصفحة تفضل شكلها سليم على الديسكتوب**.
+      - name: الموقع التعريفي سليم كصفحة قائمة بذاتها
+        working-directory: test
+        run: node site-check.mjs ../site/index.html
       - name: ارفع تقرير الفشل
         if: failure()
         uses: actions/upload-artifact@v4

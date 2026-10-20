@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>رع شات — شات مصري بروح فرعونية | Raa Chat</title>
+<meta name="description" content="رع شات — تطبيق دردشة مصري: رسائل ومكالمات صوت وفيديو، جروبات وقنوات، غرف صوتية، ستوري، واستطلاعات. بواجهة عربية بالكامل وملصقات فرعونية.">
+<meta name="theme-color" content="#14100F">
+<link rel="icon" href="/icon.png" sizes="any">
+<link rel="apple-touch-icon" href="/logo.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="رع شات">
+<meta property="og:title" content="رع شات — شات مصري بروح فرعونية">
+<meta property="og:description" content="رع شات — تطبيق دردشة مصري: رسائل ومكالمات صوت وفيديو، جروبات وقنوات، غرف صوتية، ستوري، واستطلاعات. بواجهة عربية بالكامل وملصقات فرعونية.">
+<meta property="og:image" content="https://raachateg.com/logo.png">
+<meta property="og:url" content="https://raachateg.com/">
+<meta property="og:locale" content="ar_EG">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://raachateg.com/">
+<style>
+  /* الريسِت اللي كان بييجي من غلاف نشر الـArtifact.
+     `[hidden]` بـ!important ضروري: القسم الإنجليزي بيتخفي بالخاصية دي. */
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap">
+<style>
+  /* عمود واحد: شرائط بعرض الشاشة وجواها غلاف بعرض محدود.
+     الهوية من tailwind.config.js بتاع التطبيق — مش لوحة جديدة.
+     كل خاصية اتجاه منطقية (start/inline) عشان نفس الـCSS يخدم العربي والإنجليزي. */
+  :root{
+    --ink:#14100F;          /* خلفية الصفحة — أسود العمق */
+    --surface:#1C1613;
+    --surface-t:rgba(28,22,19,.90);   /* سطح شبه معتم — النقش يتحسّ من وراه */
+    --surface-2t:rgba(36,28,24,.92);
+    --line:#3A2721;
+    --red:#E1523E;          /* أحمر رع الفرعوني */
+    --coral:#F2795C;
+    --gold:#C9A227;         /* ذهبي الملوك */
+    --papyrus:#F5EFE6;      /* بردية — النص الأساسي */
+    --muted:#A3948A;
+    --ok:#5FA86B;
+    --font:"Cairo","Segoe UI",Tahoma,sans-serif;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; color:var(--papyrus); background-color:var(--ink);
+    font-family:var(--font); font-size:16px; line-height:1.75;
+    direction:rtl; text-align:start;
+    -webkit-font-smoothing:antialiased;
+  }
+  body.en{direction:ltr}
+  /* النقش الهيروغليفي ورا الصفحة كلها: طبقة ثابتة بـ`position:fixed` مش
+     `background-attachment:fixed` — الأخيرة بتتلخبط على سفاري في الآيفون. */
+  body::after{
+    content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background-image:
+      linear-gradient(to bottom, rgba(20,16,15,.88), rgba(20,16,15,.955)),
+      url("texture.jpg");
+    background-size:cover, cover;
+    background-position:center top, center top;
+    background-repeat:no-repeat, no-repeat;
+  }
+  .wrap{
+    max-width:1060px; margin-inline:auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+  }
+  a{color:var(--coral)}
+  h1,h2,h3{font-family:var(--font); text-wrap:balance; margin:0; line-height:1.3}
+  p{margin:0}
+  ul{margin:0; padding:0; list-style:none}
+  /* تبديل اللغة */
+  body:not(.en) .t-en{display:none}
+  body.en .t-ar{display:none}
+
+  /* ——— شريط علوي ——— */
+  .topbar{position:sticky; top:env(safe-area-inset-top, 0px); z-index:20;
+    background:rgba(20,16,15,.93); backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
+  body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:30; background:var(--ink)}
+  .topbar .wrap{display:flex; align-items:center; gap:14px; padding-block:12px}
+  /* كل مقاس في الشريط بـ`clamp` عشان يتدرّج مع عرض الشاشة بدل ما ينطّ عند
+     نقطة كسر — فشاشة ٣٢٠ وشاشة ٤٣٠ الاتنين يطلعوا متزنين. */
+  .logo{display:flex; align-items:center; gap:clamp(8px,2.4vw,11px); font-weight:900;
+    font-size:clamp(16px,4.2vw,19px); flex:0 0 auto}
+  .logo img{display:block; width:clamp(30px,8vw,38px); height:auto; border-radius:10px}
+  .topnav{display:flex; gap:clamp(13px,3.6vw,22px); font-size:clamp(12.5px,3.4vw,14px); margin-inline:auto}
+  .topnav a{color:var(--muted); text-decoration:none; padding-block:4px}
+  .topnav a:hover,.topnav a:focus-visible{color:var(--papyrus)}
+  .langbtn{flex:0 0 auto; background:none; border:1px solid var(--line); color:var(--papyrus);
+    border-radius:999px; padding:clamp(5px,1.6vw,7px) clamp(11px,3.4vw,15px); font-family:var(--font);
+    font-weight:700; font-size:clamp(12px,3.2vw,13px); cursor:pointer; white-space:nowrap}
+  .langbtn:hover{border-color:var(--gold); color:var(--gold)}
+  .langbtn:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+  /* على الموبايل القايمة **مابتختفيش** — دي الطريقة الوحيدة للتنقل في الصفحة.
+     بتنزل سطر تاني وبتتمرّر أفقيًا بدل ما تتخبّى ورا زرار. */
+  @media (max-width:860px){
+    .topbar .wrap{flex-wrap:wrap; row-gap:9px; padding-block:10px}
+    .logo{order:1; font-size:17px}
+    .logo img{width:32px}
+    .langbtn{order:2; margin-inline-start:auto; padding:6px 13px}
+    .topbar .btn{order:3; padding:9px 16px; font-size:13.5px}
+    /* بتلفّ لسطرين بدل ما تتمرّر: كل الروابط تبان، ومحدش محتاج يكتشف إن
+       فيه حاجة مخبّية ورا تمرير أفقي. */
+    .topnav{order:4; width:100%; margin:0; flex-wrap:wrap; justify-content:center;
+      gap:clamp(4px,1.4vw,10px) clamp(14px,4.4vw,22px)}
+    /* مساحة لمس أوسع على الموبايل — رابط بارتفاع سطر واحد صعب يتضغط بالإصبع */
+    .topnav a{white-space:nowrap; padding-block:7px}
+  }
+  @media (max-width:430px){ .topbar .btn{display:none} }
+
+  /* ——— أزرار ——— */
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:9px;
+    font-weight:700; font-size:15px; text-decoration:none;
+    padding:13px 24px; border-radius:12px; border:1px solid transparent; cursor:pointer}
+  .btn-main{background:var(--red); color:#fff}
+  .btn-main:hover{background:var(--coral)}
+  .btn-line{border-color:var(--line); color:var(--papyrus); background:var(--surface-t)}
+  .btn-line:hover{border-color:var(--gold)}
+  .btn-off{background:var(--surface-t); color:var(--muted); border-color:var(--line); cursor:default}
+  .btn:focus-visible{outline:2px solid var(--gold); outline-offset:3px}
+
+  /* ——— الصدر ——— */
+  .hero{
+    padding-block:56px; border-bottom:1px solid var(--line);
+    /* الحجاب تقيل عن قصد: النقش غني جدًا، ولو بان بقوّته العنوان يبقى صعب
+       القراية — وده أول حاجة الزائر بيشوفها. النقش يتحسّ، مش يزاحم. */
+    background-image:
+      linear-gradient(to bottom, rgba(20,16,15,.84), rgba(20,16,15,.92) 60%, var(--ink)),
+      radial-gradient(90% 65% at 50% 0%, rgba(225,82,62,.14), transparent 70%),
+      url("texture.jpg");
+    background-size:cover, cover, cover;
+    background-position:center top, center top, center 18%;
+    background-repeat:no-repeat, no-repeat, no-repeat;
+  }
+  .hero .wrap{text-align:center}
+  .herologo{display:block; width:clamp(104px,18vw,136px); height:auto; border-radius:26px;
+    margin:0 auto 24px; box-shadow:0 18px 44px rgba(225,82,62,.22)}
+  .eyebrow{display:inline-block; font-weight:700; font-size:12.5px;
+    letter-spacing:.06em; color:var(--gold); border:1px solid rgba(201,162,39,.35);
+    background:rgba(201,162,39,.08); padding:5px 14px; border-radius:999px; margin-bottom:22px}
+  .hero h1{font-size:clamp(28px,5.6vw,46px); font-weight:900; max-width:22ch; margin-inline:auto}
+  .hero h1 em{font-style:normal; color:var(--red)}
+  .hero h1 .line2{display:block; font-size:.72em; font-weight:700; color:var(--papyrus); margin-top:10px}
+  /* عين حورس كـSVG مش حرف هيروغليفي: `𓂀` بيطلع **مربع فاضي** على أغلب
+     الأجهزة لأن الخطوط العادية مافيهاش الحروف دي. */
+  .eye{display:inline-block; vertical-align:-.12em; width:1.05em; height:auto}
+  .eye path,.eye circle{stroke:var(--red); fill:none; stroke-width:2.2; stroke-linecap:round}
+  .eye circle{fill:var(--red); stroke:none}
+  .card .ico .eye{width:21px}
+  .hero .lede{color:var(--muted); font-size:17px; max-width:58ch; margin:20px auto 0}
+  .hero .lede b{color:var(--papyrus); font-weight:600}
+  .ctas{display:flex; flex-wrap:wrap; gap:12px; margin-top:30px; justify-content:center}
+  .hint{color:var(--muted); font-size:13.5px; margin-top:14px}
+
+  /* ——— لقطة من التطبيق ——— */
+  .showcase{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,320px); gap:40px; align-items:center}
+  .showcase .shot{margin:0}
+  .showcase img{display:block; width:100%; height:auto; border-radius:22px;
+    border:1px solid var(--line); box-shadow:0 26px 60px rgba(0,0,0,.55)}
+  .showcase figcaption{color:var(--muted); font-size:12.5px; margin-top:12px; text-align:center}
+  .showlist{display:grid; gap:14px; margin-top:26px}
+  .showlist li{display:flex; gap:12px; color:var(--muted); font-size:14.5px}
+  .showlist b{color:var(--papyrus); font-weight:700}
+  .showlist .dot{flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:var(--red); margin-top:9px}
+  @media (max-width:820px){ .showcase{grid-template-columns:1fr; gap:30px} .showcase .shot{max-width:320px; margin-inline:auto} }
+
+  /* ——— شرائح عامة ——— */
+  /* الشريط العلوي لاصق، فمن غير ده أول سطر في كل قسم بيتخبّى وراه بعد الضغط. */
+  section,.hero{scroll-margin-top:112px}
+  section{border-bottom:1px solid var(--line)}
+  section .wrap{padding-block:56px}
+  .kicker{font-weight:700; font-size:12.5px; letter-spacing:.06em; color:var(--coral); margin-bottom:9px}
+  h2{font-size:clamp(23px,3.6vw,31px); font-weight:900; max-width:26ch}
+  .sub{color:var(--muted); margin-top:12px; max-width:62ch}
+
+  .grid{display:grid; gap:14px; margin-top:34px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media (max-width:820px){ .g3{grid-template-columns:1fr 1fr} }
+  @media (max-width:560px){ .g3,.g2{grid-template-columns:1fr} }
+
+  .card{background:var(--surface-t); border:1px solid var(--line); border-radius:16px; padding:22px; min-width:0}
+  .card h3{font-size:16.5px; font-weight:700; margin-bottom:7px}
+  .card p{color:var(--muted); font-size:14px}
+  .card .ico{width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
+    background:rgba(225,82,62,.12); margin-bottom:14px}
+
+  /* ——— خطوات التشغيل ——— */
+  .steps{counter-reset:s; display:grid; gap:12px; margin-top:34px}
+  .step{display:flex; gap:16px; background:var(--surface-t); border:1px solid var(--line); border-radius:16px; padding:20px 22px; min-width:0}
+  .step::before{counter-increment:s; content:counter(s);
+    font-weight:900; font-size:15px; color:var(--ink);
+    background:var(--gold); width:30px; height:30px; border-radius:50%; display:grid; place-items:center; flex:0 0 auto}
+  .step h3{font-size:16px; font-weight:700; margin-bottom:5px}
+  .step p{color:var(--muted); font-size:14px}
+
+  /* ——— جدول المواضع ——— */
+  .tablewrap{overflow-x:auto; margin-top:30px; border:1px solid var(--line); border-radius:16px;
+    background:var(--surface-t)}
+  table{border-collapse:collapse; width:100%; min-width:620px; font-size:14px}
+  caption{text-align:start; color:var(--muted); font-size:13px; padding:14px 18px 0}
+  th,td{padding:13px 18px; border-bottom:1px solid var(--line); text-align:start; vertical-align:top}
+  thead th{font-weight:700; font-size:13px; color:var(--gold);
+    background:var(--surface-2t); white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td b{font-weight:700}
+  td small{display:block; color:var(--muted); font-size:12.5px; margin-top:3px}
+  .num{font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  /* على الموبايل الجدول بيبقى كروت — مش تمرير أفقي.
+     السبب: `min-width:620px` جوه `overflow-x:auto` معناه إن عمود «مكانه في
+     التطبيق» (أهم عمود، وفيه الملاحظات) بيقع **برّه الشاشة**، والمعلن لازم
+     يكتشف لوحده إنه يسحب بالصباع. فكل موضع بقى كارت كل بياناته ظاهرة.
+     واللابل بييجي من `data-label` المتولّد من <thead> نفسه. */
+  @media (max-width:620px){
+    .tablewrap{overflow-x:visible; border:none; background:none; margin-top:22px}
+    table{min-width:0; display:block; font-size:14px}
+    caption{display:block; padding:0 2px 4px}
+    thead{display:none}
+    tbody,tbody tr,tbody td{display:block}
+    tbody tr{border:1px solid var(--line); border-radius:14px;
+      background:var(--surface-t); padding:12px 14px; margin-top:12px}
+    tbody td{padding:0; border-bottom:none}
+    /* الخانة الأولى = اسم الموضع: عنوان الكارت */
+    tbody td:first-child{font-size:15px; padding-bottom:9px; margin-bottom:8px;
+      border-bottom:1px solid var(--line)}
+    tbody tr:last-child td:first-child{border-bottom:1px solid var(--line)}
+    tbody td:not(:first-child){display:flex; gap:10px; padding-block:5px;
+      align-items:baseline; flex-wrap:wrap}
+    tbody td:not(:first-child)::before{content:attr(data-label); color:var(--gold);
+      font-size:12.5px; font-weight:700; flex:0 0 5.8em; min-width:0}
+    tbody td:not(:first-child) > *{flex:1 1 100%}
+    /* الخانة الأخيرة لابلها طويل وقيمتها طويلة — سطر لكل واحد
+       بدل لفّ متعرّج جنب بعض */
+    tbody td:last-child{display:block}
+    tbody td:last-child::before{display:block; margin-bottom:4px}
+    /* المقاس والعدد ينفع يلفّوا هنا — مفيش عمود يضغطهم */
+    .num{white-space:normal}
+  }
+
+  /* ——— الترخيص ———
+     ادعاء تنظيمي، فصياغته مأخوذة بالحرف من خطاب المجلس: قرار بتاريخ
+     ١٣ يوليو ٢٠٢٦ وترخيص خمس سنوات. مفيش رقم ترخيص في الخطاب،
+     فمفيش رقم مكتوب هنا — رقم غلط أسوأ من مفيش رقم. */
+  .lic{display:block; color:var(--muted); font-size:12.5px; margin-top:7px;
+    line-height:1.6}
+  .licnote{margin-top:18px; padding:13px 16px; border-radius:14px;
+    border:1px solid var(--line); border-inline-start:3px solid var(--gold);
+    background:var(--surface-t); font-size:14px; line-height:1.75}
+  .licnote b{color:var(--gold)}
+
+  /* ——— حقائق الخصوصية ——— */
+  .facts{display:grid; gap:12px; margin-top:34px}
+  .fact{display:flex; gap:13px; align-items:flex-start; background:var(--surface-t);
+    border:1px solid var(--line); border-radius:14px; padding:17px 20px; min-width:0}
+  .fact svg{flex:0 0 auto; margin-top:4px}
+  .fact b{font-weight:700}
+  .fact span{color:var(--muted); font-size:14px; display:block}
+
+  /* ——— قريبًا ——— */
+  .soon{background:var(--surface-2t); border:1px solid var(--line); border-radius:16px; padding:24px; margin-top:30px}
+  .soon h3{font-size:16.5px; font-weight:700; margin-bottom:12px}
+  .soon li{display:flex; gap:10px; color:var(--muted); font-size:14px; padding-block:5px}
+  .soon .tag{flex:0 0 auto; font-size:11.5px; font-weight:700;
+    color:var(--gold); border:1px solid rgba(201,162,39,.35); border-radius:999px; padding:1px 9px; height:22px; line-height:20px}
+
+  /* ——— تنزيل ——— */
+  .dl{display:grid; gap:14px; margin-top:34px}
+  .dlcard{background:var(--surface-t); border:1px solid var(--line); border-radius:16px; padding:24px; min-width:0}
+  .dlcard.live{border-color:rgba(225,82,62,.5)}
+  .dlcard h3{font-size:17px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:9px; flex-wrap:wrap}
+  .pill{font-size:11.5px; font-weight:700; border-radius:999px; padding:2px 10px}
+  .pill-live{background:rgba(95,168,107,.15); color:var(--ok); border:1px solid rgba(95,168,107,.4)}
+  .pill-soon{background:rgba(201,162,39,.12); color:var(--gold); border:1px solid rgba(201,162,39,.35)}
+  .dlcard p{color:var(--muted); font-size:14px; margin-bottom:16px}
+  .dlcard ol{margin:0 0 16px; padding-inline-start:20px; color:var(--muted); font-size:13.5px}
+  .dlcard ol li{padding-block:3px}
+
+  /* ——— تواصل ——— */
+  .contact{background:linear-gradient(135deg, rgba(225,82,62,.12), rgba(201,162,39,.08));
+    border:1px solid rgba(225,82,62,.3); border-radius:20px; padding:40px 32px; margin-top:34px}
+  .contact h3{font-size:22px; font-weight:900; margin-bottom:10px}
+  .contact p{color:var(--muted); max-width:52ch}
+  .mail{display:inline-flex; align-items:center; gap:10px; margin-top:20px; background:rgba(20,16,15,.75);
+    border:1px solid var(--line); border-radius:12px; padding:12px 18px; font-weight:700}
+  .mail code{font-family:var(--font); font-weight:400; user-select:all}
+  .copy{background:none; border:1px solid var(--line); color:var(--muted); border-radius:8px;
+    padding:4px 11px; font-size:12.5px; font-family:var(--font); cursor:pointer}
+  .copy:hover{color:var(--papyrus); border-color:var(--gold)}
+  .copy:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+
+  footer .wrap{padding-block:clamp(26px,6vw,34px); color:var(--muted); font-size:clamp(12.5px,3.2vw,13px);
+    display:flex; flex-wrap:wrap; gap:14px 26px; align-items:center; justify-content:space-between}
+  footer a{color:var(--muted); text-decoration:none}
+  footer a:hover{color:var(--papyrus); text-decoration:underline}
+  .legal{display:flex; flex-wrap:wrap; gap:16px}
+  .legal a{padding-block:6px}
+  /* على الشاشات الضيقة الروابط الأربعة كانت بتتلخبط في سطرين غير مستويين —
+     شكل غير مقصود. بقت شبكة عمودين متساويين، وكله في النص. */
+  @media (max-width:640px){
+    footer .wrap{flex-direction:column; text-align:center; gap:16px}
+    .legal{display:grid; grid-template-columns:repeat(2,auto); justify-content:center;
+      gap:2px clamp(16px,6vw,30px)}
+    .legal a{padding-block:9px}
+  }
+</style>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="logo">
+      <img src="logo.png" alt="" width="38" height="39">
+      <span class="t-ar">رع شات</span><span class="t-en">Raa Chat</span>
+    </div>
+    <!-- قايمتان منفصلتان مش قايمة واحدة بنصّين: كل لغة أقسامها علامات مختلفة
+         (`features` و`features-en`) عشان الروابط ما تنقلش لقسم مخفي. -->
+    <nav class="topnav t-ar">
+      <a href="#top">الرئيسية</a>
+      <a href="#features">الميزات</a>
+      <a href="#how">طريقة التشغيل</a>
+      <a href="#ads">للمعلنين</a>
+      <a href="#privacy">الخصوصية</a>
+      <a href="#download">التنزيل</a>
+      <a href="#contact">اتصل بنا</a>
+    </nav>
+    <nav class="topnav t-en">
+      <a href="#top-en">Home</a>
+      <a href="#features-en">Features</a>
+      <a href="#how-en">Getting started</a>
+      <a href="#ads-en">Advertise</a>
+      <a href="#privacy-en">Privacy</a>
+      <a href="#download-en">Download</a>
+      <a href="#contact-en">Contact</a>
+    </nav>
+    <button class="langbtn" type="button" id="lang" aria-label="تبديل اللغة / Switch language">
+      <span class="t-ar">English</span><span class="t-en">العربية</span>
+    </button>
+    <a class="btn btn-main" href="https://app.raachateg.com">
+      <span class="t-ar">ابدأ دلوقتي</span><span class="t-en">Open the app</span>
+    </a>
+  </div>
+</div>
+
+<!-- ============ العربية ============ -->
+<div id="ar">
+
+<div class="hero" id="top">
+  <div class="wrap">
+    <img class="herologo" src="logo.png" alt="لوجو رع شات — عين حورس" width="136" height="140">
+    <span class="eyebrow">تطبيق مصري ١٠٠٪</span>
+    <h1>شات مصري <em>بروح فرعونية</em>
+      <span class="line2">كل وسائل التواصل في مكان واحد…</span>
+    </h1>
+    <p class="lede">رسائل ومكالمات صوت وفيديو، جروبات وقنوات، غرف صوتية، ستوري، واستطلاعات — بواجهة عربية بالكامل وملصقات فرعونية.<br>
+      <b>بهوية مصرية أصيلة، تجمع عراقة الماضي وتكنولوجيا المستقبل.</b></p>
+    <div class="ctas">
+      <a class="btn btn-main" href="https://app.raachateg.com">افتح من المتصفح</a>
+      <a class="btn btn-line" href="#download">نزّل نسخة أندرويد</a>
+    </div>
+    <p class="hint">مفيش تثبيت لازم — التطبيق بيفتح من المتصفح وتقدر تحفظه على شاشتك الرئيسية.</p>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="showcase">
+      <div>
+        <div class="kicker">شكله جوّه</div>
+        <h2>دي لقطة من التطبيق نفسه</h2>
+        <p class="sub">مش رسمة تعريفية — دي الشاشة اللي بتفتح عليها فعلًا.</p>
+        <ul class="showlist">
+          <li><span class="dot"></span><span><b>شريط القصص فوق</b> — دايرة لكل حساب، والحلقة الملوّنة معناها عنده حاجة لسه ما اتشافتش.</span></li>
+          <li><span class="dot"></span><span><b>فلاتر المحادثات</b> — الكل · غير المقروء · الخاصة · الجروبات · القنوات، عشان توصل لللي بتدوّر عليه بضغطة.</span></li>
+          <li><span class="dot"></span><span><b>عدّاد غير المقروء</b> جنب كل محادثة، والاسم بيبقى بولد لحد ما تفتحها.</span></li>
+          <li><span class="dot"></span><span><b>والبانر اللي في النص</b> ده مكان إعلان حقيقي — واحد من ستة مواضع معروضة للمعلنين تحت.</span></li>
+        </ul>
+      </div>
+      <figure class="shot">
+        <img src="app-chats.png" alt="شاشة الدردشات في رع شات: شريط القصص، فلاتر، وقائمة المحادثات" width="780" height="1452" loading="lazy">
+        <figcaption>شاشة الدردشات — من بناء التطبيق ببيانات تجريبية</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="kicker">الميزات</div>
+    <h2>اللي شغّال في التطبيق فعلًا</h2>
+    <p class="sub">كل حاجة مكتوبة تحت موجودة ومتجرَّبة. واللي لسه بيتجهّز مكتوب في آخر القسم بصراحة.</p>
+
+    <div class="grid g3">
+      <div class="card"><div class="ico">💬</div><h3>رسائل كاملة</h3>
+        <p>نص وصوت ومرفقات، تعديل وحذف، ردود مقتبسة، تفاعلات، إعادة توجيه، وتمييز رسائل بنجمة. وعلامات التسليم تلاتة: اتبعتت · وصلت · اتقرت.</p></div>
+      <div class="card"><div class="ico">📞</div><h3>مكالمات صوت وفيديو</h3>
+        <p>مكالمات مباشرة بين الأجهزة، متجرَّبة بين جهازين على شبكتين مختلفتين. والصوت مابيتسجّلش عندنا.</p></div>
+      <div class="card"><div class="ico">👥</div><h3>جروبات وقنوات</h3>
+        <p><b>الجروب مفيهوش حد لعدد الأعضاء</b> — تضمّ اللي انت عايزه. بأدوار ومشرفين، عام أو خاص مع اكتشاف الجروبات. والقنوات بثّ: المالك ينشر والمشتركون يقروا ويتفاعلوا.</p></div>
+      <div class="card"><div class="ico">🎙️</div><h3>غرف صوتية</h3>
+        <p>غرف حوار <b>لحد ٥٠ واحد في نفس الوقت</b>، بهوية مؤقتة للغرفة لوحدها بتختفي أول ما تخرج. واسم الغرفة بيمرّ على فلتر المحتوى زي أي اسم ظاهر للناس.</p></div>
+      <div class="card"><div class="ico">⏱️</div><h3>ستوري واستطلاعات</h3>
+        <p>ستوري ٢٤ ساعة مجمّعة لكل حساب، واستطلاعات جوه المحادثة — وصاحب الاستطلاع يقرر الأصوات تبان للأعضاء ولا أرقام بس.</p></div>
+      <div class="card"><div class="ico"><svg class="eye" viewBox="0 0 32 20" aria-hidden="true"><path d="M1 10C8-1 24-1 31 10 24 21 8 21 1 10Z"/><circle cx="16" cy="10" r="3.4"/></svg></div><h3>ملصقات فرعونية</h3>
+        <p>٢٥ ملصقًا مرسومًا مخصوص: أنوبيس وأبو الهول وعين حورس وكليوباترا ونفرتيتي والأهرام والفلوكة والفانوس وغيرها.</p></div>
+      <div class="card"><div class="ico">🤝</div><h3>الأصدقاء</h3>
+        <p>بنطابق جهات اتصالك مع المسجّلين عشان تلاقي معارفك. <b>والأرقام مابتتخزّنش عندنا ولا بتتسجّل في اللوج</b> — مطابقة وقتها وخلاص.</p></div>
+      <div class="card"><div class="ico">🔤</div><h3>ترجمة سريعة</h3>
+        <p>ترجمة فورية لعبارات الكلام اليومي بين العربي والإنجليزي والفرنسي، شغّالة من غير إنترنت — قاموس جوه التطبيق.</p></div>
+      <div class="card"><div class="ico">🎨</div><h3>الشكل على مزاجك</h3>
+        <p>حجم الخط، ولون فقاعة الكلام، وخلفية الشات، ووضع ليلي ونهاري — وكله بيكبر مع النص عشان مايتقصّش على الشاشات الصغيرة.</p></div>
+    </div>
+
+    <div class="soon">
+      <h3>ولسه بيتجهّز — وده بالظبط وضعه النهاردة</h3>
+      <ul>
+        <li><span class="tag">قريبًا</span><span><b>المحفظة ودفع الفواتير:</b> الشاشة موجودة والشحن مقفول لحد ما نتوصّل بشريك دفع مرخّص. ومكتوب «قريبًا» جوه التطبيق نفسه — مفيش حد بيدخل ويرتدّ في آخر خطوة.</span></li>
+        <li><span class="tag">قريبًا</span><span><b>التسجيل برقم الموبايل:</b> دلوقتي التسجيل <b>بالإيميل</b>، لأن الرسائل القصيرة محتاجة تعاقد مع مجمّع مصري.</span></li>
+        <li><span class="tag">قريبًا</span><span><b>التطبيق على المتاجر:</b> لسه مش منشور على جوجل بلاي ولا آب ستور، ونسخة الآيفون لسه مابدأتش.</span></li>
+        <li><span class="tag">قريبًا</span><span><b>ترجمة الجمل الطويلة:</b> القاموس شغّال، والترجمة الآلية الكاملة لسه مش مفعّلة.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="kicker">طريقة التشغيل</div>
+    <h2>تبدأ في أقل من دقيقة</h2>
+    <p class="sub">مفيش تثبيت ولا بطاقة ولا رقم موبايل — إيميل وكلمة سر وخلاص.</p>
+    <div class="steps">
+      <div class="step"><div>
+        <h3>افتح التطبيق من المتصفح</h3>
+        <p>من الموبايل أو الكمبيوتر: <a href="https://app.raachateg.com">app.raachateg.com</a>. ولو على الموبايل، من قايمة المتصفح اختار «إضافة إلى الشاشة الرئيسية» فيبقى زي أي تطبيق بأيقونته.</p>
+      </div></div>
+      <div class="step"><div>
+        <h3>اعمل حساب بإيميلك</h3>
+        <p>اسمك وإيميلك وكلمة سر وتاريخ ميلادك، وبيوصلك كود تأكيد على الإيميل. التطبيق <b>للبالغين ١٨ سنة وفوق</b>.</p>
+      </div></div>
+      <div class="step"><div>
+        <h3>ابدأ محادثة أو انضم لجروب</h3>
+        <p>اسمح بقراءة جهات الاتصال عشان تلاقي معارفك المسجّلين، أو افتح «اكتشف جروبات» وانضم لجروب عام، أو اعمل جروبك وابعت رابطه.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<section id="ads">
+  <div class="wrap">
+    <div class="kicker">للمعلنين</div>
+    <h2>أعلن جوه رع شات</h2>
+    <p class="sub">ستة مواضع للإعلان، البيع بالشهر، وكل موضع له عدد أماكن محدود — يعني إعلانك بيدور مع عدد معروف من المعلنين مش مع عدد مفتوح. وكل حملة بتمرّ على <b>مراجعة قبل النشر</b>.</p>
+
+    <p class="licnote"><b>مرخَّص من المجلس الأعلى لتنظيم الإعلام.</b> قرار المجلس بتاريخ ١٣ يوليو ٢٠٢٦ بالموافقة على منح الترخيص لمدة <b>خمس سنوات</b> تبدأ من تاريخ القرار. صورة الترخيص متاحة للمعلنين عند الطلب.</p>
+
+    <div class="tablewrap">
+      <table>
+        <caption>المواضع والمقاسات الفعلية في التطبيق. الأسعار بالشهر وبتُحدَّد في عرض السعر.</caption>
+        <thead><tr><th scope="col">الموضع</th><th scope="col">المقاس</th><th scope="col">الأماكن</th><th scope="col">مكانه في التطبيق</th></tr></thead>
+        <tbody>
+          <tr><td><b>نافذة كاملة عند الدخول</b></td><td class="num" data-label="المقاس">١٠٨٠ × ١٩٢٠</td><td class="num" data-label="الأماكن">٤</td><td data-label="مكانه في التطبيق">شاشة كاملة بنسبة ٩:١٦<small>زر الإغلاق بيظهر متأخر</small></td></tr>
+          <tr><td><b>إعلان بين الستوريز</b></td><td class="num" data-label="المقاس">١٠٨٠ × ١٩٢٠</td><td class="num" data-label="الأماكن">٢</td><td data-label="مكانه في التطبيق">ستوري ممول في آخر شريط القصص<small>بحلقة ذهبية وشارة «إعلان» — مش وسط ستوريز الناس</small></td></tr>
+          <tr><td><b>بانر الدردشات</b></td><td class="num" data-label="المقاس">١٢٠٠ × ٣٠٠</td><td class="num" data-label="الأماكن">٣</td><td data-label="مكانه في التطبيق">أعلى قائمة الدردشات<small>الشاشة اللي بيفتح عليها المستخدم</small></td></tr>
+          <tr><td><b>بانر الخدمات</b></td><td class="num" data-label="المقاس">١٢٠٠ × ٣٠٠</td><td class="num" data-label="الأماكن">٣</td><td data-label="مكانه في التطبيق">أعلى شاشة الخدمات والمحفظة</td></tr>
+          <tr><td><b>بانر الغرف الصوتية</b></td><td class="num" data-label="المقاس">١٢٠٠ × ٣٠٠</td><td class="num" data-label="الأماكن">٣</td><td data-label="مكانه في التطبيق">أعلى قائمة الغرف</td></tr>
+          <tr><td><b>قائمة العروض</b></td><td class="num" data-label="المقاس">١٢٠٠ × ٣٠٠</td><td class="num" data-label="الأماكن">٦</td><td data-label="مكانه في التطبيق">شاشة «العروض»<small>المستخدم داخلها بإرادته — فنيّته أعلى</small></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid g3">
+      <div class="card"><h3>صورة لكل موضع بمقاسه</h3>
+        <p>مقاسات المواضع مختلفة، فالصورة الواحدة بتتقصّ. فبترفع صورة مخصوصة لكل موضع، ولوحة الإدارة بتحذّرك قبل الاعتماد لو نسبة صورتك هتتقصّ.</p></div>
+      <div class="card"><h3>إحصاءات ظهور ونقر</h3>
+        <p>كل ظهور وكل نقرة متسجّلة لكل موضع على حدة — فتعرف أي موضع بيجيب نتيجة وأيهم لأ قبل التجديد.</p></div>
+      <div class="card"><h3>مفيش استهداف بسلوك المستخدم</h3>
+        <p>الإعلانات أول-طرف، ومفيش أي أداة تتبّع من شركات تانية جوه التطبيق. الكتالوج واحد لكل المستخدمين.</p></div>
+      <div class="card"><h3>الصور من رفعنا بس</h3>
+        <p>الصورة بتترفع عندنا ومابنقبلش رابطًا خارجيًا — عشان المراجعة يبقى لها معنى، وعشان عنوان المستخدم مايوصلش لجهة تانية.</p></div>
+      <div class="card"><h3>الأسعار شاملة الضريبة</h3>
+        <p>السعر المتفق عليه هو الإجمالي، والضريبة <b>مستخرجة منه</b> مش مزوّدة عليه — فمفيش مبلغ مفاجئ في آخر الفاتورة.</p></div>
+      <div class="card"><h3>مدد جاهزة وأكواد هدايا</h3>
+        <p>شهر · ٣ شهور · ٦ شهور · سنة، والحجز بشهور كاملة عشان الفاتورة تبقى رقمًا واضحًا. وفيه أكواد هدايا للعروض الترويجية.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <div class="kicker">الخصوصية والأمان</div>
+    <h2>اللي بنعمله فعلًا — ومش بنوعد بأكتر منه</h2>
+    <p class="sub">الحاجات دي كلها قابلة للتحقق من داخل التطبيق ومن صفحاتنا القانونية.</p>
+    <div class="facts">
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>مفيش أدوات تتبّع ولا إعلانات من شركات تانية.</b><span>ولا أداة تحليلات، ولا SDK إعلانات. مفيش حد تاني بيتفرّج على استخدامك.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>جهات اتصالك مابتتخزّنش.</b><span>بنطابقها لحظة ما تطلب، وبعدها مفيش أرقام محفوظة عندنا ولا مكتوبة في أي سجل.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>صوت المكالمات والغرف مابيتسجّلش.</b><span>لا تسجيل ولا تخزين لأي مكالمة أو غرفة صوتية.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>تحذف حسابك وتصدّر بياناتك بنفسك.</b><span>من جوه التطبيق — حذف نهائي بتأكيد، وتصدير لحسابك ورسائلك ومرفقاتك.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>حذف تلقائي بمدد معلنة.</b><span>أكواد التحقق والستوري المنتهية والجلسات القديمة بتتمسح لوحدها، والمدد مكتوبة في سياسة الخصوصية.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>حظر وإبلاغ، وفلتر محتوى، ومسار خاص لحماية الأطفال.</b><span>بلاغ «إيذاء طفل» له طابور منفصل وأعلى أولوية، والإجراء إغلاق نهائي وتبليغ الجهات المختصة.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l6.5 3v4.5c0 3.6-2.6 6.4-6.5 7.5-3.9-1.1-6.5-3.9-6.5-7.5V5.5z" fill="none" stroke="#C9A227" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <div><b>الاتصال كله مشفّر في النقل (HTTPS و WSS).</b><span>ومهم نكون صريحين: <b>مفيش تشفير من طرف إلى طرف</b> لحد دلوقتي — يعني الرسائل متخزّنة على السيرفر بتاعنا. أي حد بيوعدك بغير كده عن تطبيقنا بيقول كلامًا مش صح.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="kicker">التنزيل</div>
+    <h2>تشتغل من المتصفح، أو تنزّل نسخة أندرويد</h2>
+    <p class="sub">التطبيق لسه مش منشور على المتاجر — فمكتوب تحت بالظبط إيه المتاح النهاردة وإيه اللي لسه جايّ.</p>
+    <div class="dl g2 grid">
+      <div class="dlcard live">
+        <h3>من المتصفح <span class="pill pill-live">متاح الآن</span></h3>
+        <p>أسرع طريقة، وشغّالة على الأندرويد والآيفون والكمبيوتر. وتقدر تحفظه على الشاشة الرئيسية فيفتح بأيقونته زي أي تطبيق.</p>
+        <a class="btn btn-main" href="https://app.raachateg.com">افتح رع شات</a>
+      </div>
+      <div class="dlcard">
+        <h3>أندرويد (APK) <span class="pill pill-soon">نسخة تجربة</span></h3>
+        <p>نسخة للتجربة موقّعة بمفتاح تطوير — مش نسخة متجر. أندرويد هيسألك تسمح بالتثبيت من هذا المصدر، وده طبيعي لأي ملف برّه المتجر.</p>
+        <ol><li>نزّل الملف من الزرار تحت.</li><li>وافق على «السماح بالتثبيت من هذا المصدر» لما الجهاز يسأل.</li><li>التحديثات مش تلقائية هنا — كل نسخة جديدة بتتنزّل وتتثبّت بإيدك.</li></ol>
+        <a class="btn btn-line" href="https://github.com/Dabouelmagd/raachat-new/releases/latest/download/raachat.apk">نزّل ملف APK</a>
+      </div>
+      <div class="dlcard">
+        <h3>آيفون وآيباد <span class="pill pill-soon">قريبًا</span></h3>
+        <p>نسخة iOS لسه مابدأتش، والتطبيق مش على آب ستور. لحد ما تنزل، افتح رع شات من سفاري وحفظه على الشاشة الرئيسية — بيشتغل كامل.</p>
+        <span class="btn btn-off" aria-disabled="true">آب ستور — قريبًا</span>
+      </div>
+      <div class="dlcard">
+        <h3>جوجل بلاي <span class="pill pill-soon">قريبًا</span></h3>
+        <p>النشر على بلاي محتاج نسخة إصدار موقّعة ومراجعة المتجر. لما تنزل، التحديثات هتبقى تلقائية.</p>
+        <span class="btn btn-off" aria-disabled="true">جوجل بلاي — قريبًا</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <div class="contact">
+      <h3>عايز تعلن، أو عندك سؤال؟</h3>
+      <p>للإعلانات وعروض الأسعار، أو أي استفسار عن التطبيق وخصوصيته — ابعت لنا على الإيميل ده.</p>
+      <div class="mail"><code>info@datalifeai.com</code>
+        <button class="copy" type="button" data-copy="info@datalifeai.com">انسخ</button></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>رع شات — من <b>داتا لايف لخدمات الذكاء الصناعي</b>
+      <span class="lic">مرخَّص من المجلس الأعلى لتنظيم الإعلام — قرار المجلس بتاريخ ١٣ يوليو ٢٠٢٦، ترخيص لمدة خمس سنوات.</span>
+    </div>
+    <nav class="legal">
+      <a href="https://app.raachateg.com/legal/privacy.html">سياسة الخصوصية</a>
+      <a href="https://app.raachateg.com/legal/terms.html">الشروط والأحكام</a>
+      <a href="https://app.raachateg.com/legal/community.html">قواعد المجتمع</a>
+      <a href="https://app.raachateg.com/legal/data-requests.html">طلبات البيانات</a>
+    </nav>
+  </div>
+</footer>
+</div>
+
+<!-- ============ English ============ -->
+<div id="en" lang="en" hidden>
+
+<div class="hero" id="top-en">
+  <div class="wrap">
+    <img class="herologo" src="logo.png" alt="Raa Chat logo — the Eye of Horus" width="136" height="140">
+    <span class="eyebrow">100% EGYPTIAN APP</span>
+    <h1>An Egyptian chat with a <em>pharaonic soul</em>
+      <span class="line2">Every way to stay in touch, in one place…</span>
+    </h1>
+    <p class="lede">Messages, voice and video calls, groups and channels, audio rooms, stories and polls — with pharaonic stickers drawn for it.<br>
+      <b>An Egyptian identity that carries the heritage of the past and the technology of the future.</b></p>
+    <div class="ctas">
+      <a class="btn btn-main" href="https://app.raachateg.com">Open in your browser</a>
+      <a class="btn btn-line" href="#download">Get the Android build</a>
+    </div>
+    <p class="hint">Nothing to install — it opens in the browser, and you can add it to your home screen. The app's own interface is in Arabic.</p>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="showcase">
+      <div>
+        <div class="kicker">A LOOK INSIDE</div>
+        <h2>This is a shot of the app itself</h2>
+        <p class="sub">Not an illustration — this is the screen it actually opens on.</p>
+        <ul class="showlist">
+          <li><span class="dot"></span><span><b>The stories bar</b> — one circle per account; a colored ring means they have something you haven't seen.</span></li>
+          <li><span class="dot"></span><span><b>Chat filters</b> — all, unread, private, groups, channels, so you reach what you want in one tap.</span></li>
+          <li><span class="dot"></span><span><b>An unread counter</b> beside each conversation, with the name in bold until you open it.</span></li>
+          <li><span class="dot"></span><span><b>The banner in the middle</b> is a real ad slot — one of the six placements listed below.</span></li>
+        </ul>
+      </div>
+      <figure class="shot">
+        <img src="app-chats.png" alt="The Raa Chat chats screen: stories bar, filters and the conversation list" width="780" height="1452" loading="lazy">
+        <figcaption>The chats screen — from the app build, with sample data</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="features-en">
+  <div class="wrap">
+    <div class="kicker">FEATURES</div>
+    <h2>What the app actually does today</h2>
+    <p class="sub">Everything listed here is built and tested. What is still being prepared is stated plainly at the end of this section.</p>
+
+    <div class="grid g3">
+      <div class="card"><div class="ico">💬</div><h3>Full messaging</h3>
+        <p>Text, voice notes and attachments; edit and delete; quoted replies, reactions, forwarding and starred messages. Three delivery states: sent · delivered · read.</p></div>
+      <div class="card"><div class="ico">📞</div><h3>Voice and video calls</h3>
+        <p>Direct device-to-device calls, tested between two phones on two different networks. Call audio is never recorded on our side.</p></div>
+      <div class="card"><div class="ico">👥</div><h3>Groups and channels</h3>
+        <p><b>Groups have no member limit.</b> Roles and admins, public or private, with group discovery. Channels are broadcast: the owner posts, subscribers read and react.</p></div>
+      <div class="card"><div class="ico">🎙️</div><h3>Audio rooms</h3>
+        <p>Live rooms for <b>up to 50 people at once</b>, with a temporary identity that exists only inside the room and disappears when you leave.</p></div>
+      <div class="card"><div class="ico">⏱️</div><h3>Stories and polls</h3>
+        <p>24-hour stories grouped per account, and polls inside any conversation — the author decides whether voters are shown by name or only counted.</p></div>
+      <div class="card"><div class="ico"><svg class="eye" viewBox="0 0 32 20" aria-hidden="true"><path d="M1 10C8-1 24-1 31 10 24 21 8 21 1 10Z"/><circle cx="16" cy="10" r="3.4"/></svg></div><h3>Pharaonic stickers</h3>
+        <p>25 stickers drawn for this app: Anubis, the Sphinx, the Eye of Horus, Cleopatra, Nefertiti, the pyramids, a felucca, a fanous and more.</p></div>
+      <div class="card"><div class="ico">🤝</div><h3>Find people you know</h3>
+        <p>We match your contacts against registered users. <b>The numbers are never stored on our side and never written to any log</b> — matched in the moment, then gone.</p></div>
+      <div class="card"><div class="ico">🔤</div><h3>Quick translation</h3>
+        <p>Instant translation of everyday phrases between Arabic, English and French, working offline from a dictionary inside the app.</p></div>
+      <div class="card"><div class="ico">🎨</div><h3>Make it yours</h3>
+        <p>Text size, bubble color, chat background, and a light or dark mode — and the layout grows with the text instead of clipping it on small screens.</p></div>
+    </div>
+
+    <div class="soon">
+      <h3>Still being prepared — stated exactly as it stands</h3>
+      <ul>
+        <li><span class="tag">SOON</span><span><b>Wallet and bill payments:</b> the screen exists and top-up is closed until we connect a licensed payment partner. The app itself says "soon", so nobody walks through the flow and gets turned away at the last step.</span></li>
+        <li><span class="tag">SOON</span><span><b>Sign-up by mobile number:</b> registration is <b>by email</b> for now; SMS needs a contract with an Egyptian aggregator.</span></li>
+        <li><span class="tag">SOON</span><span><b>App stores:</b> not published on Google Play or the App Store yet, and the iOS build has not started.</span></li>
+        <li><span class="tag">SOON</span><span><b>Full sentence translation:</b> the phrase dictionary works; machine translation is not switched on yet.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="how-en">
+  <div class="wrap">
+    <div class="kicker">GETTING STARTED</div>
+    <h2>You are in within a minute</h2>
+    <p class="sub">No install, no card, no phone number — an email and a password.</p>
+    <div class="steps">
+      <div class="step"><div><h3>Open it in your browser</h3>
+        <p>On a phone or a computer: <a href="https://app.raachateg.com">app.raachateg.com</a>. On a phone, choose "Add to Home Screen" from the browser menu and it behaves like any installed app.</p></div></div>
+      <div class="step"><div><h3>Create an account with your email</h3>
+        <p>Your name, email, a password and your date of birth; a confirmation code arrives by email. The app is <b>for adults aged 18 and over</b>.</p></div></div>
+      <div class="step"><div><h3>Start a chat or join a group</h3>
+        <p>Allow contact matching to find people you already know, open "Discover groups" to join a public one, or create your own group and share its link.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="ads-en">
+  <div class="wrap">
+    <div class="kicker">ADVERTISE</div>
+    <h2>Advertise inside Raa Chat</h2>
+    <p class="sub">Six placements, sold by the month, each with a fixed number of slots — so your ad rotates among a known number of advertisers, not an open set. Every campaign goes through <b>review before it runs</b>.</p>
+
+    <p class="licnote"><b>Licensed by Egypt's Supreme Council for Media Regulation.</b> The Council decided on 13 July 2026 to grant the licence for <b>five years</b> from the date of that decision. A copy of the licence is available to advertisers on request.</p>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The real placements and sizes in the app. Pricing is monthly and is quoted on request.</caption>
+        <thead><tr><th scope="col">Placement</th><th scope="col">Size</th><th scope="col">Slots</th><th scope="col">Where it appears</th></tr></thead>
+        <tbody>
+          <tr><td><b>Full-screen on open</b></td><td class="num" data-label="Size">1080 × 1920</td><td class="num" data-label="Slots">4</td><td data-label="Where it appears">Full 9:16 screen<small>the close button appears after a delay</small></td></tr>
+          <tr><td><b>Sponsored story</b></td><td class="num" data-label="Size">1080 × 1920</td><td class="num" data-label="Slots">2</td><td data-label="Where it appears">Last circle in the stories bar<small>gold ring and an "Ad" badge — never mixed in among people's own stories</small></td></tr>
+          <tr><td><b>Chats banner</b></td><td class="num" data-label="Size">1200 × 300</td><td class="num" data-label="Slots">3</td><td data-label="Where it appears">Top of the chat list<small>the screen the app opens on</small></td></tr>
+          <tr><td><b>Services banner</b></td><td class="num" data-label="Size">1200 × 300</td><td class="num" data-label="Slots">3</td><td data-label="Where it appears">Top of the services and wallet screen</td></tr>
+          <tr><td><b>Audio rooms banner</b></td><td class="num" data-label="Size">1200 × 300</td><td class="num" data-label="Slots">3</td><td data-label="Where it appears">Top of the rooms list</td></tr>
+          <tr><td><b>Offers feed</b></td><td class="num" data-label="Size">1200 × 300</td><td class="num" data-label="Slots">6</td><td data-label="Where it appears">The "Offers" screen<small>people open it deliberately — higher intent</small></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid g3">
+      <div class="card"><h3>One image per placement</h3>
+        <p>The placements have different proportions, so a single image would be cropped. You upload an image per placement, and the admin panel warns you before approval if yours will be cut.</p></div>
+      <div class="card"><h3>Impressions and clicks</h3>
+        <p>Every impression and click is recorded per placement, so you know which ones earn their keep before you renew.</p></div>
+      <div class="card"><h3>No behavioral targeting</h3>
+        <p>Ads are first-party, and there is no third-party tracking SDK anywhere in the app. Every user sees the same catalog.</p></div>
+      <div class="card"><h3>Images are hosted by us</h3>
+        <p>Creative is uploaded to us; external image URLs are rejected — so that review means something, and so no user's address is handed to a third party.</p></div>
+      <div class="card"><h3>Prices include VAT</h3>
+        <p>The agreed price is the total: VAT is <b>extracted from it</b>, never added on top — no surprise line at the bottom of the invoice.</p></div>
+      <div class="card"><h3>Set durations and gift codes</h3>
+        <p>One, three, six or twelve months, booked in whole months so the invoice is a clean number. Gift codes are available for promotions.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy-en">
+  <div class="wrap">
+    <div class="kicker">PRIVACY AND SAFETY</div>
+    <h2>What we actually do — and nothing more than that</h2>
+    <p class="sub">All of this is verifiable from inside the app and from our published legal pages.</p>
+    <div class="facts">
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>No trackers and no third-party ads.</b><span>No analytics tool, no ad SDK. Nobody else is watching how you use it.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>Your contacts are not stored.</b><span>They are matched the moment you ask, and no number is kept on our side or written to any log.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>Call and room audio is never recorded.</b><span>No recording and no storage of any call or audio room.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>You can delete your account and export your data yourself.</b><span>From inside the app — permanent deletion with confirmation, and an export of your account, messages and attachments.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>Automatic deletion on published schedules.</b><span>Verification codes, expired stories and old sessions are swept automatically, and the retention periods are written in the privacy policy.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#5FA86B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>Blocking, reporting, a content filter, and a dedicated child-safety path.</b><span>A child-safety report goes to its own queue at the highest priority; the action is permanent closure and a report to the competent authorities.</span></div></div>
+      <div class="fact"><svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l6.5 3v4.5c0 3.6-2.6 6.4-6.5 7.5-3.9-1.1-6.5-3.9-6.5-7.5V5.5z" fill="none" stroke="#C9A227" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <div><b>Everything is encrypted in transit (HTTPS and WSS).</b><span>And to be straight with you: <b>there is no end-to-end encryption</b> yet — messages are stored on our server. Anyone telling you otherwise about this app is wrong.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="download-en">
+  <div class="wrap">
+    <div class="kicker">DOWNLOAD</div>
+    <h2>Use it in the browser, or take the Android build</h2>
+    <p class="sub">The app is not on the stores yet — so here is exactly what is available today and what is still coming.</p>
+    <div class="dl g2 grid">
+      <div class="dlcard live">
+        <h3>In the browser <span class="pill pill-live">Available now</span></h3>
+        <p>The fastest route, and it works on Android, iPhone and desktop. Add it to your home screen and it opens with its own icon like any app.</p>
+        <a class="btn btn-main" href="https://app.raachateg.com">Open Raa Chat</a>
+      </div>
+      <div class="dlcard">
+        <h3>Android (APK) <span class="pill pill-soon">Test build</span></h3>
+        <p>A test build signed with a development key — not a store release. Android will ask you to allow installation from this source, which is normal for any file outside the store.</p>
+        <ol><li>Download the file from the button below.</li><li>Allow installation from this source when the phone asks.</li><li>Updates are not automatic here — each new build is downloaded and installed by hand.</li></ol>
+        <a class="btn btn-line" href="https://github.com/Dabouelmagd/raachat-new/releases/latest/download/raachat.apk">Download the APK</a>
+      </div>
+      <div class="dlcard">
+        <h3>iPhone and iPad <span class="pill pill-soon">Soon</span></h3>
+        <p>The iOS build has not started and the app is not on the App Store. Until it is, open Raa Chat in Safari and add it to your home screen — it works in full.</p>
+        <span class="btn btn-off" aria-disabled="true">App Store — soon</span>
+      </div>
+      <div class="dlcard">
+        <h3>Google Play <span class="pill pill-soon">Soon</span></h3>
+        <p>Publishing on Play needs a signed release build and store review. Once it is there, updates become automatic.</p>
+        <span class="btn btn-off" aria-disabled="true">Google Play — soon</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact-en">
+  <div class="wrap">
+    <div class="contact">
+      <h3>Want to advertise, or have a question?</h3>
+      <p>For advertising and quotes, or any question about the app and its privacy — write to us at this address.</p>
+      <div class="mail"><code>info@datalifeai.com</code>
+        <button class="copy" type="button" data-copy="info@datalifeai.com">Copy</button></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>Raa Chat — by <b>Data Life for Artificial Intelligence Services</b>
+      <span class="lic">Licensed by Egypt's Supreme Council for Media Regulation — Council decision of 13 July 2026, a five-year licence.</span>
+    </div>
+    <nav class="legal">
+      <a href="https://app.raachateg.com/legal/privacy.html#en">Privacy policy</a>
+      <a href="https://app.raachateg.com/legal/terms.html#en">Terms</a>
+      <a href="https://app.raachateg.com/legal/community.html#en">Community rules</a>
+      <a href="https://app.raachateg.com/legal/data-requests.html#en">Data requests</a>
+    </nav>
+  </div>
+</footer>
+</div>
+
+<script>
+  (function () {
+    var ar = document.getElementById("ar"), en = document.getElementById("en"), btn = document.getElementById("lang");
+
+    function apply(lang) {
+      var isEn = lang === "en";
+      document.body.classList.toggle("en", isEn);
+      ar.hidden = isEn; en.hidden = !isEn;
+      try { localStorage.setItem("raachat-site-lang", lang); } catch (e) { /* تصفّح خاص — اللغة مش هتتفكر وخلاص */ }
+      window.scrollTo(0, 0);
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem("raachat-site-lang"); } catch (e) { /* تجاهل */ }
+    // مفيش اختيار محفوظ: نبدأ بالعربي إلا لو لغة المتصفح إنجليزي.
+    if (!saved) saved = (navigator.language || "").toLowerCase().indexOf("ar") === 0 ? "ar" : (navigator.language || "").toLowerCase().indexOf("en") === 0 ? "en" : "ar";
+    if (saved === "en") apply("en");
+
+    btn.addEventListener("click", function () { apply(document.body.classList.contains("en") ? "ar" : "en"); });
+
+    // زرار النسخ: لو المتصفح رفض الحافظة، نحدّد النص عشان المستخدم ينسخه بنفسه.
+    document.querySelectorAll("[data-copy]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var isEn = document.body.classList.contains("en");
+        var code = b.parentNode.querySelector("code");
+        var back = function (t) { var old = b.textContent; b.textContent = t; setTimeout(function () { b.textContent = old; }, 2000); };
+        var pick = function () {
+          try {
+            var r = document.createRange(); r.selectNodeContents(code);
+            var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+            back(isEn ? "Selected — copy it" : "محدَّد — انسخه");
+          } catch (e) { /* الإيميل ظاهر كنص على كل حال */ }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(b.getAttribute("data-copy")).then(function () { back(isEn ? "Copied ✓" : "اتنسخ ✓"); }, pick);
+        } else { pick(); }
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

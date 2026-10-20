@@ -28,8 +28,19 @@ const OLD = "kenoz.org";
 
 type Run = { code: number; out: string; conf: string; certbot: string[] };
 
+type Opts = {
+  runningDomain?: string;
+  /** رد `curl` على الموقع التعريفي — الافتراضي صفحة سليمة */
+  curlCode?: string;
+  curlBody?: string;
+  /** محتوى موقع نجنكس تاني مزروع في sites-enabled (اختبار تضارب الأسماء) */
+  otherSite?: string;
+};
+
 /** بيشغّل السكربت فعلًا. `resolve` = الأسماء اللي `getent` بيلاقيها */
-function run(env: Record<string, string>, resolve: string[], runningDomain?: string): Run {
+function run(env: Record<string, string>, resolve: string[], opts: Opts | string = {}): Run {
+  const o: Opts = typeof opts === "string" ? { runningDomain: opts } : opts;
+  const { runningDomain, curlCode = "200", curlBody = "<h1>رع شات</h1>", otherSite } = o;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rachat-nginx-"));
   const bin = path.join(dir, "bin");
   const enabled = path.join(dir, "sites-enabled");
@@ -61,6 +72,15 @@ function run(env: Record<string, string>, resolve: string[], runningDomain?: str
   stub("certbot", `for a in "$@"; do echo "$a" >> ${cbLog}; done\nexit 0`);
   // docker بيحكي عن الدومين اللي Caddy الشغّال عليه؛ بلا قيمة = مفيش حاويات
   stub("docker", runningDomain ? `echo ${runningDomain}` : "exit 1");
+  // curl الفحص الإيجابي للموقع التعريفي: بيكتب الجسم في -o وبيطبع كود الحالة
+  stub(
+    "curl",
+    `out=""
+while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift;; esac; shift; done
+[ -n "$out" ] && printf '%s' ${JSON.stringify(curlBody)} > "$out"
+printf '%s' ${JSON.stringify(curlCode)}`,
+  );
+  if (otherSite) fs.writeFileSync(path.join(enabled, "someone-else"), otherSite);
 
   const r = spawnSync("bash", [path.join(ROOT, "scripts/add-nginx-site.sh")], {
     cwd: ROOT,
@@ -111,7 +131,11 @@ describe("add-nginx-site.sh", () => {
     expect(r.conf).not.toContain(OLD);
     const d = r.certbot.filter((a) => a === "-d").length;
     expect(d).toBe(3);
-    expect(r.certbot).not.toContain("--expand");
+    // `--expand` بقى دايمًا (٢٠ أكتوبر ٢٠٢٦). كان مشروطًا بـOLD_DOMAIN، والشرط
+    // ده ضيّق: أي إضافة اسم لشهادة قايمة بتفشل في الوضع غير التفاعلي من غيره،
+    // وإضافة الدومين المجرّد للموقع التعريفي هي بالظبط الحالة دي. وهو بلا أثر
+    // لو مفيش شهادة أصلًا.
+    expect(r.certbot).toContain("--expand");
     expect(r.certbot).toContain(`app.${NEW}`);
   });
 
@@ -193,5 +217,84 @@ describe("add-nginx-site.sh", () => {
     const r = run({ DOMAIN: "" }, allNames(NEW));
     expect(r.code).not.toBe(0);
     expect(r.certbot).toEqual([]);
+  });
+
+  /**
+   * الموقع التعريفي على الدومين المجرّد.
+   *
+   * 🔴 الفرضية اللي الاختبارات دي بتحرسها: الموقع **ملفات ثابتة** ومايمرّش على
+   * Caddy. لو بلوكه خرج فيه `proxy_pass`، الطلب يروح لـCaddy الداخلي — وCaddy
+   * بيوجّه بالاسم ومايعرفش الدومين المجرّد، فالزائر ياخد صفحة التطبيق أو خطأ.
+   */
+  describe("الموقع التعريفي (الدومين المجرّد)", () => {
+    const apex = (d: string) => [...allNames(d), d];
+
+    it("الدومين المجرّد وwww بيتحلّوا: بلوك ثابت باسمين، وفي الشهادة", () => {
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, [...apex(NEW), `www.${NEW}`]);
+      expect(r.code).toBe(0);
+      const site = blocks(r.conf).find((b) => b.names.includes(NEW));
+      expect(site, "مفيش بلوك للدومين المجرّد").toBeTruthy();
+      expect(site!.names).toEqual([NEW, `www.${NEW}`]);
+      // 🔴 ثابت مش بروكسي — ده كل الفرق بينه وبين التطبيق
+      expect(site!.body).not.toContain("proxy_pass");
+      expect(site!.body).toContain("root ");
+      expect(site!.body).toContain("charset utf-8");
+      expect(r.certbot).toContain("-d");
+      expect(r.certbot).toContain(NEW);
+      expect(r.certbot).toContain(`www.${NEW}`);
+      expect(r.out).toContain("الموقع التعريفي");
+    });
+
+    it("www مالوش DNS: الموقع على الدومين المجرّد وحده، وبيقول كده", () => {
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, apex(NEW));
+      expect(r.code).toBe(0);
+      const site = blocks(r.conf).find((b) => b.names.includes(NEW));
+      expect(site!.names).toEqual([NEW]);
+      expect(r.certbot).not.toContain(`www.${NEW}`);
+      expect(r.out).toContain(`www.${NEW}`);
+    });
+
+    it("الدومين المجرّد مالوش DNS: الموقع مابيتضافش، وباقي المواقع زي ما هي", () => {
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, allNames(NEW));
+      expect(r.code).toBe(0);
+      expect(blocks(r.conf).find((b) => b.names.includes(NEW))).toBeUndefined();
+      expect(blocks(r.conf)[0].names).toEqual(allNames(NEW));
+      expect(r.certbot).not.toContain(NEW);
+    });
+
+    it("🔴 نجنكس مش قادر يقرا المجلد (403): السكربت بيفشل ويسمّي السبب", () => {
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, apex(NEW), {
+        curlCode: "403",
+      });
+      expect(r.code).not.toBe(0);
+      expect(r.out).toContain("403");
+      expect(r.out).toContain("صلاحيات");
+    });
+
+    it("🔴 ٢٠٠ بصفحة مش بتاعتنا: مرفوض", () => {
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, apex(NEW), {
+        curlBody: "<h1>Welcome to nginx</h1>",
+      });
+      expect(r.code).not.toBe(0);
+      expect(r.out).toContain("مش بتاعتنا");
+    });
+
+    it("🔴 الاسم محجوز في موقع مشروع تاني: وقوف بلا أي تعديل", () => {
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, apex(NEW), {
+        otherSite: `server {\n  server_name ${NEW};\n  root /var/www/other;\n}\n`,
+      });
+      expect(r.code).not.toBe(0);
+      expect(r.out).toContain("محجوز");
+      expect(r.certbot).toEqual([]);
+    });
+
+    it("🔴 `--expand` دايمًا — مش بس مع OLD_DOMAIN", () => {
+      // كان مشروطًا بـOLD_DOMAIN، فإضافة الدومين المجرّد لشهادة قايمة كانت
+      // هتفشل في الوضع غير التفاعلي
+      const r = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, apex(NEW));
+      expect(r.certbot).toContain("--expand");
+      const r2 = run({ DOMAIN: NEW, LETSENCRYPT_EMAIL: "a@b.com" }, allNames(NEW));
+      expect(r2.certbot).toContain("--expand");
+    });
   });
 });
