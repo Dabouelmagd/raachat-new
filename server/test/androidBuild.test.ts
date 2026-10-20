@@ -280,11 +280,23 @@ describe("إضافات Capacitor في الواجهة", () => {
     expect(m).toContain("android.permission.READ_CONTACTS");
   });
 
+  /**
+   * 🔴 الحكم هنا على ملفات **متتبَّعة في git** بس.
+   *
+   * النسخة الأولى كانت بتقرا `assets/capacitor.plugins.json` — و`.gitignore`
+   * بتاع Capacitor بيتجاهله (سطر ١٠٠). فهو موجود على جهاز فيه `cap sync`
+   * اتشغّل، و**مش موجود في نسخة CI النضيفة** → `readFileSync` بترمي →
+   * وظيفة السيرفر حمرا. وعدّى **إحدى عشرة نشرة** كده (١٩–٢٠ أكتوبر ٢٠٢٦)
+   * وإحنا بنقول «الاختبارات عدّت» من تشغيل محلي.
+   *
+   * و`capacitor.build.gradle` **متتبَّع** وبيثبّت نفس الحاجة: الإضافة
+   * مربوطة في بناء أندرويد. ومعاه `mobile/package.json` للتبعية نفسها.
+   */
   it("إضافة جهات الاتصال مسجَّلة في مشروع أندرويد", () => {
-    const plugins = fs.readFileSync(path.join(ROOT, "mobile/android/app/src/main/assets/capacitor.plugins.json"), "utf8");
-    expect(plugins).toContain("@capacitor-community/contacts");
     const gradle = fs.readFileSync(path.join(ROOT, "mobile/android/app/capacitor.build.gradle"), "utf8");
     expect(gradle).toContain("capacitor-community-contacts");
+    const pkg = fs.readFileSync(path.join(ROOT, "mobile/package.json"), "utf8");
+    expect(pkg).toContain("@capacitor-community/contacts");
   });
 
   /**
