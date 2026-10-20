@@ -163,6 +163,12 @@ export default function AccountScreen() {
           <a href={LEGAL.privacy} target="_blank" rel="noreferrer" className="underline">{t("سياسة الخصوصية", "Privacy")}</a>
           <a href={LEGAL.terms} target="_blank" rel="noreferrer" className="underline">{t("الشروط", "Terms")}</a>
           <a href={LEGAL.community} target="_blank" rel="noreferrer" className="underline">{t("معايير المجتمع", "Community")}</a>
+          {/* 🔴 دي كانت الصفحة الوحيدة اللي مفيش منها أي طريق جوه التطبيق — وهي اللي
+              فيها الحقوق اللي مش منفَّذة في الشاشة (الاعتراض · تقييد المعالجة · الشكوى
+              لمركز حماية البيانات · مسؤول حماية البيانات)، ودي مطلوبة في ١٥١/٢٠٢٠.
+              والصفحة نفسها بتقول «التطبيق ← الحساب ← …» فالرابط كان في اتجاه واحد.
+              واللافتة هي **عنوان الصفحة المنشور نفسه**، فمفيش كلام جديد للعملاء. */}
+          <a href={LEGAL.dataRequests} target="_blank" rel="noreferrer" className="underline">{t("طلبات البيانات", "Data requests")}</a>
         </p>
         {wpOpen && <WallpaperSheet onClose={() => setWpOpen(false)} />}
         {blockedOpen && <BlockedUsersSheet onClose={() => setBlockedOpen(false)} />}
