@@ -547,7 +547,9 @@ model Report {
   targetId     String
   targetUserId String? // صاحب المحتوى المبلَّغ عنه
   targetLabel  String    @default("")
-  reason       String // abuse | spam | inappropriate | impersonation | scam | other
+  reason       String // child_safety | abuse | spam | inappropriate | impersonation | scam | other
+  // القايمة الحاكمة `REPORT_REASONS` في `server/src/routes/reports.ts`، و`child_safety`
+  // أولها عن قصد (أول الطابور في اللوحة وحد يومي منفصل).
   note         String    @default("")
   snippet      String    @default("") // نسخة من النص وقت البلاغ
   place        String    @default("")
