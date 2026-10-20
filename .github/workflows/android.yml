@@ -46,9 +46,29 @@ jobs:
       - name: بناء الواجهة
         env:
           VITE_API_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://api.raachateg.com' }}
+          # 🔴 الاتنين دول **إلزاميان للـAPK**. من غيرهم `SITE` بيبقى فاضي
+          # فروابط الخصوصية والشروط ومعايير المجتمع تبقى **نسبية**، وفي
+          # الـAPK بتتحلّ على `https://localhost` وتموت — وشاشة التسجيل
+          # بتقول «بالمتابعة أنت توافق على الشروط وسياسة الخصوصية».
+          # حصل فعلًا في نسخة ٢٠ أكتوبر ٢٠٢٦، واتكشف من رابط دعوة اتبعت
+          # لحد تاني وكان `https://localhost`.
+          VITE_SITE_URL: ${{ vars.MOBILE_SITE_URL || 'https://app.raachateg.com' }}
+          VITE_PUBLIC_SITE: ${{ vars.MOBILE_PUBLIC_SITE || 'https://raachateg.com' }}
         run: |
           test -n "$VITE_API_URL"
           export VITE_API_URL="${VITE_API_URL%/}"
+          # الموقعان لازم يكونا أصلًا عامًّا بلا مسار — نفس قاعدة VITE_API_URL
+          for v in VITE_SITE_URL VITE_PUBLIC_SITE; do
+            eval "u=\$$v"
+            test -n "$u" || { echo "$v must be set for the APK build"; exit 1; }
+            u="${u%/}"; eval "export $v=\"\$u\""
+            case "$u" in
+              https://localhost*|https://127.0.0.1*) echo "$v must not be a local origin: $u"; exit 1;;
+              https://*) ;;
+              *) echo "$v must start with https://: $u"; exit 1;;
+            esac
+            case "${u#*://}" in */*) echo "$v must be an origin with no path: $u"; exit 1;; esac
+          done
           # 🔴 لازم يكون **أصلًا بلا مسار** — ولازم نفس اللي بناء الواجهة بياخده في
           # compose (`VITE_API_URL: https://api.${DOMAIN}`). أي لاحقة زي `/api`
           # تخلّي Express مايطابقش أي راوت، فالطلب يعدّي راوترات `/auth` ويوصل

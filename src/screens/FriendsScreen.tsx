@@ -4,11 +4,9 @@ import { MessageCircle, MessageSquareShare, Share2, UserPlus, ShieldCheck } from
 import { Header } from "../components/Header";
 import { useT } from "../i18n";
 import { API_ON } from "../api/client";
-import { LEGAL, SITE } from "../legal";
+import { LEGAL, inviteUrl } from "../legal";
 import { useAppActions } from "../store/AppContext";
 import { canReadContacts, consentGiven, matchContacts, readDeviceContacts, setConsent, type Friend } from "../contacts/device";
-
-const inviteUrl = () => SITE || location.origin;
 
 export default function FriendsScreen() {
   const t = useT();
@@ -36,9 +34,14 @@ export default function FriendsScreen() {
   };
   useEffect(() => { if (consentGiven()) void sync(); /* eslint-disable-next-line */ }, []);
 
-  const msg = t(`جرّب رع شات! دردشة ومكالمات وغرف صوتية بهوية مصرية: ${inviteUrl()}`, `Try Raa Chat! Chat, calls and voice rooms: ${inviteUrl()}`);
+  // 🔴 الرابط بيتبعت لناس برّه التطبيق، فلو مفيش أصل عام بنبعت الدعوة **بلا
+  // رابط** بدل ما نبعت `https://localhost` اللي مستحيل يفتح عند حد.
+  const url = inviteUrl();
+  const msg = url
+    ? t(`جرّب رع شات! دردشة ومكالمات وغرف صوتية بهوية مصرية: ${url}`, `Try Raa Chat! Chat, calls and voice rooms: ${url}`)
+    : t("جرّب رع شات! دردشة ومكالمات وغرف صوتية بهوية مصرية.", "Try Raa Chat! Chat, calls and voice rooms.");
   const share = async (phone?: string) => {
-    if (!phone && navigator.share) { try { await navigator.share({ text: msg, url: inviteUrl() }); return; } catch { return; } }
+    if (!phone && navigator.share) { try { await navigator.share(url ? { text: msg, url } : { text: msg }); return; } catch { return; } }
     if (phone) location.href = `sms:${phone}?&body=${encodeURIComponent(msg)}`;
     else location.href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
   };
