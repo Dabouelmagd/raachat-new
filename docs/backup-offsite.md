@@ -9,8 +9,10 @@
 ## الحالة — شغّال من ٢١ أكتوبر ٢٠٢٦
 
 الرفع **شغّال ومتحقَّق في الإنتاج**: `rachat-drive:raachat-backups`، جدولة يومية
-٤:٤٠ فجرًا في `/etc/cron.d/rachat-backup-drive`، واللوج
-`/var/log/rachat-backup-drive.log`.
+**٤:٤٠ UTC** (= ٧:٤٠ صباحًا بالقاهرة — كرون بياخد ساعة السيرفر وهي UTC، مش
+`cairo.ts`) في `/etc/cron.d/rachat-backup-drive`، واللوج
+`/var/log/rachat-backup-drive.log`. **ومتحقَّق إن كرون بينفّذه فعلًا** مش إننا
+ثبّتنا ملفًا وافترضنا (الطريقة تحت).
 
 ### ١) الحساب — شخصي بقرار داليا
 اللي بيتخزن هناك هو **كل بيانات المستخدمين** (الرسائل والأرقام والإيميلات
@@ -164,7 +166,31 @@ cd /opt/rachat && bash scripts/install-backup-cron.sh
 ```
 
 بيتثبّت في `/etc/cron.d/rachat-backup-drive` (مايلمسش crontab المشاريع التانية)،
-الساعة ٤:٤٠ فجرًا. اللوج `/var/log/rachat-backup-drive.log`، والإلغاء بمسح الملف.
+الساعة **٤:٤٠ UTC** = ٧:٤٠ صباحًا بالقاهرة. اللوج `/var/log/rachat-backup-drive.log`،
+والإلغاء بمسح الملف.
+
+### ٦) 🔴 وفحص إن كرون بينفّذه فعلًا — في ٣ دقايق بدل ما نستنى يوم
+
+«ثبّتنا الملف» مش دليل إن كرون هيشغّله. والانتظار لبكرة معناه إننا نعرف بعد يوم،
+ولو فشل مانعرفش غير بعد يومين. الحيلة إن `AT` بتغيّر الموعد، فنحرّكه دقيقتين
+ونرجّعه:
+```
+cd /opt/rachat
+AT="$(date -d '+2 minutes' '+%M %H')" bash scripts/install-backup-cron.sh > /tmp/cronset.log 2>&1 && echo "SCHEDULED-FOR-$(date -d '+2 minutes' '+%H:%M')"
+sleep 180
+tail -4 /var/log/rachat-backup-drive.log
+bash scripts/install-backup-cron.sh > /tmp/cronrestore.log 2>&1 && echo RESTORED-0440
+```
+
+المفروض اللوج يطلّع `⏭ مرفوعة قبل كده` مرتين و`✅ خلص` — **ونسخة اليوم اللي
+اترفعت خلاص بتتخطّى، وده كفاية**: المطلوب إثباته إن كرون شغّل السكربت، مش إن
+الرفع بيشتغل (ده اتفحص في الخطوة ٤). والسطر الأخير بيرجّع الموعد.
+
+✅ **اتعمل في ٢١ أكتوبر ٢٠٢٦ ونجح.** ونفس الحيلة تنفع مع
+`install-monitor-cron.sh`.
+
+⚠️ **و`install-backup-cron.sh` مالوش اختبار في `server/test/`** — الدليل الوحيد
+عليه هو الفحص اليدوي ده.
 
 ---
 
