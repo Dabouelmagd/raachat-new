@@ -77,8 +77,15 @@ export async function retentionSweep(ctx: Ctx, mode: RetentionMode = "dry"): Pro
   out.minorAdEvents = wet ? (await db.adEvent.deleteMany({ where: adWhere })).count : await db.adEvent.count({ where: adWhere });
 
   // ٥) البلاغات: سنتان من إغلاقها. فيها `snippet` = نسخة من نص الرسالة المبلَّغ عنها.
+  //
+  // 🔴 **وبلاغات `child_safety` مستثناة** (مذكرة المحامي ٢١ أكتوبر ٢٠٢٦): حذف
+  // أو إتلاف أدلة رقمية تتعلق بوقائع إيذاء أو استغلال أطفال ممكن يعرّض الإدارة
+  // للمساءلة بتهمة «إخفاء أدلة جريمة» أو عرقلة العدالة، والجهات الأمنية
+  // والقضائية ممكن تطلب السجلات بعد مدة تتجاوز السنتين بكتير. فمابتتمسحش
+  // تلقائيًا أبدًا — الحذف بقرار بشري بعد أمر قضائي أو إخطار رسمي بانتهاء
+  // التحقيق. والدليل نفسه في `Evidence` ومافيش أي مسار تلقائي بيلمسه.
   const rCut = new Date(now - REPORT_YEARS * 365.25 * DAY);
-  const rWhere = { status: "resolved", resolvedAt: { lt: rCut } };
+  const rWhere = { status: "resolved", resolvedAt: { lt: rCut }, reason: { not: "child_safety" } };
   out.reports = wet ? (await db.report.deleteMany({ where: rWhere })).count : await db.report.count({ where: rWhere });
 
   return out;

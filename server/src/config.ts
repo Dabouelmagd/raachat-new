@@ -54,6 +54,14 @@ const Env = z.object({
   // أصحاب النظام (مالك): أرقام/إيميلات مفصولة بفاصلة. أول دخول بيها بيتحوّل لمالك تلقائيًا.
   OWNER_CONTACTS: z.string().default(""),
   BANNED_WORDS: z.string().default(""), // كلمات ممنوعة مفصولة بفاصلة (فلتر المحتوى المسيء)
+  /**
+   * مفتاح تشفير سجل أدلة بلاغات إيذاء الأطفال (AES-256-GCM).
+   * اختياري في المخطط عشان التطبيق مايقعش من غيره، إنما **بدونه الملف
+   * مابيتخزنش خالص** (`problem = "no_key"` في السجل وتحذير في اللوحة) —
+   * لأن السجل بيدخل النسخة الاحتياطية الرايحة لجوجل درايف.
+   * الضبط: `bash scripts/set-evidence-key.sh`.
+   */
+  EVIDENCE_KEY: z.string().optional(),
   RING_TIMEOUT_MS: z.coerce.number().default(45000),
 });
 export type Config = z.infer<typeof Env>;

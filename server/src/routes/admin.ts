@@ -13,6 +13,7 @@ import { notifyPush } from "../lib/push.js";
 import { messageInclude, messageView } from "../serialize.js";
 import { ALL_PERMS, CATALOG, effectivePerms, ensurePresetRoles, isPerm } from "../lib/permissions.js";
 import { eraseUser } from "../lib/eraseUser.js";
+import { openEvidence } from "../lib/evidence.js";
 import { isOwnUpload } from "../lib/adImage.js";
 
 export interface StaffInfo { userId: string; name: string; isOwner: boolean; perms: Set<string> }
@@ -788,6 +789,46 @@ export function adminRoutes(ctx: Ctx) {
     const done = await db.report.updateMany({ where: { kind: rep.kind, targetId: rep.targetId, status: "open" }, data: { status: "resolved", resolution: b.action, resolvedById: s.userId, resolvedAt: new Date() } });
     await audit(s, ({ delete: "حذف محتوى مبلَّغ عنه", delete_ban: "حذف محتوى وحظر صاحبه", warn: "حذّر صاحب محتوى", dismiss: "تجاهل بلاغ" } as const)[b.action], rep.targetLabel, { report: rep.id, kind: rep.kind, reason: rep.reason, closed: done.count });
     res.json({ id: rep.id, resolved: done.count, action: b.action });
+  }));
+
+  // ---------- سجل أدلة بلاغات إيذاء الأطفال (مغلق — المالك أو صلاحية صريحة)
+  //
+  // القايمة **مابترجّعش المحتوى أبدًا** — بيانات المحضر بس. والمحتوى بيخرج من
+  // مسار واحد (`/release`) بطلب رسمي مكتوب، وبيتسجّل في سجل المراجعة.
+  r.get("/admin/evidence", need("evidence.manage"), wrap(async (_req, res) => {
+    const rows = await db.evidence.findMany({ orderBy: { savedAt: "desc" }, take: 200 });
+    res.json(rows.map((x) => ({
+      id: x.id, kind: x.kind, targetId: x.targetId, target: x.targetLabel, where: x.place,
+      hasFile: !!x.blob, fileName: x.fileName, fileMime: x.fileMime, fileSize: x.fileSize,
+      sha256: x.sha256, problem: x.problem,
+      incidentAt: x.incidentAt.toISOString(), reportedAt: x.reportedAt.toISOString(), savedAt: x.savedAt.toISOString(),
+      releasedAt: x.releasedAt?.toISOString() ?? null, releaseRef: x.releaseRef,
+    })));
+  }));
+
+  // تسليم الدليل للجهات القضائية. **بطلب رسمي مكتوب وتأكيد صريح** — ومن غير
+  // مفتاح التشفير مفيش فتح أصلًا، فالرسالة بتقول كده بدل خطأ غامض.
+  r.post("/admin/evidence/:id/release", need("evidence.manage"), wrap(async (req, res) => {
+    const s = S(req);
+    const b = z.object({ ref: z.string().trim().min(3).max(200), confirm: z.literal(true) }).parse(req.body);
+    const ev = await db.evidence.findUnique({ where: { id: String(req.params.id) } });
+    if (!ev) throw notFound("السجل مش موجود");
+    if (!ev.blob || !ev.iv || !ev.tag) throw bad("no_file", `مفيش ملف محفوظ في السجل ده${ev.problem ? ` (${ev.problem})` : ""}`);
+    if (!ctx.config.EVIDENCE_KEY) throw bad("no_key", "مفتاح السجل مش متضبط — bash scripts/set-evidence-key.sh");
+    let plain: Buffer;
+    try {
+      plain = openEvidence(ctx.config.EVIDENCE_KEY, Buffer.from(ev.blob), Buffer.from(ev.iv), Buffer.from(ev.tag));
+    } catch {
+      // GCM بيتحقق من السلامة، ففشل الفتح = مفتاح مختلف عن اللي اتشفّر بيه
+      // أو بيانات اتعدّلت — والاتنين لازم يتقالوا صريح مش «خطأ داخلي».
+      throw bad("open_failed", "تعذّر فتح الدليل — المفتاح الحالي مش اللي اتشفّر بيه، أو البيانات اتغيّرت");
+    }
+    await db.evidence.update({ where: { id: ev.id }, data: { releasedAt: new Date(), releaseRef: b.ref } });
+    await audit(s, "سلّم دليل بلاغ إيذاء طفل", ev.targetLabel, { evidence: ev.id, kind: ev.kind, ref: b.ref, sha256: ev.sha256 });
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${ev.sha256 ?? ev.id}"`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(plain);
   }));
 
   // ---------- الـ Stories النشطة

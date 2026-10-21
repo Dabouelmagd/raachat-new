@@ -598,3 +598,48 @@ model Block {
   @@id([blockerId, blockedId])
   @@index([blockedId])
 }
+
+/// 🔴 سجل أدلة بلاغات إيذاء الأطفال — **مغلق تمامًا عن المنصة وعن المستخدمين**.
+///
+/// مذكرة المحامي (٢١ أكتوبر ٢٠٢٦): «لا يتم الاحتفاظ بملفات الميديا أو النصوص
+/// المجرمة بصفة محتوى معروض، بل يتم التحفظ عليها في سجل رقمي مشفر ومغلق تمامًا
+/// عن المنصة وعن المستخدمين ومخصص حصريًا لتسليمه للجهات القضائية بناءً على طلب
+/// رسمي، مع توثيق محضر إداري بالواقعة وتاريخ التبليغ».
+///
+/// فالمحتوى هنا **مش ملفًا على القرص**: `express.static` بيقدّم كل `UPLOAD_DIR`
+/// بما فيه أي مجلد جوّاه، فأي ملف هناك بيبقى على عنوان عام. والبدائل كلها
+/// بتتطلّب volume جديد في compose — فالمكان الصح هو القاعدة نفسها، والرفع
+/// محدود بـ١٠ ميجا فالحجم مضمون.
+model Evidence {
+  id           String    @id @default(cuid())
+  kind         String // message | story | room | user | thread
+  targetId     String
+  targetUserId String?
+  targetLabel  String    @default("")
+  /// المحضر الإداري: نصّ المحتوى **كامل** وقت الحفظ (مش مقصوص زي `Report.snippet`)
+  text         String    @default("")
+  place        String    @default("")
+  fileName     String?
+  fileMime     String?
+  fileSize     Int?
+  /// الملف مشفّرًا AES-256-GCM. NULL = مفيش ملف أصلًا، أو `problem` بيقول السبب.
+  blob         Bytes?
+  iv           Bytes?
+  tag          Bytes?
+  /// بصمة الملف **الأصلي قبل التشفير** — إثبات سلامة الدليل وقت التسليم
+  sha256       String?
+  /// فاضي = تمام. وإلا: no_key | file_gone | read_failed — **بيتعرض في اللوحة**
+  /// عشان الفشل مايعديش في سكوت (الدليل ضاع والبلاغ شكله سليم).
+  problem      String    @default("")
+  /// وقت الواقعة (إنشاء المحتوى) — جزء من المحضر
+  incidentAt   DateTime
+  reportedAt   DateTime  @default(now())
+  savedAt      DateTime  @default(now())
+  /// التسليم للجهات القضائية: التاريخ ورقم الطلب الرسمي
+  releasedAt   DateTime?
+  releaseRef   String?
+
+  /// واقعة واحدة = سجل واحد مهما كان عدد المبلّغين
+  @@unique([kind, targetId])
+  @@index([savedAt])
+}

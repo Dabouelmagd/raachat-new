@@ -86,6 +86,9 @@ export async function startTestEnv() {
   const config = loadConfig({
     NODE_ENV: "test", DATABASE_URL: url, JWT_SECRET: "test-secret-test-secret", RATE_LIMIT: "off", UPLOAD_DIR: uploads,
     GOOGLE_TRANSLATE_KEY: "k", OWNER_CONTACTS: "01099000001, boss@example.com", BANNED_WORDS: "كلمةممنوعة, badword",
+    // سجل أدلة بلاغات إيذاء الأطفال — موجود في الاختبارات عشان المسار يتجرّب
+    // فعلًا. (حالة «مفيش مفتاح» بتتجرّب بتفريغه داخل اختبارها لوحده.)
+    EVIDENCE_KEY: "test-evidence-key",
   } as NodeJS.ProcessEnv);
   /** كل نداء شبكة خارج (للتأكد إن الكاش بيمنع نداءات متكررة للمزوّد المدفوع) */
   const fetched: string[] = [];

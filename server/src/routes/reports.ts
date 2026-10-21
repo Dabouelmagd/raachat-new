@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
 import { HttpError, bad, notFound, wrap } from "../lib/errors.js";
+import { preserveEvidence, type PreserveInput } from "../lib/evidence.js";
 
 /**
  * **`child_safety` سبب منفصل عن قصد** (١٥ أكتوبر ٢٠٢٦): قبل كده اللي يشوف
@@ -46,16 +47,20 @@ export function reportRoutes(ctx: Ctx) {
       throw new HttpError(429, "too_many", "وصلت للحد اليومي للبلاغات");
 
     let targetUserId: string | null = null, targetLabel = "", snippet = "", place = "";
+    // المحضر الإداري للسجل المغلق: النصّ **كامل** (مش مقصوص) والملف نفسه.
+    let keep: Omit<PreserveInput, "kind" | "targetId" | "targetUserId" | "targetLabel" | "place"> | null = null;
     if (b.kind === "message") {
-      const m = await db.message.findUnique({ where: { id: b.targetId }, include: { author: { select: { id: true, name: true } }, thread: { select: { type: true, name: true } } } });
+      const m = await db.message.findUnique({ where: { id: b.targetId }, include: { author: { select: { id: true, name: true } }, thread: { select: { type: true, name: true } }, attachment: true } });
       if (!m || m.deleted) throw notFound("الرسالة مش موجودة");
       if (!(await db.membership.findUnique({ where: { threadId_userId: { threadId: m.threadId, userId: me } } }))) throw notFound("الرسالة مش موجودة"); // مش بنكشف وجودها لغير الأعضاء
       targetUserId = m.authorId; targetLabel = m.author.name; snippet = m.text.slice(0, 500);
       place = m.thread.type === "group" ? `جروب: ${m.thread.name ?? ""}` : "محادثة خاصة";
+      keep = { text: m.text, incidentAt: m.createdAt, fileUrl: m.attachment?.url, fileName: m.attachment?.name, fileMime: m.attachment?.mime };
     } else if (b.kind === "story") {
       const s = await db.story.findUnique({ where: { id: b.targetId }, include: { author: { select: { name: true } } } });
       if (!s || s.expiresAt < new Date()) throw notFound("الـ Story مش موجودة");
       targetUserId = s.authorId; targetLabel = s.author.name; snippet = s.caption.slice(0, 500); place = "Stories";
+      keep = { text: s.caption, incidentAt: s.createdAt, fileUrl: s.imageUrl };
     } else if (b.kind === "room") {
       const rm = await db.room.findUnique({ where: { id: b.targetId }, include: { owner: { select: { name: true } } } });
       if (!rm || rm.closedAt) throw notFound("الغرفة مش موجودة");
@@ -80,6 +85,18 @@ export function reportRoutes(ctx: Ctx) {
       update: {},
       select: { id: true },
     });
+
+    // 🔴 الدليل بيتحفظ **وقت البلاغ**، قبل أي مسار حذف: صاحب المحتوى ممكن
+    // يمسحه، والستوري بتتكنس بعد ٢٤ ساعة، وإجراء المشرف نفسه بيمسح المرفق.
+    // وبيتنادى بعد الـ upsert عشان البلاغ يتسجّل حتى لو الحفظ اتعثّر.
+    if (child) {
+      await preserveEvidence(ctx, {
+        kind: b.kind, targetId: b.targetId, targetUserId, targetLabel, place,
+        text: keep?.text ?? snippet,
+        incidentAt: keep?.incidentAt ?? new Date(),
+        fileUrl: keep?.fileUrl, fileName: keep?.fileName, fileMime: keep?.fileMime,
+      });
+    }
     res.status(201).json({ id: rep.id });
   }));
   return r;
