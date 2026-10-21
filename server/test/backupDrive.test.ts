@@ -86,10 +86,10 @@ exit 0
   return { dir, bin, backups, drive };
 }
 
-function run(w: ReturnType<typeof world>, args: string[] = []) {
+function run(w: ReturnType<typeof world>, args: string[] = [], env: Record<string, string> = {}) {
   const r = spawnSync("bash", [path.join(w.dir, "scripts/backup-to-drive.sh"), ...args], {
     cwd: w.dir, encoding: "utf8", input: "", timeout: 30_000,
-    env: { ...process.env, PATH: `${w.bin}:${process.env.PATH}`, DRIVE_FOLDER: "bk" },
+    env: { ...process.env, PATH: `${w.bin}:${process.env.PATH}`, DRIVE_FOLDER: "bk", ...env },
   });
   return { code: r.status, out: (r.stdout ?? "") + (r.stderr ?? "") };
 }
@@ -141,6 +141,26 @@ describe("رفع النسخ على جوجل درايف", () => {
     const r2 = run(w);
     expect(r2.code, r2.out).toBe(0);
     expect(r2.out).toContain("مرفوعة قبل كده");
+  });
+
+  it("🔴 بيطبع وقت التشغيلة، و**بـUTC فعلًا** مش بتوقيت السيرفر المحلي", () => {
+    const w = world();
+    // ليه الاختبار ده: تشغيلتان بتتخطّيا نفس النسخة بتطلّعا **نفس النصّ
+    // بالظبط**، فلوج بلا وقت مابيفرّقش بين تشغيلة النهاردة وتشغيلة الأسبوع
+    // اللي فات — حصل فعلًا ٢٢ أكتوبر ٢٠٢٦ واضطرينا نسأل `stat`.
+    //
+    // والحكم على **السلوك** مش على وجود كلمة UTC: منطقة زمنية بعيدة، فلو حد
+    // شال `-u` من `date` السطر يطبع توقيت طوكيو ومكتوب جنبه UTC — لوج بيكدب،
+    // وده أسوأ من لوج بلا وقت (الواحد بيقراه وقت عطل ويحكم بساعة غلط).
+    const r = run(w, [], { TZ: "Asia/Tokyo" });
+    expect(r.code, r.out).toBe(0);
+    const m = r.out.match(/(\d{4}-\d\d-\d\d) (\d\d):(\d\d):\d\d UTC/);
+    expect(m, "مفيش سطر وقت في الناتج").toBeTruthy();
+    const printed = Date.parse(`${m![1]}T${m![2]}:${m![3]}:00Z`);
+    // هامش دقيقتين يكفي للفرق بين تشغيل السكربت وقراءة الساعة هنا، وأصغر
+    // بكتير من أي إزاحة منطقة زمنية (أصغر إزاحة في العالم ١٥ دقيقة).
+    expect(Math.abs(printed - Date.now()), `الوقت المطبوع ${m![0]} مش UTC`)
+      .toBeLessThan(2 * 60_000);
   });
 
   it("🔴 بيشيل الأقدم ويسيب آخر KEEP لكل نوع", () => {
