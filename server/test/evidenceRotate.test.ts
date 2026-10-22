@@ -59,28 +59,56 @@ function world(count: string) {
   return { dir, bin };
 }
 
-function run(w: { dir: string; bin: string }, args: string[] = []) {
+/** المفتاح الجديد بيتلزق من مدير كلمات السر، فبيوصل للسكربت على stdin */
+function run(w: { dir: string; bin: string }, args: string[] = [], input = "") {
   const r = spawnSync("bash", [path.join(w.dir, "scripts/set-evidence-key.sh"), ...args], {
-    cwd: w.dir, encoding: "utf8", input: "", timeout: 60_000,
+    cwd: w.dir, encoding: "utf8", input, timeout: 60_000,
     env: { ...process.env, PATH: `${w.bin}:${process.env.PATH}` },
   });
   return { code: r.status, out: (r.stdout ?? "") + (r.stderr ?? "") };
 }
 
+const NEW_KEY = "new-key-from-the-password-manager-abcdefghijkl";
+
 const keyOf = (w: { dir: string }) =>
   (fs.readFileSync(path.join(w.dir, ".env.production"), "utf8").match(/^EVIDENCE_KEY=(.*)$/m)?.[1] ?? "");
 
 describe("تبديل مفتاح سجل الأدلة", () => {
-  it("معايرة: الخزنة فاضية فالتبديل بينجح والمفتاح بيتغيّر فعلًا", () => {
+  it("معايرة: الخزنة فاضية فالتبديل بينجح والمفتاح بيتغيّر للملزوق", () => {
     const w = world("0");
-    const r = run(w, ["--rotate"]);
+    const r = run(w, ["--rotate"], `${NEW_KEY}\n`);
     expect(r.code, r.out).toBe(0);
-    const k = keyOf(w);
-    expect(k).not.toBe(OLD_KEY);
-    expect(k.length).toBeGreaterThanOrEqual(40);
-    // والمفتاح نفسه **مابيتطبعش** على الشاشة
-    expect(r.out).not.toContain(k);
+    expect(keyOf(w)).toBe(NEW_KEY);
+    // 🔴 ولا المفتاح الجديد ولا القديم بيتطبع — ده شرط القاعدة نفسها
+    expect(r.out).not.toContain(NEW_KEY);
     expect(r.out).not.toContain(OLD_KEY);
+  });
+
+  it("🔴 ومفيش في الناتج ولا أمر بيعرض المفتاح", () => {
+    // الطريقة القديمة كانت بتقول في الآخر «اعرضي المفتاح وانسخيه» — وده
+    // بالظبط اللي كشفه. فالناتج ممنوع يوجّه لأي أمر بيطبعه.
+    const w = world("0");
+    const r = run(w, ["--rotate"], `${NEW_KEY}\n`);
+    expect(r.out).not.toMatch(/grep[^\n]*EVIDENCE_KEY/);
+    expect(r.out).toMatch(/ROTATED/);
+  });
+
+  it.each([
+    ["short", "قصير"],
+    ["has space in the middle of a long enough key", "فيه مسافة"],
+  ])("🔴 مفتاح مرفوض (%s) → مفيش كتابة", (bad) => {
+    const w = world("0");
+    const r = run(w, ["--rotate"], `${bad}\n`);
+    expect(r.code, r.out).not.toBe(0);
+    expect(keyOf(w)).toBe(OLD_KEY);
+  });
+
+  it("🔴 نفس المفتاح الحالي بيترفض — تبديل بلا تبديل", () => {
+    const w = world("0");
+    const r = run(w, ["--rotate"], `${OLD_KEY}\n`);
+    expect(r.code, r.out).not.toBe(0);
+    expect(r.out).toMatch(/نفس المفتاح/);
+    expect(keyOf(w)).toBe(OLD_KEY);
   });
 
   it("🔴 فيه أدلة محفوظة → بيرفض التبديل والمفتاح مابيتغيّرش", () => {
