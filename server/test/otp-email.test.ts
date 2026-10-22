@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { otpEmail } from "../src/lib/otp-email.js";
-import { providerSender } from "../src/lib/senders.js";
+import { providerSender, redactEmailBody } from "../src/lib/senders.js";
 import { loadConfig } from "../src/config.js";
 
 const base = { DATABASE_URL: "postgresql://x/y", JWT_SECRET: "test-secret-test-secret" } as NodeJS.ProcessEnv;
@@ -75,5 +75,57 @@ describe("إيميل كود التحقق", () => {
     await providerSender(config, fake).send("email", "x@y.z", "999000");
     expect(html).toContain("https://app.kenoz.org/icon.png");
     expect(html).not.toContain("wrong.test");
+  });
+
+  /**
+   * 🔴 **فشل الإرسال لازم يقول سببه.** قبل ٢٢ أكتوبر ٢٠٢٦ الفرع كان
+   * `if (!r.ok) throw new Error("email_failed")` وخلاص — فاللوج يطلّع
+   * `OTP send failed: email_failed` **ونفس السطر بالحرف** في كل الحالات:
+   * مفتاح ملغي (401) · دومين مش متحقَّق (403) · سقف خلص (429) · عنوان محجوب.
+   * فلما مستخدم بلّغ إن الكود ماوصلوش، مكانش في إيدينا حاجة نفرّق بيها.
+   */
+  it("🔴 فشل Resend بيتسجّل بالـ status وجسم الرد", async () => {
+    const config = loadConfig({ ...base, RESEND_KEY: "re_live_abcdefghij", EMAIL_FROM: "a@b.c", CORS_ORIGIN: "https://app.kenoz.org" });
+    const fake = (async () =>
+      new Response(JSON.stringify({ statusCode: 403, message: "The kenoz.org domain is not verified" }), { status: 403 })
+    ) as unknown as typeof fetch;
+
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(providerSender(config, fake).send("email", "someone@example.com", "123456")).rejects.toThrow("email_failed");
+      const line = log.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(line, "الـ status هو اللي بيفرّق بين الأسباب").toContain("status=403");
+      expect(line, "ورسالة المزوّد نفسها").toContain("not verified");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("🔴 واللوج مافيهوش المفتاح ولا إيميل المستخدم", async () => {
+    const KEY = "re_live_secret_key_value";
+    const config = loadConfig({ ...base, RESEND_KEY: KEY, EMAIL_FROM: "a@b.c", CORS_ORIGIN: "https://app.kenoz.org" });
+    // Resend بيردّد العنوان في رفض كتير، والمفتاح وارد يترجّع في رسالة مصادقة
+    const fake = (async () =>
+      new Response(JSON.stringify({ message: `invalid key ${KEY} for recipient someone@example.com` }), { status: 401 })
+    ) as unknown as typeof fetch;
+
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(providerSender(config, fake).send("email", "someone@example.com", "123456")).rejects.toThrow("email_failed");
+      const line = log.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(line, "المفتاح ممنوع يدخل لوج على سيرفر مشترك").not.toContain(KEY);
+      expect(line, "وبيانات المستخدم ممنوعة في اللوج").not.toContain("someone@example.com");
+      expect(line).toContain("status=401");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("redactEmailBody: بيشيل المفتاح والعناوين، والمفتاح الفاضي مابيمسحش كل حاجة", () => {
+    expect(redactEmailBody("key=re_abcdefghij to=a.b+x@mail.co.uk", "re_abcdefghij")).toBe("key=*** to=***@***");
+    // مفتاح فاضي أو قصير جدًا: لو استخدمناه في الاستبدال كان هيحوّل النص كله نجوم
+    expect(redactEmailBody("plain body", "")).toBe("plain body");
+    expect(redactEmailBody("plain body", undefined)).toBe("plain body");
+    expect(redactEmailBody("no secrets here")).toBe("no secrets here");
   });
 });

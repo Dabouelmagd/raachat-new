@@ -10,6 +10,22 @@ export function firstPublicOrigin(list: string): string {
   return parts.find((u) => !isLocal(u)) ?? parts[0] ?? "";
 }
 
+/**
+ * جسم رد Resend وهو بيفشل — بيتسجّل في اللوج، فلازم يخرج منه حاجتان:
+ *
+ * 1. **المفتاح** لو المزوّد ردّده في رسالة الخطأ (اللوج على سيرفر مشترك).
+ * 2. **عنوان إيميل المستخدم** — Resend بيحطّه في رسائل الرفض (مرسل مرفوض،
+ *    عنوان غلط، عنوان في قايمة الحجب)، وتسجيل بيانات المستخدمين في اللوج ممنوع.
+ *
+ * والـ status بيفضل ظاهرًا لأنه هو الفرق بين «المفتاح غلط» (401) و«الدومين مش
+ * متحقَّق» (403) و«السقف خلص» (429) — ومن غيره مفيش طريق للتشخيص.
+ */
+export function redactEmailBody(body: string, key?: string): string {
+  let s = body;
+  if (key && key.length >= 8) s = s.split(key).join("***");
+  return s.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "***@***");
+}
+
 export interface OtpSender {
   send(channel: "phone" | "email", target: string, code: string): Promise<void>;
   /**
@@ -85,7 +101,16 @@ export function providerSender(c: Config, f: typeof fetch = fetch): OtpSender {
           headers: { Authorization: `Bearer ${c.RESEND_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({ from: c.EMAIL_FROM, to: target, subject: mail.subject, html: mail.html, text: mail.text }),
         });
-        if (!r.ok) throw new Error("email_failed");
+        // 🔴 لازم نسجّل الـ status وجسم الرد. قبل كده كان `throw` وخلاص، فاللوج
+        // بيقول `OTP send failed: email_failed` **وبس** — نفس السطر بالحرف لمفتاح
+        // ملغي، ودومين مش متحقَّق، وسقف خلص، وعنوان محجوب. يعني أول ما مستخدم
+        // يبلّغ إن الكود ماوصلوش مفيش في إيدينا حاجة نفرّق بيها، والتشخيص يبقى
+        // تخمينًا. (حصل فعلًا ٢٢ أكتوبر ٢٠٢٦.) وفرع الـ SMS فوق بيسجّلهما أصلًا.
+        if (!r.ok) {
+          const body = await r.text().catch(() => "");
+          console.error(`email_failed status=${r.status} body=${redactEmailBody(body, c.RESEND_KEY).slice(0, 200)}`);
+          throw new Error("email_failed");
+        }
       }
     },
   };
