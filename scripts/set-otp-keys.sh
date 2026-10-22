@@ -22,9 +22,21 @@ echo "— Resend (إيميل) —"
 r=$(asks 'RESEND_KEY (بيبدأ بـ re_)')
 if [ -n "$r" ]; then
   set_kv RESEND_KEY "$r"
-  f=$(ask "EMAIL_FROM (Enter للافتراضي: Raa Chat <no-reply@$DOMAIN>)")
-  set_kv EMAIL_FROM "${f:-Raa Chat <no-reply@$DOMAIN>}"
+  # 🔴 الافتراضي هو **المرسِل الشغّال حاليًا** مش `no-reply@$DOMAIN`.
+  # السبب (اتكشف ٢٢ أكتوبر ٢٠٢٦): بعد الانتقال لـ`raachateg.com` بقى `DOMAIN`
+  # هو الدومين الجديد، واللي لسه **مش متحقَّق عند Resend**. فإعادة تشغيل
+  # السكربت والضغط على Enter كانت بتحوّل المرسِل لدومين مرفوض، و**كل أكواد
+  # التحقق تقف لكل المستخدمين** في سكوت. دلوقتي Enter = «سيبي اللي شغّال».
+  CURF=$(grep -E '^EMAIL_FROM=.+' .env.production | head -1 | cut -d= -f2-)
+  DEF=${CURF:-Raa Chat <no-reply@$DOMAIN>}
+  f=$(ask "EMAIL_FROM (Enter لإبقاء: $DEF)")
+  set_kv EMAIL_FROM "${f:-$DEF}"
   echo "✅ Resend اتضبط"
+  if [ -n "$f" ] && [ "$f" != "$CURF" ]; then
+    echo "⚠️ بدّلتي المرسِل بإيدك — ودومينه لازم يكون Verified عند Resend وإلا كل"
+    echo "   الأكواد تتوقف. الأضمن: bash scripts/set-email-from.sh '$f'"
+    echo "   (بيفحص الدومين، ويبعت إيميل حقيقي، وبيتراجع لوحده لو ماوصلش.)"
+  fi
 fi
 
 echo "— Twilio (رسائل SMS) —"
