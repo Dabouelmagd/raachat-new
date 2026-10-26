@@ -15,7 +15,7 @@ concurrency:
 jobs:
   server:
     name: السيرفر (vitest)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
 
   web:
     name: الواجهة (بناء + Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -113,7 +113,7 @@ jobs:
   # بقى بيحكم ويرجّع ٢ عند الفشل، وإلا الوظيفة دي كانت هتبقى خضراء على أي عطل.
   api-mode:
     name: وضع الـ API (الإرسال الفاشل + كلام الجروب + حالات الرسالة)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
@@ -163,7 +163,7 @@ jobs:
 
   admin:
     name: لوحة الإدارة (بناء)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

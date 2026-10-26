@@ -184,3 +184,47 @@ describe("الموقع التعريفي في الـCI", () => {
     expect(html).toMatch(/<meta name="viewport"[^>]*width=device-width/);
   });
 });
+
+/**
+ * نسخة أوبونتو على الـrunner — **مثبّتة مش `ubuntu-latest`**.
+ *
+ * 🔴 السبب (٢٦ أكتوبر ٢٠٢٦، عطل حقيقي): جيتهاب حوّلت `ubuntu-latest` لأوبونتو
+ * ٢٦ (الإشعار في التشغيلات بيقول «beginning October 19, 2026»)، والتحويل
+ * تدريجي — فنشرة ٢٢ أكتوبر كانت **خضرا** و٢٦ أكتوبر **حمرا بلا أي تغيير
+ * متعلّق**. وPlaywright 1.56.0 بيحوّل أوبونتو ٢٦ لـ`ubuntu26.04-x64`
+ * (`hostPlatform.js`: الشرط `major < 26` بيسقط)، والمفتاح ده **مش موجود في
+ * ولا جدول**: مش في `nativeDeps` (فـ`--with-deps` بيحذّر ويتخطّى تثبيت
+ * المكتبات **في سكوت**) ومش في جداول تنزيل المتصفحات — فتنزيل كروميوم بيفشل
+ * والخطوة بتخرج بـ١.
+ *
+ * ⚠️ والعطل كان **مضلّلًا**: الوظيفتين الساقطتين هما اللي بيبنوا الواجهة،
+ * فبيبان كأن تعديل الواجهة الأخير هو السبب. الدليل القاطع إن كل خطوات البناء
+ * وفحص الأنواع قبلها **عدّت**، والساقط هو تنزيل المتصفح وحده.
+ *
+ * فأي `ubuntu-latest` في أي وظيفة = نفس العطل تاني مع تحويل جيتهاب الجايّ،
+ * واللي بياخد باله مستخدم بلاغ مش فحص.
+ */
+describe("نسخة الـrunner مثبّتة", () => {
+  const files = ["ci.yml", "android.yml"];
+
+  it("🔴 مفيش ولا وظيفة على `ubuntu-latest`", () => {
+    for (const f of files) {
+      const wf = fs.readFileSync(path.join(ROOT, ".github/workflows", f), "utf8");
+      expect(wf, `${f}: الـrunner لازم يكون نسخة مثبّتة`).not.toMatch(/runs-on:\s*ubuntu-latest/);
+    }
+  });
+
+  /**
+   * والنسخة المثبّتة لازم تكون واحدة Playwright **بيعرفها** — وإلا التثبيت
+   * بيبقى شكليًا ونفس العطل يرجع على رقم تاني.
+   */
+  it("🔴 النسخة المثبّتة من اللي Playwright بيدعمها", () => {
+    const known = ["ubuntu-22.04", "ubuntu-24.04"];
+    for (const f of files) {
+      const wf = fs.readFileSync(path.join(ROOT, ".github/workflows", f), "utf8");
+      const used = [...wf.matchAll(/runs-on:\s*(\S+)/g)].map((m) => m[1]);
+      expect(used.length, `${f}: مفيش ولا runs-on اتقرا — الفحص بلا معنى`).toBeGreaterThan(0);
+      for (const r of used) expect(known, `${f}: runner مش مدعّم: ${r}`).toContain(r);
+    }
+  });
+});

@@ -25,7 +25,7 @@ on:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # لازمة لخطوة الـRelease — من غيرها `gh release create` بيرجّع 403.
     permissions:
       contents: write
