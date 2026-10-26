@@ -13,20 +13,32 @@ import { clearOverlays, expectNoPageErrors, openApp } from "../helpers";
 const row = (page: import("@playwright/test").Page, name: RegExp) =>
   page.locator("button.rounded-2xl.bg-rachat-card").filter({ hasText: name }).first();
 
+/**
+ * 🔴 الحكم على **وزن الخط المحسوب** مش على اسم الكلاس (٢٦ أكتوبر ٢٠٢٦):
+ * الفحص القديم كان `toHaveClass(/font-extrabold/)` — وعدّى على كود كان بيخلّي
+ * المقروء `font-bold` (٧٠٠) وغير المقروء `font-extrabold` (٨٠٠)، يعني فرق
+ * **١٠٠ درجة مابيتشافش بالعين** والبلاغ كان «مفيش فرق». الوزن المحسوب هو
+ * اللي بيقيس اللي المستخدم بيشوفه فعلًا، وبيعدّي أي إعادة تسمية للكلاسات.
+ */
+const weight = (l: import("@playwright/test").Locator) =>
+  l.evaluate((el) => Number(getComputedStyle(el).fontWeight));
+
 test("المحادثة اللي فيها رسايل ما اتقرتش: بولد + عدّاد، وبترجع عادي بعد الفتح", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
   const mariam = row(page, /مريم عبد الله|Mariam/);
   // اسم المحادثة نفسه (جوه غلاف فيه علامة التثبيت)
   const title = mariam.locator("span.truncate.text-sm").first();
-  await expect(title).toHaveClass(/font-extrabold/);
+  expect(await weight(title), "اسم المحادثة اللي فيها جديد لازم يبقى بولد").toBeGreaterThanOrEqual(700);
   await expect(mariam.getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveText(/٢|2/);
 
   await mariam.click();
   await page.getByRole("button", { name: /رجوع|Back/ }).first().click();
   await clearOverlays(page);
-  await expect(row(page, /مريم عبد الله|Mariam/).locator("span.truncate.text-sm").first()).not.toHaveClass(/font-extrabold/);
-  await expect(page.getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveCount(0);
+  const after = row(page, /مريم عبد الله|Mariam/).locator("span.truncate.text-sm").first();
+  expect(await weight(after), "وبعد ما تتفتح يرجع **من غير بولد** — ده الفرق اللي المستخدم بيشوفه").toBeLessThanOrEqual(500);
+  // العدّاد بتاع المحادثة دي بس — فيه محادثات تانية في الديمو لسه فيها جديد
+  await expect(row(page, /مريم عبد الله|Mariam/).getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveCount(0);
   expectNoPageErrors(page);
 });
 

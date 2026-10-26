@@ -7,6 +7,7 @@ import { useAppActions, useAppState } from "../store/AppContext";
 import { DEMO_CHANNELS } from "../store/seed";
 import type { Thread } from "../types";
 import { loc, useT, num } from "../i18n";
+import { threadNameClass, UnreadBadge } from "../components/unread";
 
 /**
  * القنوات: قنواتي + اكتشاف + إنشاء.
@@ -66,12 +67,13 @@ export default function ChannelsScreen() {
             <button key={c.id} onClick={() => navigate(`/chat/${c.id}`)} className="flex w-full items-center gap-3 rounded-2xl bg-rachat-card p-3 text-start">
               <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-extrabold text-rachat-ink ${c.colorClass}`}>{c.initial}</span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold" dir="auto">{c.name}</div>
+                <div className={threadNameClass(c.unread)} dir="auto">{c.name}</div>
                 <div className="flex items-center gap-1 text-[11px] text-neutral-500">
                   <Users size={11} /> {num(c.memberCount ?? 0)} {t("مشترك", "subscribers")}
                   {c.canPost && <span className="text-rachat-gold">· {t("بتنشر فيها", "you post here")}</span>}
                 </div>
               </div>
+              <UnreadBadge count={c.unread} />
             </button>
           ))}
           {mine.length === 0 && <p className="py-4 text-center text-xs text-neutral-500">{t("مفيش قنوات لسه — اشترك من تحت أو أنشئ قناتك", "No channels yet — subscribe below or create yours")}</p>}

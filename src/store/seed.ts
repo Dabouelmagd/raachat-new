@@ -15,13 +15,17 @@ export const INITIAL_THREADS: Thread[] = [
   { id: "t1", type: "dm", get name() { return tr("مريم عبد الله", "Mariam Abdallah"); }, colorClass: "bg-rachat-red", get initial() { return tr("م", "M"); }, memberIds: ["u1"], unread: 2 },
   { id: "t2", type: "group", get name() { return tr("مجموعة الشغل 💼", "Work Group 💼"); }, colorClass: "bg-rachat-gold", get initial() { return tr("ش", "W"); }, memberIds: ["u1", "u2", "u4"] },
   { id: "t3", type: "dm", get name() { return tr("يوسف كامل", "Youssef Kamel"); }, colorClass: "bg-rachat-coral", get initial() { return tr("ي", "Y"); }, memberIds: ["u2"] },
-  { id: "t4", type: "group", get name() { return tr("فريق التصميم", "Design Team"); }, colorClass: "bg-[#7a4a2a]", get initial() { return tr("ف", "D"); }, memberIds: ["u3", "u5", "u6"] },
+  // 🔴 جروب فيه رسايل ما اتقرتش **عن قصد** (٢٦ أكتوبر ٢٠٢٦): قبل كده كان `t1`
+  // (محادثة فردية) هو الوحيد اللي له `unread`، فالفرق بين «بولد» و«عادي» في
+  // **«جروباتي»** و«قنواتي» مكانش بيظهر في بناء الديمو ولا بيتجرّب أصلًا —
+  // نفس درس الستوريتين لنفس الحساب. و`t2` بيفضل مقروءًا عشان الاختبار يقارن.
+  { id: "t4", type: "group", get name() { return tr("فريق التصميم", "Design Team"); }, colorClass: "bg-[#7a4a2a]", get initial() { return tr("ف", "D"); }, memberIds: ["u3", "u5", "u6"], unread: 3 },
   // محادثة «الحالات الصعبة» — **عن قصد**: اسم طويل جدًا في العنوان، ورسايل فيها
   // رابط طويل وكلمة إنجليزية بلا مسافات. المحتوى ده هو اللي بيكسّر العرض على
   // الموبايل (الصفحة تبقى أعرض من الشاشة فالرسايل تتقص من الناحية التانية)،
   // ومن غيره الاختبار مابيشوفش العطل. اتبلّغ من الإنتاج في ١٢ أكتوبر.
   // قناة مشترك فيها **عن قصد**: «للقراءة بس» ومنع الكتابة لازم يتجرّبوا
-  { id: "ch1", type: "channel", get name() { return tr("أخبار رع شات 📣", "Raa Chat News 📣"); }, get about() { return tr("كل جديد في التطبيق", "Everything new in the app"); }, colorClass: "bg-rachat-gold", get initial() { return tr("أ", "R"); }, memberIds: [], memberCount: 1240, myRole: "member", canPost: false },
+  { id: "ch1", type: "channel", get name() { return tr("أخبار رع شات 📣", "Raa Chat News 📣"); }, get about() { return tr("كل جديد في التطبيق", "Everything new in the app"); }, colorClass: "bg-rachat-gold", get initial() { return tr("أ", "R"); }, memberIds: [], memberCount: 1240, myRole: "member", canPost: false, unread: 4 },
   { id: "t5", type: "group", get name() { return tr("nsw-bity& : ḥmt nswt 👑 : مجموعة باسم طويل جدًا للاختبار", "nsw-bity& : ḥmt nswt 👑 : a very long group name for testing"); }, colorClass: "bg-rachat-maroon", get initial() { return tr("ن", "N"); }, memberIds: ["u1", "u2", "u3"] },
 ];
 

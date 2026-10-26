@@ -34,24 +34,55 @@ async function withBadgeSpy(page: Page) {
 
 const calls = (page: Page) => page.evaluate(() => (window as unknown as BadgeWin).__badge ?? []);
 
+const toLatin = (s: string) => s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+
+/**
+ * مجموع العدّادات الظاهرة في قايمة الدردشات.
+ *
+ * 🔴 مش رقمًا مكتوبًا بالإيد (الدرس من ٢٦ أكتوبر ٢٠٢٦): الاختبار كان بيتوقّع
+ * `2` — مجموع بيانات الديمو وقتها — فأول ما اتضافت محادثات فيها جديد (عشان
+ * الفرق بين «بولد» و«عادي» يتجرّب في «جروباتي» و«قنواتي») سقط **اختبار سليم**.
+ * والمقارنة بالقايمة أقوى أصلًا: دي الفرضية الحقيقية — **الرقم على الأيقونة =
+ * اللي المستخدم شايفه في القايمة**.
+ */
+async function listTotal(page: Page) {
+  const labels = await page.getByLabel(/رسايل ما اتقرتش|Unread messages/).allInnerTexts();
+  return labels.reduce((sum, t) => sum + Number(toLatin(t.trim()) || 0), 0);
+}
+
 test("🔴 العلامة بتظهر بعدد الرسايل المش مقروءة", async ({ page }) => {
   await withBadgeSpy(page);
   await openApp(page);
-  // بيانات الديمو: محادثة واحدة فيها رسالتين مش مقروءين
-  await expect.poll(() => calls(page), { timeout: 5000 }).toContain(2);
+  await tab(page, /الدردشات|Chats/);
+  await clearOverlays(page);
+  const total = await listTotal(page);
+  expect(total, "بيانات الديمو لازم يكون فيها جديد وإلا الاختبار بلا معنى").toBeGreaterThan(0);
+  await expect.poll(() => calls(page), { timeout: 5000 }).toContain(total);
   expectNoPageErrors(page);
 });
 
-test("🔴 العلامة بتختفي بعد ما المستخدم يقرا", async ({ page }) => {
+test("🔴 العلامة بتنقص وقت القراءة وتختفي لما كله يتقرا", async ({ page }) => {
   await withBadgeSpy(page);
   await openApp(page);
-  await expect.poll(() => calls(page), { timeout: 5000 }).toContain(2);
-
   await tab(page, /الدردشات|Chats/);
   await clearOverlays(page);
-  // فتح المحادثة بيصفّر العدّاد → العلامة تتمسح
+  const total = await listTotal(page);
+  await expect.poll(() => calls(page), { timeout: 5000 }).toContain(total);
+
+  // فتح محادثة واحدة بيصفّر عدّادها بس — فالرقم ينقص مش يتمسح
   await page.getByText(/مريم عبد الله/).first().click();
   await expect(page.getByRole("heading", { name: /مريم عبد الله/ })).toBeVisible();
+  await page.getByRole("button", { name: /رجوع|Back/ }).first().click();
+  await clearOverlays(page);
+  await expect.poll(() => calls(page), { timeout: 5000 }).toContain(total - 2);
+
+  // ولما كل اللي فيه جديد يتقرا، العلامة تتمسح
+  for (const name of [/فريق التصميم|Design Team/, /أخبار رع شات|Raa Chat News/]) {
+    await page.getByText(name).first().click();
+    await page.getByRole("button", { name: /رجوع|Back/ }).first().click();
+    await clearOverlays(page);
+  }
+  expect(await listTotal(page), "القايمة لازم تبقى بلا عدّادات").toBe(0);
   await expect.poll(() => calls(page), { timeout: 5000 }).toContain("clear");
   expectNoPageErrors(page);
 });

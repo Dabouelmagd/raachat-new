@@ -6,6 +6,7 @@ import { useT, num, loc } from "../i18n";
 import { ThreadAvatar } from "../components/ThreadAvatar";
 import { Header } from "../components/Header";
 import { useAppState, useAppActions } from "../store/AppContext";
+import { threadNameClass, UnreadBadge } from "../components/unread";
 import { PUBLIC_GROUPS } from "../data/groups";
 
 export default function GroupsScreen() {
@@ -29,9 +30,10 @@ export default function GroupsScreen() {
               className="flex w-full items-center gap-3 rounded-2xl bg-rachat-card p-3 text-start">
               <ThreadAvatar thread={t} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold">{t.name}</div>
+                <div className={threadNameClass(t.unread)} dir="auto">{t.name}</div>
                 <div className="flex items-center gap-1 text-[11px] text-neutral-500"><Users size={11} /> {num(t.memberIds.length + 1)} {tt("أعضاء", "members")}</div>
               </div>
+              <UnreadBadge count={t.unread} />
             </button>
           ))}
           {mine.length === 0 && <p className="py-4 text-center text-xs text-neutral-500">{tt("لسه مفيش جروبات — أنشئ واحد أو انضم من تحت", "No groups yet — create one or join below")}</p>}

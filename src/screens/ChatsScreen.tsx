@@ -12,6 +12,7 @@ import { NewChatSheet } from "../components/NewChatSheet";
 import { SponsoredCard } from "../ads/SponsoredCard";
 import { useAppActions, useAppState } from "../store/AppContext";
 import { useT, num as n } from "../i18n";
+import { threadNameClass, UnreadBadge } from "../components/unread";
 
 type Filter = "all" | "unread" | "dm" | "group" | "channel" | "room" | "fav";
 
@@ -111,7 +112,7 @@ export default function ChatsScreen() {
                   {/* الاسم بولد طول ما فيه رسايل ما اتقرتش، وبيرجع عادي أول ما تفتحي المحادثة */}
                   <span className="flex min-w-0 items-center gap-1">
                     {t.pinned && <Pin size={12} aria-label={tx("مثبّتة", "Pinned")} className="shrink-0 text-rachat-gold" />}
-                    <span className={`truncate text-sm ${unreadOf(t) ? "font-extrabold text-white" : "font-bold text-rachat-papyrus"}`} dir="auto">{t.name}</span>
+                    <span className={threadNameClass(unreadOf(t))} dir="auto">{t.name}</span>
                   </span>
                   <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
                     <span role="button" tabIndex={0} aria-label={t.pinned ? tx("فك التثبيت", "Unpin") : tx("تثبيت", "Pin")} aria-pressed={!!t.pinned} onClick={(e) => { e.stopPropagation(); void togglePin(t); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void togglePin(t); } }} className={t.pinned ? "text-rachat-gold" : "text-neutral-600"}>{t.pinned ? <PinOff size={14} /> : <Pin size={14} />}</span>
@@ -123,11 +124,7 @@ export default function ChatsScreen() {
                   <span className={`truncate text-xs ${unreadOf(t) ? "font-bold text-rachat-papyrus" : "text-neutral-400"}`} dir="auto">
                     {last ? (last.deleted ? tx("تم حذف الرسالة", "Message deleted") : (last.text && occKind(last.text) ? tx("🎉 ملصق تهنئة", "🎉 Greeting sticker") : last.text && phaKind(last.text) ? tx("🏺 ملصق فرعوني", "🏺 Pharaonic sticker") : last.text) || (last.attachment ? `📎 ${last.attachment.name}` : "")) : tx("لا توجد رسائل بعد", "No messages yet")}
                   </span>
-                  {unreadOf(t) > 0 && (
-                    <span aria-label={tx("رسايل ما اتقرتش", "Unread messages")} className="shrink-0 rounded-full bg-rachat-red px-2 py-0.5 text-[11px] font-extrabold text-white">
-                      {n(unreadOf(t))}
-                    </span>
-                  )}
+                  <UnreadBadge count={unreadOf(t)} />
                 </div>
               </div>
             </button>
