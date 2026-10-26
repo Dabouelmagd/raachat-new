@@ -10,6 +10,7 @@ import { ContactsBanner } from "../components/ContactsBanner";
 import { StoriesBar } from "../components/StoriesBar";
 import { NewChatSheet } from "../components/NewChatSheet";
 import { SponsoredCard } from "../ads/SponsoredCard";
+import { LiveBadge, liveCount, roomNameClass, roomStatusText } from "../components/roomLive";
 import { useAppActions, useAppState } from "../store/AppContext";
 import { useT, num as n } from "../i18n";
 import { threadNameClass, UnreadBadge } from "../components/unread";
@@ -81,9 +82,10 @@ export default function ChatsScreen() {
           <button key={r.id} onClick={() => navigate("/rooms")} className="mb-2.5 flex w-full items-center gap-3 rounded-2xl bg-rachat-card p-3 text-start shadow-lg shadow-black/20">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-rachat-maroon text-rachat-gold"><Mic size={18} /></span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-rachat-papyrus">{r.name}</div>
-              <div className="text-xs text-neutral-400">{r.joined ? tx("أنت داخل الغرفة", "You're in this room") : tx("اضغط للانضمام", "Tap to join")} · {r.count ?? r.participants.length} {tx("مشارك", "people")}</div>
+              <div className={`truncate ${roomNameClass(liveCount(r))}`} dir="auto">{r.name}</div>
+              <div className="text-xs text-neutral-400">{roomStatusText(tx, liveCount(r), r.joined)}</div>
             </div>
+            <LiveBadge count={liveCount(r)} />
           </button>
         ))}
         {filter === "room" && rooms.length === 0 && <p className="mt-10 text-center text-xs text-neutral-500">{tx("مفيش غرف صوتية دلوقتي", "No voice rooms right now")}</p>}

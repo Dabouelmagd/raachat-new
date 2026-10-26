@@ -122,6 +122,14 @@ export const INITIAL_ROOMS: VoiceRoom[] = [
       { id: "u5", get name() { return tr("سارة", "Sara"); }, color: "#7a4a2a" },
     ],
   },
+  // 🔴 غرفة **فاضية** عن قصد: من غيرها الفرق بين «فيها ناس دلوقتي» و«فاضية»
+  // مستحيل يظهر في بناء الديمو ولا يتجرّب — نفس درس الستوريتين لنفس الحساب
+  // ودرس الجروب والقناة اللي فيهم غير مقروء. والغرفة الفاضية حالة حقيقية في
+  // الإنتاج كمان: `GET /rooms` بيرجّع كل غرفة مفتوحة بلا فلتر على الحضور.
+  {
+    id: "r3", get name() { return tr("قعدة الفجر 🌙", "Dawn Hangout 🌙"); }, createdByMe: false, joined: false, myIdentityMode: null,
+    participants: [],
+  },
 ];
 
 export const INITIAL_STORIES: Story[] = [

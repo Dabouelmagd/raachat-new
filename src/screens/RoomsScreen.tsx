@@ -3,10 +3,11 @@ import { Plus, Eye, EyeOff, Lock, Mic, MicOff, Hand, LogOut, X } from "lucide-re
 import { Header } from "../components/Header";
 import { useAppState, useAppActions } from "../store/AppContext";
 import { RoomParticipant } from "../types";
-import { useT, tr, num } from "../i18n";
+import { useT, tr } from "../i18n";
 import { API_ON } from "../api/client";
 import { useRoomAudio } from "../rtc/roomAudio";
 import { SponsoredCard } from "../ads/SponsoredCard";
+import { LiveBadge, liveCount, roomNameClass, roomStatusText } from "../components/roomLive";
 
 const TEMP_NAMES: { name: string; color: string }[] = [
   { get name() { return tr("المسافر الليلي", "Night Traveler"); }, color: "#C9A227" },
@@ -165,10 +166,11 @@ export default function RoomsScreen() {
         {rooms.length === 0 && <p className="py-10 text-center text-xs text-neutral-500">{t("مفيش غرف مفتوحة دلوقتي — اعمل غرفة بزرار +", "No open rooms right now — create one with +")}</p>}
         {rooms.map((r) => (
           <div key={r.id} className="mb-2.5 rounded-2xl bg-rachat-card p-3.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-rachat-papyrus">{r.name}</span>
-              <span className="text-[11px] text-neutral-500">{num(r.count ?? r.participants.length)} {t("مستمع", "listening")}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`min-w-0 flex-1 truncate ${roomNameClass(liveCount(r))}`} dir="auto">{r.name}</span>
+              <LiveBadge count={liveCount(r)} />
             </div>
+            <div className="mt-0.5 text-[11px] text-neutral-500">{roomStatusText(t, liveCount(r), r.joined)}</div>
             <div className="mt-2.5 flex items-center justify-between">
               <div className="flex">
                 {r.participants.slice(0, 5).map((p, i) => (
