@@ -38,24 +38,49 @@ test("حقل تاريخ الميلاد بيرفض الغلط وبيقول إن �
   await expect(page.getByRole("button", { name: /حفظ التغييرات/ })).toBeEnabled();
 });
 
-test("🔴 اللي أقلّ من ١٨ بإقراره: المحفظة مقفولة، ومفيش طمأنة إن باقي التطبيق مفتوح له", async ({ page }) => {
+test("🔴 غير محدَّد السن: المحفظة مقفولة، وبقيّة التطبيق مفتوحة له (مطابق للسياسة البند ١٠)", async ({ page }) => {
   await openProfile(page);
-  await setBirthDate(page, `${yearForAge(12)}-01-01`);
+  // بيفضّي تاريخ ميلاده — وهي **حالة الإنتاج الحقيقية**: الحسابات المنشأة قبل
+  // ١٣ أكتوبر ٢٠٢٦ لم يكن تحديده لازمًا فيها، وتُعامَل معاملة غير محدَّدة السن.
+  await setBirthDate(page, "");
 
   await tab(page, /الخدمات|Services/);
   await expect(page.getByText(/خدمة من/)).toBeVisible();
   await expect(page.getByText(/محفظتك/)).toHaveCount(0);
-  // 🔴 كان بيتأكد إن الرسالة بتقول «بقيّة رع شات مفتوحة لك» — وده مناقض للسياسة
-  // البند ١٠: الحساب اللي يتبيّن إنه دون ١٨ **يُغلق وتُمحى بياناته**. فطمأنة القاصر
-  // إن باقي التطبيق مفتوح له = التطبيق بيقول عكس المستند المنشور.
-  await expect(page.getByText(/بقيّة رع شات مفتوحة لك/)).toHaveCount(0);
-  await expect(page.getByText(/مخصَّص لمن بلغ/)).toBeVisible();
-  // تاريخه محدد خلاص، فمفيش زرار «حدِّد تاريخ ميلادك»
-  await expect(page.getByRole("button", { name: /حدِّد تاريخ ميلادك/ })).toHaveCount(0);
+  // والسياسة البند ١٠ بتقول إن دي بتفضل تستخدم باقي التطبيق لحد ما يُحدَّد السن —
+  // فالطمأنة هنا **صحيحة**، على عكس حالة الأقلّ من ١٨ (اللي بتُغلق بحسب السياسة).
+  await expect(page.getByText(/بقيّة رع شات مفتوحة لك/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /حدِّد تاريخ ميلادك/ })).toBeVisible();
 
-  // الشات شغّال عادي للقاصر
+  // الشات شغّال عادي
   await tab(page, /الدردشات|Chats/);
   await expect(page.getByRole("heading", { name: /رع شات|الدردشات/ }).or(page.getByText(/الدردشات/)).first()).toBeVisible();
+  expectNoPageErrors(page);
+});
+
+/**
+ * 🔴 **كتابة تاريخ أقلّ من ١٨ مرفوضة (قرار داليا ٢٦ أكتوبر ٢٠٢٦) — بدون حذف أي شيء.**
+ *
+ * قبلها كان `PATCH /me` يقبل أي تاريخ صالح ويحفظه، فالمستخدم يقرّ بنفسه إنه دون السن
+ * والخادم يسجّلها ويكمّل — والسياسة (البند ١٠) تقول إن الحساب في هذه الحالة يُغلق
+ * وتُمحى بياناته. فالتسجيل الصامت كان إقرارًا بالعلم بلا الإجراء الموعود.
+ *
+ * **والحارس الحقيقي في الخادم** (`assertProfileBirthDate`، واختباراته في
+ * `server/test/adultOnly.test.ts`) — والمنع هنا كي لا يُرتدّ المستخدم في آخر خطوة.
+ */
+test("🔴 تاريخ أقلّ من ١٨: زرّ الحفظ مقفول ومعاه سبب صريح", async ({ page }) => {
+  await openProfile(page);
+  const save = page.getByRole("button", { name: /حفظ التغييرات/ });
+  await expect(save).toBeEnabled();
+
+  await page.locator("#rc-birth").fill(`${yearForAge(12)}-01-01`);
+  await expect(save, "تاريخ دون ١٨ ممنوع يتحفظ").toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText(/للبالغين/);
+
+  // ويرجع يفتح على تاريخ بالغ — فالمنع على القيمة الممنوعة وحدها
+  await page.locator("#rc-birth").fill(`${yearForAge(30)}-01-01`);
+  await expect(save).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   expectNoPageErrors(page);
 });
 
@@ -80,9 +105,11 @@ test("٢١+: مفيش سقوف خالص", async ({ page }) => {
   await expect(page.getByText(/سقوف لحد سن/)).toHaveCount(0);
 });
 
-test("شاشة الدفع نفسها مقفولة على القاصر (لو جه عليها من الخدمات)", async ({ page }) => {
+test("شاشة الدفع نفسها مقفولة على غير محدَّد السن (لو جه عليها من الخدمات)", async ({ page }) => {
   await openProfile(page);
-  await setBirthDate(page, `${yearForAge(15)}-06-01`);
+  // كان بيضبط تاريخ ١٥ سنة — وكتابة تاريخ دون ١٨ بقت مرفوضة من ٢٦ أكتوبر ٢٠٢٦،
+  // فالحالة المتبقية والواقعية هي **غير محدَّد السن** (حسابات ما قبل ١٣ أكتوبر).
+  await setBirthDate(page, "");
   await tab(page, /الخدمات|Services/);
   // القفل بيمنع أصلًا الوصول لأزرار الفواتير
   await expect(page.getByText(/خدمة من/)).toBeVisible();

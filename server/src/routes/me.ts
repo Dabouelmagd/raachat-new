@@ -5,7 +5,7 @@ import { consumeOtp, normalizeTarget, requestOtp, requireAuth, type AuthedReques
 import type { Ctx } from "../context.js";
 import { HttpError, bad, notFound, wrap } from "../lib/errors.js";
 import { meUser, publicUser } from "../serialize.js";
-import { validBirthDate } from "../lib/age.js";
+import { assertProfileBirthDate } from "../lib/age.js";
 import { eraseUser } from "../lib/eraseUser.js";
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -30,12 +30,22 @@ export function meRoutes(ctx: Ctx) {
     assertClean(ctx, b.name, b.status);
     const { birthDate, ...rest } = b;
     const data: Record<string, unknown> = { ...rest };
+    const me = (req as AuthedRequest).userId;
     if (birthDate !== undefined) {
-      const d = new Date(birthDate + "T00:00:00Z");
-      if (!validBirthDate(d)) throw bad("bad_birth_date", "تاريخ ميلاد غير صحيح");
-      data.birthDate = d;
+      // 🔴 كان `validBirthDate` وحده — فكل تاريخ صالح يُحفَظ، بما فيه تاريخ أقلّ من ١٨.
+      // الحارس الآن يرفض الأقلّ من ١٨ ولا يحذف شيئًا (قرار داليا ٢٦ أكتوبر ٢٠٢٦)،
+      // والقاعدة من **نفس مصدر** حارس إنشاء الحساب في `lib/age.ts`.
+      //
+      // 🔴 والرفض على **التغيير** لا على القيمة المرسلة: الواجهة تحمّل التاريخ المخزَّن
+      // في الحقل وترسله مع كل حفظ، فلو رفضنا القيمة كما هي لصار صاحب صفٍّ مخزَّن دون
+      // ١٨ (من استرجاع نسخة أو تعديل مباشر في القاعدة — المصدر الواقعي الوحيد له)
+      // **عاجزًا عن تعديل اسمه أو صورته** إلى الأبد، وهو حجزٌ لم تطلبه داليا:
+      // القرار كان «ارفض تاريخًا أقلّ من ١٨ **بدون حذف**»، لا «اقفل الحساب».
+      const cur = await ctx.db.user.findUnique({ where: { id: me }, select: { birthDate: true } });
+      const same = !!cur?.birthDate && cur.birthDate.toISOString().slice(0, 10) === birthDate;
+      if (!same) data.birthDate = assertProfileBirthDate(birthDate);
     }
-    const u = await ctx.db.user.update({ where: { id: (req as AuthedRequest).userId }, data });
+    const u = await ctx.db.user.update({ where: { id: me }, data });
     res.json(meUser(u));
   }));
   // بحث في المستخدمين (لبدء دردشة/إضافة أعضاء)

@@ -28,9 +28,20 @@ export default function ProfileScreen() {
 
   /** تاريخ الميلاد اختياري، لكن لو مكتوب لازم يكون صحيح — والسيرفر بيرفض الغلط كمان */
   const badBirth = birthDate !== "" && !validBirthDay(birthDate);
+  /**
+   * 🔴 وأقلّ من ١٨ مرفوض كذلك (قرار داليا ٢٦ أكتوبر ٢٠٢٦) — **والحارس الحقيقي في
+   * الخادم** (`assertProfileBirthDate` في `PATCH /me`). المنع هنا كي لا يملأ المستخدم
+   * الحقل ويُرتدّ في آخر خطوة بخطأ من الخادم، تمامًا كزرّ «حساب جديد» في شاشة الدخول.
+   */
+  /**
+   * ⚠️ والمقارنة بالتاريخ **المخزَّن**: صاحب صفٍّ دون ١٨ (من استرجاع نسخة أو تعديل
+   * مباشر في القاعدة) يفتح الشاشة فتاريخه في الحقل — فمنعٌ على القيمة وحدها كان
+   * هيقفل عليه تعديل اسمه وصورته. الممنوع هو **كتابة** تاريخ أقلّ من ١٨، مش امتلاكه.
+   */
+  const underAge = birthDate !== "" && !badBirth && !isAdultDay(birthDate) && birthDate !== p.birthDate;
 
   const save = () => {
-    if (badBirth) return;
+    if (badBirth || underAge) return;
     saveProfile({ name, status, color, photo, birthDate: birthDate || undefined });
     setSaved(true);
     setTimeout(() => nav("/account"), 700);
@@ -91,19 +102,21 @@ export default function ProfileScreen() {
         <input
           id="rc-birth" type="date" value={birthDate} max={todayDay()} dir="ltr"
           onChange={(e) => setBirthDate(e.target.value)}
-          aria-invalid={badBirth || undefined}
+          aria-invalid={badBirth || underAge || undefined}
           aria-describedby="rc-birth-help"
-          className={`w-full rounded-xl bg-rachat-card px-3.5 py-3 text-sm text-rachat-papyrus outline-none focus:ring-1 ${badBirth ? "ring-1 ring-rachat-coral" : "focus:ring-rachat-red"}`}
+          className={`w-full rounded-xl bg-rachat-card px-3.5 py-3 text-sm text-rachat-papyrus outline-none focus:ring-1 ${badBirth || underAge ? "ring-1 ring-rachat-coral" : "focus:ring-rachat-red"}`}
         />
         <p id="rc-birth-help" className="mb-6 mt-1.5 text-[10.5px] leading-[17px] text-neutral-500">
           {badBirth
             ? <span role="alert" className="text-rachat-coral">{t("تاريخ ميلاد غير صحيح", "That date of birth isn't valid")}</span>
+            : underAge
+            ? <span role="alert" className="text-rachat-coral">{t(`رع شات للبالغين (${num(ADULT_AGE)} سنة أو أكثر) — لا نحفظ تاريخًا أقلّ من ذلك.`, `Raa Chat is for adults (${ADULT_AGE}+) — we do not save a date of birth below that.`)}</span>
             : isAdultDay(birthDate)
               ? t(`رع شات للبالغين (${num(ADULT_AGE)} سنة أو أكثر). وحسابك سنّه محدَّد، فخدمات المحفظة ودفع الفواتير مفتوحة له.`, `Raa Chat is for adults (${ADULT_AGE}+). Your date of birth is set, so wallet and bill payment are available to you.`)
               : t(`رع شات للبالغين (${num(ADULT_AGE)} سنة أو أكثر). والمحفظة ودفع الفواتير لا تُفتَح إلا لمن بلغ ${num(ADULT_AGE)} سنة، وتبقى مغلقة ما لم يُحدَّد تاريخ ميلادك. وتاريخ الميلاد إقرار منك، ولا نطلب مستندات لإثباته.`, `Raa Chat is for adults (${ADULT_AGE}+). Wallet and bill payment open only to those aged ${ADULT_AGE} or over, and stay closed until your date of birth is set. Your date of birth is your own declaration; we ask for no documents to prove it.`)}
         </p>
 
-        <button onClick={save} disabled={!name.trim() || badBirth}
+        <button onClick={save} disabled={!name.trim() || badBirth || underAge}
           className="w-full rounded-xl bg-gradient-to-br from-rachat-red to-rachat-coral py-3 text-sm font-bold text-white disabled:opacity-40">
           {saved ? t("تم الحفظ ✓", "Saved ✓") : t("حفظ التغييرات", "Save changes")}
         </button>

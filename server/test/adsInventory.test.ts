@@ -142,7 +142,10 @@ describe("خريطة الإعلانات", () => {
     const big = await env.login("01099000050", "بالغ");
     const kid = await env.login("01099000051", "قاصر");
     await api().patch("/me").set(big.auth).send({ birthDate: "1990-05-20" }).expect(200);
-    await api().patch("/me").set(kid.auth).send({ birthDate: `${new Date().getUTCFullYear() - 12}-01-01` }).expect(200);
+    // 🔴 التاريخ الأقلّ من ١٨ يُكتب **في القاعدة مباشرةً** من ٢٦ أكتوبر ٢٠٢٦: كل مسار
+    // (التسجيل · الدخول بكود · `PATCH /me` · `set-birthdate.sh`) يرفضه، فالقاعدة هي
+    // مصدره الواقعي الوحيد (استرجاع نسخة أو تعديل مباشر) — وفرع `!isAdult` موجود لها.
+    await env.ctx.db.user.update({ where: { id: kid.user.id }, data: { birthDate: new Date(`${new Date().getUTCFullYear() - 12}-01-01T00:00:00Z`) } });
     const c = (await api().post("/admin/ads/campaigns").set(owner.auth).send(camp({ advertiser: "سلوك", placements: ["banner", "modal"], ...mo(0), approve: true })).expect(201)).body;
 
     // ١) مفيش استهداف: نفس الكتالوج بالحرف للبالغ والقاصر (ومن غير تاريخ ميلاد كمان)

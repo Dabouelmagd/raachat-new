@@ -95,9 +95,12 @@ describe("wallet", () => {
     expect(no.body.code).toBe("birth_date_required");
     await request(env.app).post("/wallet/topup").set(a.auth).send({ amount: 100 }).expect(403);
 
-    // قاصر (١٢ سنة) = مقفول بكود مختلف
+    // قاصر (١٢ سنة) = مقفول بكود مختلف.
+    // 🔴 والتاريخ يُكتب **في القاعدة مباشرةً** من ٢٦ أكتوبر ٢٠٢٦: `PATCH /me` بقى
+    // يرفض الأقلّ من ١٨ (`under_age`) زي مسارات إنشاء الحساب، فالقاعدة هي المصدر
+    // الواقعي الوحيد لصفٍّ كده — وفرع `age_restricted` في المحفظة موجود له.
     const y = new Date().getUTCFullYear() - 12;
-    await setBirth(a, `${y}-01-01`).expect(200);
+    await env.ctx.db.user.update({ where: { id: a.user.id }, data: { birthDate: new Date(`${y}-01-01T00:00:00Z`) } });
     const minor = await request(env.app).get("/wallet").set(a.auth).expect(403);
     expect(minor.body.code).toBe("age_restricted");
     await request(env.app).post("/wallet/pay").set(a.auth).send({ service: "elec", account: "1", amount: 10, pin: "1234", idempotencyKey: "minor-key-01" }).expect(403);

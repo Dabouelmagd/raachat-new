@@ -241,3 +241,76 @@ describe("محو بيانات حساب من اللوحة", () => {
     await erase(owner.auth, victim.user.id).expect(409);                                      // ممحو بالفعل
   });
 });
+
+/**
+ * **تعديل تاريخ الميلاد لحساب موجود — `PATCH /me` (قرار داليا ٢٦ أكتوبر ٢٠٢٦).**
+ *
+ * المسار كان `validBirthDate` وحده: أي تاريخ صالح يُحفَظ، بما فيه تاريخ أقلّ من ١٨.
+ * فالمستخدم يقرّ بنفسه إنه دون السن، والخادم يسجّلها ويكمّل — والسياسة المنشورة
+ * (البند ١٠) تقول إنّ الحساب في هذه الحالة «أغلقناه ومحونا بياناته فورًا». القرار:
+ * **نرفض التاريخ ولا نحذف شيئًا** (الحذف لا يرجع، والرفض يمنع الحالة من أصلها).
+ */
+describe("تعديل تاريخ الميلاد لحساب موجود", () => {
+  const patch = (auth: Record<string, string>, body: Record<string, unknown>) =>
+    request(env.app).patch("/me").set(auth).send(body);
+
+  it("🔴 أقلّ من ١٨ مرفوض — والتاريخ المخزَّن ما اتغيّرش", async () => {
+    const a = await env.login("01099200001", "حساب قديم");
+    await patch(a.auth, { birthDate: birthFor(30) }).expect(200);
+
+    const r = await patch(a.auth, { birthDate: birthFor(12) }).expect(403);
+    expect(r.body.code).toBe("under_age");
+    // 🔴 الفحص الحاسم: الرفض **مش بيكتب نصّ الطريق** — لو كتب التاريخ وبعدين رفض،
+    // الحساب يبقى مسجَّلًا دون ١٨ والرد يقول «مرفوض»، وهي أسوأ من القبول الصريح.
+    const row = await env.ctx.db.user.findUnique({ where: { id: a.user.id }, select: { birthDate: true } });
+    expect(row!.birthDate!.toISOString().slice(0, 10)).toBe(birthFor(30));
+    expect((await request(env.app).get("/me").set(a.auth).expect(200)).body.isAdult).toBe(true);
+  });
+
+  it("🔴 ومرفوض كذلك لحساب غير محدَّد السن — فلا طريق يُنشئ تاريخًا دون ١٨", async () => {
+    const a = await env.login("01099200002", "غير محدَّد");
+    await env.ctx.db.user.update({ where: { id: a.user.id }, data: { birthDate: null } });
+
+    expect((await patch(a.auth, { birthDate: birthFor(17) }).expect(403)).body.code).toBe("under_age");
+    const row = await env.ctx.db.user.findUnique({ where: { id: a.user.id }, select: { birthDate: true } });
+    expect(row!.birthDate, "فضل غير محدَّد — ولا اتسجّل قاصرًا").toBeNull();
+  });
+
+  it("١٨ بالظبط النهاردة مقبول، و١٨ ناقص يوم مرفوض (بتقويم القاهرة)", async () => {
+    const a = await env.login("01099200003", "على الحدّ");
+    await patch(a.auth, { birthDate: birthFor(ADULT_AGE) }).expect(200);
+    // ‏`days` بالسالب = مولود **بعد** التاريخ ده، يعني أصغر بيوم (الموجب بيكبّره —
+    // وأول نسخة من الاختبار ده استخدمت `1` فعدّى بـ٢٠٠ على كود سليم)
+    expect((await patch(a.auth, { birthDate: birthFor(ADULT_AGE, -1) }).expect(403)).body.code).toBe("under_age");
+    // ومن غير تاريخ ميلاد خالص: الحساب القديم لسه يقدر يعدّل اسمه
+    const r = await patch(a.auth, { name: "اسم جديد" }).expect(200);
+    expect(r.body.name).toBe("اسم جديد");
+  });
+
+  /**
+   * 🔴 الحالة اللي كسرها إصلاحي نفسه قبل الـcommit: صاحب صفٍّ مخزَّن دون ١٨ (مصدره
+   * الواقعي الوحيد استرجاع نسخة أو تعديل مباشر) يفتح الملف الشخصي فتاريخه في الحقل،
+   * والواجهة ترسله مع **كل** حفظ — فالرفض على القيمة كان بيقفل عليه تعديل اسمه
+   * وصورته إلى الأبد. والقرار كان «ارفض تاريخًا أقلّ من ١٨ بدون حذف»، لا «اقفل الحساب».
+   */
+  it("🔴 صاحب تاريخ مخزَّن دون ١٨ لسه يقدر يعدّل اسمه (الرفض على التغيير مش على القيمة)", async () => {
+    const a = await env.login("01099200005", "صفّ قديم");
+    const kid = birthFor(12);
+    await env.ctx.db.user.update({ where: { id: a.user.id }, data: { birthDate: new Date(`${kid}T00:00:00Z`) } });
+
+    // بيبعت نفس التاريخ المخزَّن مع الاسم — زي ما الواجهة بتعمل بالظبط
+    const r = await patch(a.auth, { name: "اسمه الجديد", birthDate: kid }).expect(200);
+    expect(r.body.name).toBe("اسمه الجديد");
+    // والتاريخ ما اتغيّرش ولا اتمسح — مفيش حذف، ده كان شرط القرار
+    const row = await env.ctx.db.user.findUnique({ where: { id: a.user.id }, select: { birthDate: true } });
+    expect(row!.birthDate!.toISOString().slice(0, 10)).toBe(kid);
+    // إنما **تاريخ دون ١٨ مختلف** لسه مرفوض — الحارس مش بيتفتح بالحيلة دي
+    expect((await patch(a.auth, { birthDate: birthFor(13) }).expect(403)).body.code).toBe("under_age");
+  });
+
+  it("التاريخ غير الصالح لسه مرفوض بنفس الكود القديم", async () => {
+    const a = await env.login("01099200004", "تواريخ غلط");
+    expect((await patch(a.auth, { birthDate: birthFor(-1) }).expect(400)).body.code).toBe("invalid_birth_date");
+    expect((await patch(a.auth, { birthDate: "1850-01-01" }).expect(400)).body.code).toBe("invalid_birth_date");
+  });
+});
