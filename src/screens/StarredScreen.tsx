@@ -36,9 +36,9 @@ export default function StarredScreen() {
         {rows?.length === 0 && (
           <div className="mt-16 flex flex-col items-center gap-2 text-center">
             <Star size={34} className="text-rachat-gold" />
-            <p className="text-sm text-neutral-400">{t("مفيش رسائل مميّزة لسه", "No starred messages yet")}</p>
+            <p className="text-sm text-neutral-400">{t("لا توجد رسائل مميّزة بعد", "No starred messages yet")}</p>
             <p className="max-w-[260px] text-[11px] leading-5 text-neutral-500">
-              {t("دوسي على أي رسالة واختاري «تمييز بنجمة» عشان ترجعيلها بسرعة من هنا.",
+              {t("اضغط على أي رسالة واختر «تمييز بنجمة» للرجوع إليها بسرعة من هنا.",
                  "Tap any message and choose “Star” to find it quickly here.")}
             </p>
           </div>

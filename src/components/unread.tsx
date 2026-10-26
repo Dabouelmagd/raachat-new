@@ -32,7 +32,7 @@ export function UnreadBadge({ count }: { count?: number }) {
   if (!count) return null;
   return (
     <span
-      aria-label={tx("رسايل ما اتقرتش", "Unread messages")}
+      aria-label={tx("رسائل غير مقروءة", "Unread messages")}
       className="shrink-0 rounded-full bg-rachat-red px-2 py-0.5 text-[11px] font-extrabold text-white"
     >
       {num(count)}

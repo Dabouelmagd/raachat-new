@@ -18,7 +18,7 @@ const openChannel = async (page: import("@playwright/test").Page) => {
   await clearOverlays(page);
 };
 
-test("فلتر «القنوات» بيعرض القنوات بس، والجروبات لأ", async ({ page }) => {
+test("فلتر «القنوات» بيعرض القنوات بس، والمجموعات لأ", async ({ page }) => {
   await open(page);
   await page.getByRole("tab", { name: /^القنوات$|^Channels$/ }).click();
   await expect(page.getByText(/أخبار رع شات|Raa Chat News/)).toBeVisible();
@@ -29,9 +29,9 @@ test("فلتر «القنوات» بيعرض القنوات بس، والجرو�
 test("القناة للقراءة بس: مفيش صندوق كتابة ومفيش «رد»، والتفاعل موجود", async ({ page }) => {
   await openChannel(page);
   await expect(page.getByPlaceholder(/اكتب رسالة|Type a message/)).toHaveCount(0);
-  await expect(page.getByText(/القناة دي للقراءة بس|read-only/)).toBeVisible();
+  await expect(page.getByText(/هذه القناة للقراءة فقط|read-only/)).toBeVisible();
 
-  // قايمة خيارات الرسالة: مفيش رد ولا رد بالصوت، إنما التفاعل والنجمة موجودين
+  // قايمة خيارات الرسالة: لا يوجد ردّ ولا رد بالصوت، إنما التفاعل والنجمة موجودين
   await page.getByText(/نزلنا الاستطلاعات|Polls and pinned chats/).first().click();
   const menu = page.getByRole("dialog", { name: /خيارات الرسالة|Message options/ });
   await expect(menu).toBeVisible();

@@ -41,7 +41,7 @@ export function PasswordSheet({ onClose }: { onClose: () => void }) {
       await setMyPassword(pass, has ? current : undefined);
       setDone(true);
     } catch (e) {
-      setErr((e as Error).message || t("حصلت مشكلة، حاول تاني", "Something went wrong, try again"));
+      setErr((e as Error).message || t("حدث خطأ، حاول مرة أخرى", "Something went wrong, try again"));
     }
     setBusy(false);
   };
@@ -54,7 +54,7 @@ export function PasswordSheet({ onClose }: { onClose: () => void }) {
         {/* العنوان بزرار الإغلاق لازم يفضل ظاهر مهما اتسكرل */}
         <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex items-center justify-between bg-rachat-card px-5 pb-3 pt-5">
           <h3 className="text-base font-extrabold text-rachat-papyrus">
-            {has ? t("تغيير كلمة السر", "Change password") : t("اعمل كلمة سر للحساب", "Set a password")}
+            {has ? t("تغيير كلمة السر", "Change password") : t("أنشئ كلمة سرّ للحساب", "Set a password")}
           </h3>
           <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="text-neutral-400"><X size={18} /></button>
         </div>
@@ -63,8 +63,8 @@ export function PasswordSheet({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-3">
             <p className="text-sm text-rachat-papyrus">
               {has
-                ? t("اتغيّرت. أي جهاز تاني كان داخل بحسابك اتسجّل خروجه.", "Changed. Any other device signed into your account has been logged out.")
-                : t("تمام — من المرة الجاية ادخل بإيميلك وكلمة السر، مش بكود.", "Done — next time sign in with your email and password, not a code.")}
+                ? t("تغيّرت. وسُجِّل خروج أي جهاز آخر كان داخلًا بحسابك.", "Changed. Any other device signed into your account has been logged out.")
+                : t("تمّ — في المرة القادمة ادخل ببريدك وكلمة السرّ، لا بكود.", "Done — next time sign in with your email and password, not a code.")}
             </p>
             <button onClick={onClose} className="rounded-xl bg-rachat-red py-3 text-sm font-extrabold text-white">{t("تمام", "Done")}</button>
           </div>
@@ -73,7 +73,7 @@ export function PasswordSheet({ onClose }: { onClose: () => void }) {
             {has === null && <p className="text-xs text-neutral-500">{t("جاري التحميل…", "Loading…")}</p>}
             {has === false && (
               <p className="text-xs leading-5 text-neutral-400">
-                {t("حسابك دلوقتي بيدخل بكود لمرة واحدة كل مرة. اعمل كلمة سر وادخل بيها بعد كده.",
+                {t("حسابك يدخل الآن بكود لمرة واحدة في كل مرة. أنشئ كلمة سرّ وادخل بها بعد ذلك.",
                    "Your account currently signs in with a one-time code every time. Set a password and use it from now on.")}
               </p>
             )}
@@ -85,13 +85,13 @@ export function PasswordSheet({ onClose }: { onClose: () => void }) {
               placeholder={t(`كلمة السر الجديدة (${num(MIN)} حروف على الأقل)`, `New password (at least ${MIN} characters)`)}
               aria-label={t("كلمة السر الجديدة", "New password")} className={field} />
             <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)}
-              placeholder={t("اكتبها تاني", "Repeat it")} aria-label={t("تأكيد كلمة السر", "Confirm password")} className={field} />
-            {again.length > 0 && pass !== again && <p className="text-[11px] text-rachat-coral">{t("الكلمتين مش زي بعض", "The two don't match")}</p>}
+              placeholder={t("أعد كتابتها", "Repeat it")} aria-label={t("تأكيد كلمة السر", "Confirm password")} className={field} />
+            {again.length > 0 && pass !== again && <p className="text-[11px] text-rachat-coral">{t("الكلمتان غير متطابقتين", "The two don't match")}</p>}
             {err && <p className="text-sm text-rachat-coral" role="alert">{err}</p>}
             <button disabled={!ok || busy} onClick={() => void save()} className="rounded-xl bg-rachat-red py-3 text-sm font-extrabold text-white disabled:opacity-40">
-              {has ? t("غيّر كلمة السر", "Change password") : t("اعمل كلمة السر", "Set password")}
+              {has ? t("غيّر كلمة السر", "Change password") : t("أنشئ كلمة السرّ", "Set password")}
             </button>
-            {!API_ON && <p className="text-[11px] text-neutral-500">{t("نسخة تجريبية: مفيش حفظ فعلي.", "Demo version: nothing is actually saved.")}</p>}
+            {!API_ON && <p className="text-[11px] text-neutral-500">{t("نسخة تجريبية: لا يوجد حفظ فعلي.", "Demo version: nothing is actually saved.")}</p>}
           </div>
         )}
       </div>

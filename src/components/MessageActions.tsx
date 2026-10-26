@@ -49,9 +49,9 @@ export function MessageActions(p: ActionsProps) {
     const text = m.text || m.attachment?.name || "";
     try {
       await navigator.clipboard.writeText(text);
-      setDone(t("اتنسخت", "Copied"));
+      setDone(t("نُسِخت", "Copied"));
     } catch {
-      setDone(t("المتصفح مارضيش ينسخ", "The browser refused to copy"));
+      setDone(t("تعذّر النسخ من المتصفح", "The browser refused to copy"));
     }
   };
 
@@ -63,7 +63,7 @@ export function MessageActions(p: ActionsProps) {
       p.onStarChanged(next);
     } catch {
       setStarred(!next); // رجّعها زي ما كانت لو السيرفر رفض
-      setDone(t("ما اتحفظتش، حاول تاني", "Not saved, try again"));
+      setDone(t("لم يُحفَظ، حاول مرة أخرى", "Not saved, try again"));
     }
   };
 
@@ -133,8 +133,8 @@ export function MessageActions(p: ActionsProps) {
           <dl className="mx-2 mt-1 rounded-xl bg-rachat-black p-3 text-xs text-neutral-300">
             <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("المُرسِل", "From")}</dt><dd dir="auto">{m.authorName}</dd></div>
             <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("وقت الإرسال", "Sent")}</dt><dd>{m.at ? fullStamp(m.at) : m.time}</dd></div>
-            {p.isMe && <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("الحالة", "Status")}</dt><dd>{m.read ? t("اتقرت", "Read") : t("اتبعتت", "Sent")}</dd></div>}
-            {m.edited && <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("التعديل", "Edited")}</dt><dd>{t("اتعدّلت بعد الإرسال", "Edited after sending")}</dd></div>}
+            {p.isMe && <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("الحالة", "Status")}</dt><dd>{m.read ? t("قُرئت", "Read") : t("أُرسِلت", "Sent")}</dd></div>}
+            {m.edited && <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("التعديل", "Edited")}</dt><dd>{t("عُدِّلت بعد الإرسال", "Edited after sending")}</dd></div>}
             {m.text && <div className="flex justify-between gap-3 py-0.5"><dt className="text-neutral-500">{t("عدد الحروف", "Characters")}</dt><dd>{num(m.text.length)}</dd></div>}
             {m.attachment && (
               <>

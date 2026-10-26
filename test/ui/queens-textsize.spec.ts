@@ -36,9 +36,9 @@ test("حجم الخط بيكبر ويصغّر فعلًا", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
   await page.getByRole("link", { name: /الحساب|Account/ }).click();
-  await page.getByRole("button", { name: /خلفية الشات|Chat wallpaper/ }).click();
-  const sheet = page.getByRole("dialog", { name: /شكل الشات|Chat appearance/ });
-  const sample = sheet.getByText(/كده هيبقى شكل الكلام|This is how your text/);
+  await page.getByRole("button", { name: /خلفية المحادثة|Chat wallpaper/ }).click();
+  const sheet = page.getByRole("dialog", { name: /شكل المحادثة|Chat appearance/ });
+  const sample = sheet.getByText(/هكذا سيظهر شكل الكلام|This is how your text/);
   const sizeOf = async () => parseFloat(await sample.evaluate((e) => getComputedStyle(e).fontSize));
 
   const normal = await sizeOf();

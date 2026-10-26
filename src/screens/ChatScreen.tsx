@@ -148,7 +148,7 @@ export default function ChatScreen() {
       const api = e instanceof ApiError ? e : null;
       setFailed({
         text, replyTo: rep, att,
-        why: api?.message || t("مفيش اتصال بالسيرفر", "No connection to the server"),
+        why: api?.message || t("لا يوجد اتصال بالخادم", "No connection to the server"),
         certain: !!api,
       });
     }
@@ -193,7 +193,7 @@ export default function ChatScreen() {
           right={
             <>
               <button aria-label={t("الترجمة الفورية", "Live translation")} aria-pressed={tset.on} className={tset.on ? "text-rachat-gold" : ""} onClick={(e) => { e.stopPropagation(); setShowTr(true); }}><Languages size={19} /></button>
-              <button aria-label={t("خلفية الشات", "Chat wallpaper")} onClick={(e) => { e.stopPropagation(); setShowWp(true); }}><Palette size={19} /></button>
+              <button aria-label={t("خلفية المحادثة", "Chat wallpaper")} onClick={(e) => { e.stopPropagation(); setShowWp(true); }}><Palette size={19} /></button>
               <button aria-label={t("مكالمة فيديو", "Video call")} onClick={(e) => { e.stopPropagation(); navigate(`/call/${id}?mode=video`); }}><Video size={19} /></button>
               <button aria-label={t("مكالمة صوتية", "Voice call")} onClick={(e) => { e.stopPropagation(); navigate(`/call/${id}?mode=voice`); }}><Phone size={18} /></button>
               {thread?.type === "group" && <Users size={18} />}
@@ -226,12 +226,12 @@ export default function ChatScreen() {
 
       {failed && (
         <div className="border-t border-rachat-coral/50 bg-rachat-coral/10 px-3.5 py-2" role="alert">
-          <div className="text-[11px] font-bold text-rachat-coral">{t("الرسالة ما اتبعتتش", "Message wasn't sent")}</div>
+          <div className="text-[11px] font-bold text-rachat-coral">{t("لم تُرسَل الرسالة", "Message wasn't sent")}</div>
           <div className="text-xs text-rachat-papyrus">{failed.why}</div>
           {failed.text && <div className="mt-1 truncate text-[11px] text-neutral-400">«{failed.text}»</div>}
           {!failed.certain && (
             <div className="mt-1 text-[11px] text-neutral-400">
-              {t("الاتصال قطع قبل ما السيرفر يرد — يمكن تكون وصلت. راجع المحادثة قبل ما تبعتها تاني.",
+              {t("انقطع الاتصال قبل أن يردّ الخادم — وقد تكون وصلت. راجع المحادثة قبل إرسالها مرة أخرى.",
                  "The connection dropped before the server replied — it may have arrived. Check the chat before sending again.")}
             </div>
           )}
@@ -239,7 +239,7 @@ export default function ChatScreen() {
             <button
               onClick={() => { const f = failed; setFailed(null); void deliver(f.text, f.replyTo, f.att); }}
               className="rounded-lg bg-rachat-coral px-2.5 py-1 text-[11px] font-bold text-white"
-            >{t("حاول تاني", "Try again")}</button>
+            >{t("حاول مرة أخرى", "Try again")}</button>
             {failed.text && (
               <button
                 onClick={() => {
@@ -251,7 +251,7 @@ export default function ChatScreen() {
                   inputRef.current?.focus();
                 }}
                 className="rounded-lg border border-rachat-coral/60 px-2.5 py-1 text-[11px] font-bold text-rachat-coral"
-              >{t("رجّع النص للخانة", "Put the text back")}</button>
+              >{t("أعِد النصّ إلى الحقل", "Put the text back")}</button>
             )}
             <button onClick={() => setFailed(null)} aria-label={t("إخفاء", "Dismiss")} className="ms-auto text-neutral-500"><X size={16} /></button>
           </div>
@@ -348,7 +348,7 @@ export default function ChatScreen() {
         <div className="border-t border-rachat-maroon/40 bg-rachat-black px-3.5 py-3" role="status" aria-live="polite">
           {rec.simulated && (
             <p className="mb-2 text-center text-[10.5px] leading-4 text-neutral-500">
-              {t("الميكروفون مش متاح في المعاينة دي، ده تسجيل تجريبي من غير صوت. في المتصفح العادي بيسجل صوتك فعلًا.", "The microphone isn't available in this preview, so this is a silent demo recording. In a regular browser it records your real voice.")}
+              {t("الميكروفون غير متاح في هذه المعاينة، وهذا تسجيل تجريبي دون صوت. في المتصفح العادي يُسجَّل صوتك فعلًا.", "The microphone isn't available in this preview, so this is a silent demo recording. In a regular browser it records your real voice.")}
             </p>
           )}
           <div className="flex items-center gap-2.5">
@@ -367,7 +367,7 @@ export default function ChatScreen() {
         /* القناة اللي مش بنشر فيها: مفيش صندوق كتابة خالص — التفاعل بس */
         <div className="flex items-center justify-center gap-2 border-t border-rachat-maroon/40 bg-rachat-black px-3.5 py-4 text-center text-[11.5px] leading-5 text-neutral-400" role="status">
           <Megaphone size={15} className="shrink-0 text-rachat-gold" />
-          {t("القناة دي للقراءة بس — تقدر تتفاعل بالإيموجي", "This channel is read-only — you can still react")}
+          {t("هذه القناة للقراءة فقط — ويمكنك التفاعل بالإيموجي", "This channel is read-only — you can still react")}
         </div>
       ) : (
       <div className="flex items-center gap-2.5 border-t border-rachat-maroon/40 bg-rachat-black px-3.5 py-3">
@@ -419,7 +419,7 @@ export default function ChatScreen() {
             <div className="mt-5 flex flex-col gap-2">
               {thread.type === "channel" ? (
                 thread.myRole === "owner" ? (
-                  <p className="text-[11px] text-neutral-500">{t("إنت صاحب القناة دي", "You own this channel")}</p>
+                  <p className="text-[11px] text-neutral-500">{t("أنت صاحب هذه القناة", "You own this channel")}</p>
                 ) : (
                   <button
                     onClick={() => { void unsubscribeChannel(thread.id); navigate("/"); }}
@@ -436,7 +436,7 @@ export default function ChatScreen() {
                 }}
                 className="flex items-center justify-center gap-2 rounded-xl bg-rachat-red/15 py-2.5 text-sm font-bold text-rachat-red"
               >
-                <LogOut size={15} /> {t("مغادرة الجروب", "Leave group")}
+                <LogOut size={15} /> {t("مغادرة المجموعة", "Leave group")}
               </button>
               )}
               <button onClick={() => setShowInfo(false)} className="text-xs text-neutral-500">

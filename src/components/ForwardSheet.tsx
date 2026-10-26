@@ -31,7 +31,7 @@ export function ForwardSheet({ message, onClose }: { message: Message; onClose: 
       await sendMessage(threadId, message.text, undefined, message.attachment);
       setSent((s) => [...s, threadId]);
     } catch (e) {
-      setErr((e as Error).message || t("ما اتبعتتش، حاول تاني", "Not sent, try again"));
+      setErr((e as Error).message || t("لم تُرسَل، حاول مرة أخرى", "Not sent, try again"));
     }
     setBusy("");
   };
@@ -51,8 +51,8 @@ export function ForwardSheet({ message, onClose }: { message: Message; onClose: 
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={t("دوّر على محادثة", "Search chats")}
-            aria-label={t("دوّر على محادثة", "Search chats")}
+            placeholder={t("ابحث عن محادثة", "Search chats")}
+            aria-label={t("ابحث عن محادثة", "Search chats")}
             className="w-full bg-transparent text-sm text-rachat-papyrus outline-none placeholder:text-neutral-500"
           />
         </div>
@@ -68,11 +68,11 @@ export function ForwardSheet({ message, onClose }: { message: Message; onClose: 
               <ThreadAvatar thread={th} className="h-10 w-10 text-sm" />
               <span className="min-w-0 flex-1 truncate text-sm text-rachat-papyrus" dir="auto">{th.name}</span>
               <span className="shrink-0 text-[11px] font-bold text-rachat-coral">
-                {sent.includes(th.id) ? t("اتبعتت ✓", "Sent ✓") : busy === th.id ? t("…", "…") : <Send size={15} />}
+                {sent.includes(th.id) ? t("أُرسِلت ✓", "Sent ✓") : busy === th.id ? t("…", "…") : <Send size={15} />}
               </span>
             </button>
           ))}
-          {list.length === 0 && <p className="px-3 py-6 text-center text-xs text-neutral-500">{t("مفيش محادثة بالاسم ده", "No chat with that name")}</p>}
+          {list.length === 0 && <p className="px-3 py-6 text-center text-xs text-neutral-500">{t("لا توجد محادثة بهذا الاسم", "No chat with that name")}</p>}
         </div>
       </div>
     </div>

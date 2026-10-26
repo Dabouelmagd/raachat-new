@@ -41,7 +41,7 @@ export default function ChannelsScreen() {
       setMaking(false); setName(""); setAbout("");
       if (typeof id === "string") navigate(`/chat/${id}`);
     } catch (e) {
-      setErr((e as Error).message || t("القناة ما اتعملتش، حاول تاني", "Channel not created, try again"));
+      setErr((e as Error).message || t("لم تُنشَأ القناة، حاول مرة أخرى", "Channel not created, try again"));
     }
   };
 
@@ -57,7 +57,7 @@ export default function ChannelsScreen() {
             <button onClick={() => void create()} disabled={!name.trim()} className="w-full rounded-xl bg-rachat-red py-2.5 text-sm font-extrabold text-white disabled:opacity-40">
               {t("أنشئ القناة", "Create channel")}
             </button>
-            <p className="text-[10.5px] leading-4 text-neutral-500">{t("في القناة إنت اللي بتنشر، والمشتركين بيقروا ويتفاعلوا بس — ومابيشوفوش بعض.", "In a channel you post; subscribers read and react only — and can't see each other.")}</p>
+            <p className="text-[10.5px] leading-4 text-neutral-500">{t("في القناة أنت مَن ينشر، والمشتركون يقرؤون ويتفاعلون فقط — ولا يرى أحدهم الآخر.", "In a channel you post; subscribers read and react only — and can't see each other.")}</p>
           </div>
         )}
 
@@ -70,13 +70,13 @@ export default function ChannelsScreen() {
                 <div className={threadNameClass(c.unread)} dir="auto">{c.name}</div>
                 <div className="flex items-center gap-1 text-[11px] text-neutral-500">
                   <Users size={11} /> {num(c.memberCount ?? 0)} {t("مشترك", "subscribers")}
-                  {c.canPost && <span className="text-rachat-gold">· {t("بتنشر فيها", "you post here")}</span>}
+                  {c.canPost && <span className="text-rachat-gold">· {t("تنشر فيها", "you post here")}</span>}
                 </div>
               </div>
               <UnreadBadge count={c.unread} />
             </button>
           ))}
-          {mine.length === 0 && <p className="py-4 text-center text-xs text-neutral-500">{t("مفيش قنوات لسه — اشترك من تحت أو أنشئ قناتك", "No channels yet — subscribe below or create yours")}</p>}
+          {mine.length === 0 && <p className="py-4 text-center text-xs text-neutral-500">{t("لا توجد قنوات بعد — اشترك من الأسفل أو أنشئ قناتك", "No channels yet — subscribe below or create yours")}</p>}
         </div>
 
         <h2 className="mb-2 mt-6 text-sm font-extrabold">{t("اكتشف قنوات", "Discover channels")}</h2>
@@ -94,14 +94,14 @@ export default function ChannelsScreen() {
           ))}
           {discover.length === 0 && (
             <p className="flex items-center justify-center gap-1.5 py-4 text-center text-xs text-neutral-500">
-              <Check size={13} /> {t("إنت مشترك في كل القنوات المتاحة", "You're subscribed to every available channel")}
+              <Check size={13} /> {t("أنت مشترك في كل القنوات المتاحة", "You're subscribed to every available channel")}
             </p>
           )}
         </div>
 
         <p className="mt-6 flex items-start gap-2 rounded-2xl bg-rachat-card p-3 text-[11px] leading-5 text-neutral-400">
           <Megaphone size={14} className="mt-0.5 shrink-0 text-rachat-gold" />
-          {t("القناة للبث: صاحبها بينشر، والمشتركين بيقروا ويتفاعلوا — ومحدش يشوف باقي المشتركين.", "A channel broadcasts: the owner posts, subscribers read and react — and nobody sees the other subscribers.")}
+          {t("القناة للبثّ: صاحبها ينشر، والمشتركون يقرؤون ويتفاعلون — ولا يرى أحدٌ باقي المشتركين.", "A channel broadcasts: the owner posts, subscribers read and react — and nobody sees the other subscribers.")}
         </p>
       </div>
     </div>

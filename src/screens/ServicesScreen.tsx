@@ -98,7 +98,7 @@ export default function ServicesScreen() {
           **مقفولة بوضوح** بدل ما المستخدم يمشي خطوتين ويرتدّ على «الرصيد غير
           كافي»، وده أسوأ من «قريبًا» لأنه بيبان كأنه عطل في حسابه.
         */}
-        {topupSoon && <p className="mb-2 text-[11.5px] leading-5 text-neutral-400">{t("دفع الفواتير وشحن المحفظة بيتجهّزوا مع شريك دفع مرخّص، ولسه مش متاحين.", "Bill payment and wallet top-up are being set up with a licensed payment partner, and are not available yet.")}</p>}
+        {topupSoon && <p className="mb-2 text-[11.5px] leading-5 text-neutral-400">{t("دفع الفواتير وشحن المحفظة قيد التجهيز مع شريك دفع مرخَّص، وغير متاحين بعد.", "Bill payment and wallet top-up are being set up with a licensed payment partner, and are not available yet.")}</p>}
         <div className="grid grid-cols-4 gap-2">
           {SERVICES.map((s) => {
             const Icon = ICONS[s.key];

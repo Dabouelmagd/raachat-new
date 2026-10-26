@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoPageErrors, openApp, stubCapacitor, tab } from "../helpers";
 
 /**
- * **جهات الاتصال في الـAPK** (بلاغ داليا ١٩ أكتوبر ٢٠٢٦: «لا يفتح أرقام التليفون
+ * **جهات الاتصال في الـAPK** (بلاغ داليا ١٩ أكتوبر ٢٠٢٦: «لا يفتح أرقام الهاتف
  * من على الموبايل» — والشاشة بتقول «جهازك أو متصفحك مش بيسمح بقراءة جهات الاتصال»
  * على جهاز الإضافة متركّبة فيه فعلًا).
  *
@@ -61,7 +61,7 @@ test("رفض الصلاحية بيقول للمستخدم يفعّلها من ا
   await openFriends(page);
 
   await page.getByRole("button", { name: /موافقة ومزامنة|Allow and sync/ }).click();
-  await expect(page.getByText(/مفيش صلاحية لجهات الاتصال/)).toBeVisible();
+  await expect(page.getByText(/لا توجد صلاحية لجهات الاتصال/)).toBeVisible();
   // ومش رسالة «الجهاز مش بيسمح» — دي معناها إننا ما لقيناش الإضافة أصلًا
   await expect(page.getByText(/مش بيسمح بقراءة جهات الاتصال/)).toBeHidden();
   expectNoPageErrors(page);

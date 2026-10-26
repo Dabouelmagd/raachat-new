@@ -27,8 +27,8 @@ export default function FriendsScreen() {
       setNotOn(r.notOnApp.map((p) => ({ phone: p, name: r.byPhone.get(p) ?? p })));
       setState("done");
     } catch (e) {
-      setErr((e as Error).message === "denied" ? t("مفيش صلاحية لجهات الاتصال. فعّليها من إعدادات الجهاز.", "Contacts permission denied. Enable it in device settings.")
-        : t("جهازك أو متصفحك مش بيسمح بقراءة جهات الاتصال. افتحي التطبيق على الموبايل، أو ادعي أصدقاءك بالرابط.", "This device/browser can't read contacts. Use the mobile app, or invite friends with the link."));
+      setErr((e as Error).message === "denied" ? t("لا توجد صلاحية لجهات الاتصال. فعِّلها من إعدادات الجهاز.", "Contacts permission denied. Enable it in device settings.")
+        : t("جهازك أو متصفحك لا يسمح بقراءة جهات الاتصال. افتح التطبيق على الهاتف، أو ادعُ أصدقاءك بالرابط.", "This device/browser can't read contacts. Use the mobile app, or invite friends with the link."));
       setState("error");
     }
   };
@@ -39,7 +39,7 @@ export default function FriendsScreen() {
   const url = inviteUrl();
   const msg = url
     ? t(`جرّب رع شات! دردشة ومكالمات وغرف صوتية بهوية مصرية: ${url}`, `Try Raa Chat! Chat, calls and voice rooms: ${url}`)
-    : t("جرّب رع شات! دردشة ومكالمات وغرف صوتية بهوية مصرية.", "Try Raa Chat! Chat, calls and voice rooms.");
+    : t("جرِّب رع شات! دردشة ومكالمات وغرف صوتية بهوية مصرية.", "Try Raa Chat! Chat, calls and voice rooms.");
   const share = async (phone?: string) => {
     if (!phone && navigator.share) { try { await navigator.share(url ? { text: msg, url } : { text: msg }); return; } catch { return; } }
     if (phone) location.href = `sms:${phone}?&body=${encodeURIComponent(msg)}`;
@@ -55,14 +55,14 @@ export default function FriendsScreen() {
       <div className="flex-1 overflow-y-auto px-4 pb-6">
         {state === "idle" && !consentGiven() && (
           <div className="mt-2 rounded-2xl bg-rachat-card p-4">
-            <div className="mb-2 flex items-center gap-2 text-rachat-gold"><ShieldCheck size={18} /><b className="text-sm">{t("اعرفي مين من أصدقائك على رع شات", "Find friends on Raa Chat")}</b></div>
-            <p className="text-xs leading-6 text-neutral-400">{t("هنقرا الأسماء والأرقام المحفوظة على تليفونك ونطابقها بالمسجّلين عشان نوريكي مين عنده التطبيق ومين لأ. الأرقام بتتبعت مرة واحدة للمطابقة بس ومش بنخزّنها على السيرفر، وتقدري توقفي ده في أي وقت.",
+            <div className="mb-2 flex items-center gap-2 text-rachat-gold"><ShieldCheck size={18} /><b className="text-sm">{t("اعرف مَن من أصدقائك على رع شات", "Find friends on Raa Chat")}</b></div>
+            <p className="text-xs leading-6 text-neutral-400">{t("سنقرأ الأسماء والأرقام المحفوظة على هاتفك ونطابقها مع المسجّلين لنُظهر لك مَن لديه التطبيق ومَن لا. وتُرسَل الأرقام مرة واحدة للمطابقة فقط ولا نخزّنها على الخادم، ويمكنك إيقاف ذلك في أي وقت.",
               "We read the names and numbers on your phone and match them against registered users to show who has the app. Numbers are sent once for matching and are not stored on our servers. You can stop this any time.")} <a className="text-rachat-gold underline" href={LEGAL.privacy} target="_blank" rel="noreferrer">{t("سياسة الخصوصية", "Privacy policy")}</a></p>
             <button onClick={() => { setConsent(true); void sync(); }} className="mt-3 w-full rounded-xl bg-rachat-red py-2.5 text-sm font-bold text-white">{t("موافقة ومزامنة جهات الاتصال", "Allow and sync contacts")}</button>
-            <button onClick={() => share()} className="mt-2 w-full rounded-xl bg-rachat-black py-2.5 text-xs text-neutral-300">{t("لا، هدعو أصدقائي بالرابط", "No thanks, invite with a link")}</button>
+            <button onClick={() => share()} className="mt-2 w-full rounded-xl bg-rachat-black py-2.5 text-xs text-neutral-300">{t("لا، سأدعو أصدقائي بالرابط", "No thanks, invite with a link")}</button>
           </div>
         )}
-        {state === "loading" && <p className="mt-8 text-center text-xs text-neutral-500">{t("بنطابق جهات الاتصال…", "Matching contacts…")}</p>}
+        {state === "loading" && <p className="mt-8 text-center text-xs text-neutral-500">{t("جارٍ مطابقة جهات الاتصال…", "Matching contacts…")}</p>}
         {state === "error" && <p className="mt-4 rounded-xl bg-rachat-card p-3 text-xs text-rachat-coral">{err}</p>}
         {state === "done" && (
           <>
@@ -76,9 +76,9 @@ export default function FriendsScreen() {
                   <button onClick={() => chat(f)} className="flex items-center gap-1 rounded-lg bg-rachat-red px-3 py-1.5 text-[11px] font-bold text-white"><MessageCircle size={13} />{t("دردشة", "Chat")}</button>
                 </div>
               ))}
-              {!onApp.length && <p className="rounded-xl bg-rachat-card p-3 text-xs text-neutral-500">{t("لسه محدش من جهات اتصالك على التطبيق. ادعيهم من تحت 👇", "None of your contacts are on the app yet. Invite them below 👇")}</p>}
+              {!onApp.length && <p className="rounded-xl bg-rachat-card p-3 text-xs text-neutral-500">{t("لا أحد من جهات اتصالك على التطبيق بعد. ادعُهم من الأسفل 👇", "None of your contacts are on the app yet. Invite them below 👇")}</p>}
             </div>
-            <p className="mb-2 mt-5 text-[11px] font-bold text-neutral-500">{t(`ادعي للانضمام (${notOn.length})`, `Invite (${notOn.length})`)}</p>
+            <p className="mb-2 mt-5 text-[11px] font-bold text-neutral-500">{t(`الدعوة للانضمام (${notOn.length})`, `Invite (${notOn.length})`)}</p>
             <div className="space-y-2">
               {notOn.filter((f) => match(f.name)).slice(0, 200).map((f) => (
                 <div key={f.phone} className="flex items-center gap-2 rounded-xl bg-rachat-card px-3.5 py-2.5">
@@ -91,9 +91,9 @@ export default function FriendsScreen() {
             </div>
           </>
         )}
-        <button onClick={() => share()} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-rachat-gold/40 py-3 text-sm font-bold text-rachat-gold"><Share2 size={16} />{t("شاركي رابط الدعوة", "Share invite link")}</button>
+        <button onClick={() => share()} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-rachat-gold/40 py-3 text-sm font-bold text-rachat-gold"><Share2 size={16} />{t("شارِك رابط الدعوة", "Share invite link")}</button>
         {consentGiven() && <button onClick={() => { setConsent(false); setState("idle"); setOnApp([]); setNotOn([]); }} className="mt-3 w-full text-center text-[11px] text-neutral-500 underline">{t("إيقاف مزامنة جهات الاتصال", "Stop contact sync")}</button>}
-        {!canReadContacts() && API_ON && <p className="mt-3 flex items-center gap-1 text-[10.5px] text-neutral-600"><UserPlus size={12} />{t("قراءة جهات الاتصال متاحة في تطبيق الموبايل.", "Contact sync is available in the mobile app.")}</p>}
+        {!canReadContacts() && API_ON && <p className="mt-3 flex items-center gap-1 text-[10.5px] text-neutral-600"><UserPlus size={12} />{t("قراءة جهات الاتصال متاحة في تطبيق الهاتف.", "Contact sync is available in the mobile app.")}</p>}
       </div>
     </div>
   );

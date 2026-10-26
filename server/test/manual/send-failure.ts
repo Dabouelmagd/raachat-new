@@ -10,7 +10,7 @@
  *   1) cd /home/claude/raachat-new && VITE_API_URL=http://localhost:4111 npx vite build -c vite.single.config.ts
  *   2) cd server && npx tsx test/manual/send-failure.ts
  *
- * المتوقّع: شريط «الرسالة ما اتبعتتش» بسبب الفشل، والخانة فاضية، وزرار «رجّع
+ * المتوقّع: شريط «لم تُرسَل الرسالة» بسبب الفشل، والخانة فاضية، وزرار «رجّع
  * النص للخانة» بيرجّع النص بالحرف. على الكود القديم: مفيش شريط، والنص ضاع،
  * والرفض بيظهر كـ PAGEERROR بس (يعني المستخدم مايشوفش حاجة خالص).
  *
@@ -112,7 +112,7 @@ async function main() {
     const dlg = page.locator('[role="dialog"]');
     if (await dlg.count()) {
       out.push("dialog=" + JSON.stringify((await dlg.first().innerText()).slice(0, 200)));
-      const skip = page.getByRole("button", { name: /لاحقًا|تخطّى|تخطي|مش دلوقتي|إغلاق|Later|Skip|Not now|Close/ });
+      const skip = page.getByRole("button", { name: /لاحقًا|تخطّى|تخطي|ليس الآن|إغلاق|Later|Skip|Not now|Close/ });
       if (await skip.count()) await skip.first().click(); else await page.keyboard.press("Escape");
       await page.waitForTimeout(600);
     }
@@ -146,8 +146,8 @@ async function main() {
     // البشرية و`process.exit(0)` دايمًا — يعني لو العطل رجع، السكربت بيعدّي
     // أخضر. ودي بالظبط الحالة اللي قاعدة الفحوص بتمنعها: «رقم بيتطبع للمراجعة
     // بدل ما يتفحص». ولازم تبقى حكمًا عشان الـ CI يقدر يشغّله.
-    if (!/ما اتبعتتش|wasn't sent/.test(txt)) fail.push(`[${mode}] مفيش شريط «الرسالة ما اتبعتتش» — المستخدم مش شايف إن الإرسال فشل`);
-    // زرار «رجّع النص للخانة»
+    if (!/ما أُرسِلتش|wasn't sent/.test(txt)) fail.push(`[${mode}] مفيش شريط «لم تُرسَل الرسالة» — المستخدم مش شايف إن الإرسال فشل`);
+    // زرار «أعِد النصّ إلى الحقل»
     const back = page.getByRole("button", { name: /رجّع النص|Put the text back/ });
     if (await back.count()) {
       await back.click();
@@ -157,7 +157,7 @@ async function main() {
       if (!restored.includes(TEXT)) fail.push(`[${mode}] «رجّع النص» ما رجّعش النص بالحرف — نص المستخدم ضاع`);
     } else {
       out.push(`[${mode}] after-restore=NO-BUTTON`);
-      fail.push(`[${mode}] مفيش زرار «رجّع النص للخانة» — مفيش طريقة يرجّع بيها كلامه`);
+      fail.push(`[${mode}] مفيش زرار «أعِد النصّ إلى الحقل» — مفيش طريقة يرجّع بيها كلامه`);
     }
   }
 

@@ -41,9 +41,9 @@ test("القاصر: المحفظة مقفولة برسالة واضحة، وبا
   await expect(page.getByText(/خدمة من/)).toBeVisible();
   await expect(page.getByText(/محفظتك/)).toHaveCount(0);
   // الرسالة لازم تطمّنه إن مفيش حاجة تانية مقفولة
-  await expect(page.getByText(/باقي رع شات مفتوح لك/)).toBeVisible();
-  // تاريخه محدد خلاص، فمفيش زرار «حدّد تاريخ ميلادك»
-  await expect(page.getByRole("button", { name: /حدّد تاريخ ميلادك/ })).toHaveCount(0);
+  await expect(page.getByText(/بقيّة رع شات مفتوحة لك/)).toBeVisible();
+  // تاريخه محدد خلاص، فمفيش زرار «حدِّد تاريخ ميلادك»
+  await expect(page.getByRole("button", { name: /حدِّد تاريخ ميلادك/ })).toHaveCount(0);
 
   // الشات شغّال عادي للقاصر
   await tab(page, /الدردشات|Chats/);

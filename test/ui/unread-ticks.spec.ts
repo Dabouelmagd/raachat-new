@@ -5,9 +5,9 @@ import { clearOverlays, expectNoPageErrors, openApp } from "../helpers";
  * (بطلب داليا ١٢ أكتوبر)
  * - **غير المقروء بخط بولد** وجنبه العدّاد، وبيرجع عادي أول ما تفتحي المحادثة.
  * - **فلتر «غير المقروء»** جنب باقي الفلاتر.
- * - **علامات التسليم:** ✓ اتبعتت · ✓✓ وصلت · ✓✓ أزرق اتقرت.
+ * - **علامات التسليم:** ✓ أُرسِلت · ✓✓ وصلت · ✓✓ أزرق قُرئت.
  *
- * بيانات الديمو فيها `t1` بعدّاد ٢، ورسالة «وصلت» ورسالة «اتقرت» — **عن قصد**،
+ * بيانات الديمو فيها `t1` بعدّاد ٢، ورسالة «وصلت» ورسالة «قُرئت» — **عن قصد**،
  * من غيرهم الحالات دي مابتظهرش في بناء الديمو أصلًا.
  */
 const row = (page: import("@playwright/test").Page, name: RegExp) =>
@@ -23,14 +23,14 @@ const row = (page: import("@playwright/test").Page, name: RegExp) =>
 const weight = (l: import("@playwright/test").Locator) =>
   l.evaluate((el) => Number(getComputedStyle(el).fontWeight));
 
-test("المحادثة اللي فيها رسايل ما اتقرتش: بولد + عدّاد، وبترجع عادي بعد الفتح", async ({ page }) => {
+test("المحادثة اللي فيها رسائل غير مقروءة: بولد + عدّاد، وبترجع عادي بعد الفتح", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
   const mariam = row(page, /مريم عبد الله|Mariam/);
   // اسم المحادثة نفسه (جوه غلاف فيه علامة التثبيت)
   const title = mariam.locator("span.truncate.text-sm").first();
   expect(await weight(title), "اسم المحادثة اللي فيها جديد لازم يبقى بولد").toBeGreaterThanOrEqual(700);
-  await expect(mariam.getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveText(/٢|2/);
+  await expect(mariam.getByLabel(/رسائل غير مقروءة|Unread messages/)).toHaveText(/٢|2/);
 
   await mariam.click();
   await page.getByRole("button", { name: /رجوع|Back/ }).first().click();
@@ -38,7 +38,7 @@ test("المحادثة اللي فيها رسايل ما اتقرتش: بولد 
   const after = row(page, /مريم عبد الله|Mariam/).locator("span.truncate.text-sm").first();
   expect(await weight(after), "وبعد ما تتفتح يرجع **من غير بولد** — ده الفرق اللي المستخدم بيشوفه").toBeLessThanOrEqual(500);
   // العدّاد بتاع المحادثة دي بس — فيه محادثات تانية في الديمو لسه فيها جديد
-  await expect(row(page, /مريم عبد الله|Mariam/).getByLabel(/رسايل ما اتقرتش|Unread messages/)).toHaveCount(0);
+  await expect(row(page, /مريم عبد الله|Mariam/).getByLabel(/رسائل غير مقروءة|Unread messages/)).toHaveCount(0);
   expectNoPageErrors(page);
 });
 
@@ -51,14 +51,14 @@ test("فلتر «غير المقروء» بيعرض المحادثات دي بس
   expectNoPageErrors(page);
 });
 
-test("علامات الرسالة: اتبعتت · وصلت · اتقرت", async ({ page }) => {
+test("علامات الرسالة: أُرسِلت · وصلت · قُرئت", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
   await row(page, /مريم عبد الله|Mariam/).click();
   await clearOverlays(page);
 
-  // «اتقرت» لازم تبقى زرقا — ودي اللي بتفرّق عن «وصلت»
-  const read = page.getByLabel(/^اتقرت$|^Read$/).first();
+  // «قُرئت» لازم تبقى زرقا — ودي اللي بتفرّق عن «وصلت»
+  const read = page.getByLabel(/^قُرئت$|^Read$/).first();
   await expect(read).toBeVisible();
   await expect(read).toHaveClass(/text-sky-400/);
 
@@ -67,12 +67,12 @@ test("علامات الرسالة: اتبعتت · وصلت · اتقرت", asyn
   expectNoPageErrors(page);
 });
 
-test("لون فقاعة الكلام بيتغيّر من شكل الشات", async ({ page }) => {
+test("لون فقاعة الكلام بيتغيّر من شكل المحادثة", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
   await page.getByRole("link", { name: /الحساب|Account/ }).click();
-  await page.getByRole("button", { name: /خلفية الشات|Chat wallpaper/ }).click();
-  const sheet = page.getByRole("dialog", { name: /شكل الشات|Chat appearance/ });
+  await page.getByRole("button", { name: /خلفية المحادثة|Chat wallpaper/ }).click();
+  const sheet = page.getByRole("dialog", { name: /شكل المحادثة|Chat appearance/ });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText("لون فقاعة الكلام")).toBeVisible();
   await sheet.getByRole("button", { name: /^زمردي$|^Emerald$/ }).click();

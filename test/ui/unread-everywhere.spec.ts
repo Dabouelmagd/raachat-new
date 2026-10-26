@@ -4,10 +4,10 @@ import { clearOverlays, expectNoPageErrors, openApp } from "../helpers";
 /**
  * الفرق بين «فيه جديد» و«مقروء» لازم يبان في **كل** قايمة فيها محادثات
  * (بطلب داليا ٢٦ أكتوبر ٢٠٢٦: «الاسم لما يبعت رسالة يبقى بولد ولما تتفتح يبقى
- * من غير بولد … في الشات وكل الجروبات والغرف»).
+ * من غير بولد … في الشات وكل المجموعات والغرف»).
  *
  * 🔴 العطل كان نمط «القاعدة على مسار واحد»: `ChatsScreen` كان فيه الفرق،
- * و**«جروباتي»** في `GroupsScreen` و**«قنواتي»** في `ChannelsScreen` كانوا
+ * و**«مجموعاتي»** في `GroupsScreen` و**«قنواتي»** في `ChannelsScreen` كانوا
  * `font-bold` **دايمًا** وبلا أي عدّاد — فاللي بيدخل من الشاشتين دول مابيشوفش
  * أي فرق خالص. والمصدر بقى واحد في `src/components/unread.tsx`.
  *
@@ -21,30 +21,30 @@ import { clearOverlays, expectNoPageErrors, openApp } from "../helpers";
 const weight = (l: import("@playwright/test").Locator) =>
   l.evaluate((el) => Number(getComputedStyle(el).fontWeight));
 
-/** صفوف «جروباتي»/«قنواتي» أزرار؛ وصفوف الاكتشاف `div` فمابتتطابقش */
+/** صفوف «مجموعاتي»/«قنواتي» أزرار؛ وصفوف الاكتشاف `div` فمابتتطابقش */
 const row = (page: import("@playwright/test").Page, name: RegExp) =>
   page.locator("button.rounded-2xl.bg-rachat-card").filter({ hasText: name }).first();
 const nameOf = (r: import("@playwright/test").Locator) => r.locator(".truncate.text-sm").first();
-const badge = (r: import("@playwright/test").Locator) => r.getByLabel(/رسايل ما اتقرتش|Unread messages/);
+const badge = (r: import("@playwright/test").Locator) => r.getByLabel(/رسائل غير مقروءة|Unread messages/);
 
-test("«جروباتي»: الجروب اللي فيه جديد بولد + عدّاد، والمقروء من غير بولد", async ({ page }) => {
+test("«مجموعاتي»: المجموعة اللي فيه جديد بولد + عدّاد، والمقروء من غير بولد", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
-  await page.getByRole("link", { name: /الجروبات|Groups/ }).click();
+  await page.getByRole("link", { name: /المجموعات|Groups/ }).click();
 
   const fresh = row(page, /فريق التصميم|Design Team/);
   const seen = row(page, /مجموعة الشغل|Work Group/);
-  expect(await weight(nameOf(fresh)), "الجروب اللي فيه جديد لازم بولد").toBeGreaterThanOrEqual(700);
+  expect(await weight(nameOf(fresh)), "المجموعة اللي فيه جديد لازم بولد").toBeGreaterThanOrEqual(700);
   expect(await weight(nameOf(seen)), "والمقروء من غير بولد — وإلا مفيش فرق").toBeLessThanOrEqual(500);
   await expect(badge(fresh)).toHaveText(/٣|3/);
   await expect(badge(seen)).toHaveCount(0);
   expectNoPageErrors(page);
 });
 
-test("«جروباتي»: بعد ما تفتحي الجروب اسمه يرجع من غير بولد والعدّاد يختفي", async ({ page }) => {
+test("«مجموعاتي»: بعد ما تفتحي المجموعة اسمه يرجع من غير بولد والعدّاد يختفي", async ({ page }) => {
   await openApp(page);
   await clearOverlays(page);
-  await page.getByRole("link", { name: /الجروبات|Groups/ }).click();
+  await page.getByRole("link", { name: /المجموعات|Groups/ }).click();
   await row(page, /فريق التصميم|Design Team/).click();
   await page.getByRole("button", { name: /رجوع|Back/ }).first().click();
   await clearOverlays(page);

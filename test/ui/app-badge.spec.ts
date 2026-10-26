@@ -41,12 +41,12 @@ const toLatin = (s: string) => s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥
  *
  * 🔴 مش رقمًا مكتوبًا بالإيد (الدرس من ٢٦ أكتوبر ٢٠٢٦): الاختبار كان بيتوقّع
  * `2` — مجموع بيانات الديمو وقتها — فأول ما اتضافت محادثات فيها جديد (عشان
- * الفرق بين «بولد» و«عادي» يتجرّب في «جروباتي» و«قنواتي») سقط **اختبار سليم**.
+ * الفرق بين «بولد» و«عادي» يتجرّب في «مجموعاتي» و«قنواتي») سقط **اختبار سليم**.
  * والمقارنة بالقايمة أقوى أصلًا: دي الفرضية الحقيقية — **الرقم على الأيقونة =
  * اللي المستخدم شايفه في القايمة**.
  */
 async function listTotal(page: Page) {
-  const labels = await page.getByLabel(/رسايل ما اتقرتش|Unread messages/).allInnerTexts();
+  const labels = await page.getByLabel(/رسائل غير مقروءة|Unread messages/).allInnerTexts();
   return labels.reduce((sum, t) => sum + Number(toLatin(t.trim()) || 0), 0);
 }
 

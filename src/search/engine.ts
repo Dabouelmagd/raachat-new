@@ -89,7 +89,7 @@ const CONCEPTS: string[][] = [
   ["تصميم", "ديزاين", "design", "ui", "ux", "شعار", "logo"],
   ["مراجعه", "راجع", "review", "check", "فحص"],
   ["غرفه", "غرف", "room", "rooms", "صوتيه", "voice"],
-  ["جروب", "مجموعه", "جروبات", "group", "groups", "team", "فريق"],
+  ["مجموعة", "مجموعه", "مجموعات", "group", "groups", "team", "فريق"],
   ["لغه", "language", "عربي", "english", "انجليزي", "انجليزيه"],
   ["اشعار", "اشعارات", "تنبيه", "notification", "notifications", "alert"],
   ["رنه", "نغمه", "صوت", "ringtone", "sound", "tone", "ring", "اهتزاز", "vibration", "vibrate"],
@@ -118,7 +118,7 @@ const sameConcept = (a: string, b: string) => {
 const KIND_WORDS: Record<string, Kind> = {};
 const addKind = (k: Kind, ws: string[]) => ws.forEach((w) => (KIND_WORDS[stem(norm(w))] = k));
 addKind("message", ["رساله", "رسايل", "رسائل", "message", "messages", "كلام"]);
-addKind("group", ["جروب", "جروبات", "groups", "group"]);
+addKind("group", ["مجموعة", "مجموعات", "groups", "group"]);
 addKind("room", ["غرفه", "غرف", "room", "rooms"]);
 addKind("service", ["خدمه", "خدمات", "service", "services"]);
 addKind("person", ["شخص", "اشخاص", "اسم", "contact", "contacts", "people", "person"]);
@@ -141,7 +141,7 @@ const SETTINGS = (): Doc[] => {
     s("theme", "الوضع الفاتح", "Light mode", "الوضع الداكن الفاتح المظهر", "dark light theme appearance", "/account"),
     s("privacy", "الخصوصية والأمان", "Privacy & security", "إخفاء الرقم لقطة الشاشة حظر", "hide phone number screenshot block", "/account"),
     s("notif", "الإشعارات", "Notifications", "تنبيهات الرسائل الجروبات المكالمات", "alerts messages groups calls", "/notifications"),
-    s("ring", "رنة المكالمة", "Call ringtone", "نغمة صوت حجاز النيل المعبد سيستروم جرس", "sound tone hijaz nile temple sistrum bell", "/notifications"),
+    s("ring", "رنّة المكالمة", "Call ringtone", "نغمة صوت حجاز النيل المعبد سيستروم جرس", "sound tone hijaz nile temple sistrum bell", "/notifications"),
     s("vib", "الاهتزاز", "Vibration", "اهتزاز الرنة الرسائل", "vibrate ringtone messages", "/notifications"),
     s("sessions", "الجلسات النشطة", "Active sessions", "الأجهزة المتصلة تسجيل خروج جهاز", "connected devices sign out device", "/sessions"),
     s("profile", "الملف الشخصي", "Profile", "الاسم الصورة الحالة البروفايل", "name photo status profile avatar", "/profile"),
@@ -170,18 +170,18 @@ export function buildIndex(ctx: SearchContext): Doc[] {
       id: t.id,
       kind: "chat",
       title: t.name,
-      body: t.type === "group" ? tr("جروب", "group") : tr("محادثة", "chat"),
+      body: t.type === "group" ? tr("مجموعة", "group") : tr("محادثة", "chat"),
       meta: "",
       to: `/chat/${t.id}`,
       threadId: t.id,
-      sub: t.type === "group" ? tr("جروب", "Group") : tr("محادثة", "Chat"),
+      sub: t.type === "group" ? tr("مجموعة", "Group") : tr("محادثة", "Chat"),
     })
   );
   ctx.contacts.forEach((c) =>
     docs.push({ id: c.id, kind: "person", title: c.name, body: "", meta: "", to: "/", contactId: c.id, sub: tr("جهة اتصال", "Contact") })
   );
   PUBLIC_GROUPS.forEach((g) =>
-    docs.push({ id: g.id, kind: "group", title: g.name, body: g.desc, meta: "", to: "/groups", sub: tr("جروب عام", "Public group") })
+    docs.push({ id: g.id, kind: "group", title: g.name, body: g.desc, meta: "", to: "/groups", sub: tr("مجموعة عامة", "Public group") })
   );
   ctx.rooms.forEach((r) =>
     docs.push({
@@ -195,7 +195,7 @@ export function buildIndex(ctx: SearchContext): Doc[] {
     })
   );
   ctx.stories.forEach((s) =>
-    docs.push({ id: s.id, kind: "story", title: s.caption, body: "", meta: s.authorName, to: "/", sub: `${tr("ستوري", "Story")} · ${s.authorName}` })
+    docs.push({ id: s.id, kind: "story", title: s.caption, body: "", meta: s.authorName, to: "/", sub: `${tr("قصص", "Story")} · ${s.authorName}` })
   );
   SERVICES.forEach((s) =>
     docs.push({ id: `svc_${s.key}`, kind: "service", title: s.label, body: s.biller, meta: `${s.field} ${s.hint} فاتورة دفع bill payment`, to: `/pay/${s.key}`, sub: tr("خدمة دفع", "Payment service") })
@@ -345,13 +345,13 @@ export function runSearch(
 export function composeAnswer(query: string, hits: Hit[], interp: Interpretation): string {
   if (!hits.length && interp.person) {
     return tr(
-      `مفيش حاجة مطابقة من ${interp.person} لسه.`,
+      `لا يوجد ما يطابق من ${interp.person} بعد.`,
       `Nothing matching from ${interp.person} yet.`
     );
   }
   if (!hits.length) {
     return tr(
-      `ملقيتش حاجة مطابقة لـ «${query}». جرّب كلمات أبسط أو اسم شخص أو خدمة (زي «كهرباء» أو «ملف مريم»).`,
+      `لم أجد ما يطابق «${query}». جرّب كلمات أبسط أو اسم شخص أو خدمة (مثل «كهرباء» أو «ملف مريم»).`,
       `I couldn't find anything matching “${query}”. Try simpler words, a person's name or a service (e.g. “electricity” or “Mariam's file”).`
     );
   }
@@ -366,13 +366,13 @@ export function composeAnswer(query: string, hits: Hit[], interp: Interpretation
   if (svc) {
     parts.push(
       tr(
-        `تقدر تدفع «${svc.doc.title}» مباشرة من المحفظة (${svc.doc.body}).`,
+        `يمكنك دفع «${svc.doc.title}» مباشرة من المحفظة (${svc.doc.body}).`,
         `You can pay “${svc.doc.title}” straight from your wallet (${svc.doc.body}).`
       )
     );
   }
-  if (off) parts.push(tr(`وفيه عرض مناسب: ${off.doc.title} بكود ${off.doc.meta.split(" ")[0]}.`, `A matching offer: ${off.doc.title} with code ${off.doc.meta.split(" ")[0]}.`));
-  if (set) parts.push(tr(`الإعداد ده موجود في: ${set.doc.title}.`, `That setting lives in: ${set.doc.title}.`));
+  if (off) parts.push(tr(`وهناك عرض مناسب: ${off.doc.title} بكود ${off.doc.meta.split(" ")[0]}.`, `A matching offer: ${off.doc.title} with code ${off.doc.meta.split(" ")[0]}.`));
+  if (set) parts.push(tr(`هذا الإعداد موجود في: ${set.doc.title}.`, `That setting lives in: ${set.doc.title}.`));
   if (msg) {
     parts.push(
       tr(
@@ -382,8 +382,8 @@ export function composeAnswer(query: string, hits: Hit[], interp: Interpretation
     );
   }
   if (grp) parts.push(tr(`ومكان مناسب للنقاش: ${grp.doc.title}.`, `A good place to discuss it: ${grp.doc.title}.`));
-  if (!parts.length) parts.push(tr(`لقيت ${hits.length} نتيجة قريبة من «${query}».`, `Found ${hits.length} results close to “${query}”.`));
-  if (interp.person) parts.unshift(tr(`فلترت على ${interp.person}.`, `Filtered to ${interp.person}.`));
+  if (!parts.length) parts.push(tr(`وجدت ${hits.length} نتيجة قريبة من «${query}».`, `Found ${hits.length} results close to “${query}”.`));
+  if (interp.person) parts.unshift(tr(`قصرتُ النتائج على ${interp.person}.`, `Filtered to ${interp.person}.`));
   return parts.join(" ");
 }
 
@@ -404,6 +404,6 @@ export const SUGGESTIONS = () => [
   tr("الملف اللي مريم بعتته", "the file Mariam sent"),
   tr("رسايل من يوسف", "messages from Youssef"),
   tr("عروض الخصم", "discount offers"),
-  tr("إزاي أغير اللغة", "how to change language"),
+  tr("كيف أغيّر اللغة", "how to change language"),
   tr("غرف صوتية", "voice rooms"),
 ];

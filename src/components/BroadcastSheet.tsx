@@ -55,16 +55,16 @@ export function BroadcastSheet({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("رسالة لأكتر من شخص", "Message several people")} className="fixed inset-0 z-[55] flex items-end justify-center bg-black/80 sm:items-center">
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("رسالة لأكثر من شخص", "Message several people")} className="fixed inset-0 z-[55] flex items-end justify-center bg-black/80 sm:items-center">
       <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-full max-w-[380px] flex-col rounded-t-2xl bg-rachat-card p-5 sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-extrabold text-rachat-papyrus">{t("رسالة لأكتر من شخص", "Message several people")}</p>
+          <p className="font-extrabold text-rachat-papyrus">{t("رسالة لأكثر من شخص", "Message several people")}</p>
           <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="text-neutral-500"><X size={18} /></button>
         </div>
 
         {done ? (
           <div className="py-8 text-center">
-            <p className="text-sm font-bold text-emerald-400">{t(`اتبعتت لـ ${done.ok} محادثة`, `Sent to ${done.ok} chats`)}</p>
+            <p className="text-sm font-bold text-emerald-400">{t(`أُرسِلت إلى ${done.ok} محادثة`, `Sent to ${done.ok} chats`)}</p>
             {done.fail > 0 && (
               <>
                 <p className="mt-1 text-xs text-rachat-coral">{t(`فشل الإرسال لـ ${done.fail}`, `${done.fail} failed`)}</p>

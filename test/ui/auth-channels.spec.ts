@@ -9,7 +9,7 @@ import { expectNoPageErrors, requireBuild, DIST } from "../helpers";
  * `server/test/channels.test.ts` (٤ اختبارات) — وده أدق مكان له لأن القرار
  * قرار السيرفر مش الواجهة.
  */
-test("في وضع الديمو: التليفون والإيميل الاتنين شغّالين ومفيش تنبيه", async ({ page }) => {
+test("في وضع الديمو: الهاتف والبريد الإلكتروني الاتنين شغّالين ومفيش تنبيه", async ({ page }) => {
   requireBuild();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -17,14 +17,14 @@ test("في وضع الديمو: التليفون والإيميل الاتنين
   await page.goto("file://" + DIST);
 
   await page.getByRole("button", { name: /دخول بكود لمرة واحدة|one-time code/ }).click();
-  const phone = page.getByRole("button", { name: /^التليفون$|^Phone$/ });
+  const phone = page.getByRole("button", { name: /^الهاتف$|^Phone$/ });
   await expect(phone).toBeEnabled();
-  await expect(page.getByRole("button", { name: /^الإيميل$|^Email$/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^البريد الإلكتروني$|^Email$/ })).toBeEnabled();
   await expect(page.getByText(/الدخول بالرقم موقوف مؤقتًا|temporarily unavailable/)).toHaveCount(0);
 
   // والاختيار لسه بيشتغل: الخانة بتقبل رقم مصري
   await phone.click();
-  await page.getByLabel(/رقم التليفون|Phone number/).fill("01000000000");
-  await expect(page.getByLabel(/رقم التليفون|Phone number/)).toHaveValue("01000000000");
+  await page.getByLabel(/رقم الهاتف|Phone number/).fill("01000000000");
+  await expect(page.getByLabel(/رقم الهاتف|Phone number/)).toHaveValue("01000000000");
   expectNoPageErrors(page);
 });

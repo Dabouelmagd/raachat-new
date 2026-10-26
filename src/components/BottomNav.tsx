@@ -6,7 +6,7 @@ import { useT } from "../i18n";
 // الدردشات، الجروبات، الغرف، الخدمات، الحساب
 export const TABS = [
   { to: "/", label: ["الدردشات", "Chats"], icon: Cartouche, end: true },
-  { to: "/groups", label: ["الجروبات", "Groups"], icon: Pyramids, end: false },
+  { to: "/groups", label: ["المجموعات", "Groups"], icon: Pyramids, end: false },
   { to: "/rooms", label: ["الغرف", "Rooms"], icon: Lotus, end: false },
   { to: "/services", label: ["الخدمات", "Services"], icon: Scarab, end: false },
   { to: "/ads", label: ["الإعلانات", "Ads"], icon: Megaphone, end: false },

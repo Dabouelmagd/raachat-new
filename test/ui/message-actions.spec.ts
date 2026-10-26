@@ -37,7 +37,7 @@ test("«إعادة توجيه» بيفتح قايمة المحادثات وبي�
   const sheet = page.getByRole("dialog", { name: /إعادة توجيه/ });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText("مجموعة الشغل 💼")).toBeVisible();
-  await sheet.getByLabel("دوّر على محادثة").fill("يوسف");
+  await sheet.getByLabel("ابحث عن محادثة").fill("يوسف");
   await expect(sheet.getByText("مجموعة الشغل 💼")).toHaveCount(0);
   await expect(sheet.getByText("يوسف كامل")).toBeVisible();
   expectNoPageErrors(page);

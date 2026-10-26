@@ -101,7 +101,7 @@ export default function RoomsScreen() {
 
         {API_ON && ["denied", "none", "other", "full"].includes(audio) && (
           <div role="status" className="mx-4 mb-1.5 rounded-lg bg-rachat-red/20 px-2.5 py-1.5 text-[11px] text-rachat-coral">
-            {audio === "denied" ? t("محتاجين إذن المايك عشان تسمع وتتكلم", "Microphone permission is needed to listen and talk") : audio === "none" ? t("مفيش مايك على الجهاز", "No microphone found") : audio === "full" ? t("الغرفة الصوتية مكتملة (٨ أشخاص)", "The voice room is full (8 people)") : t("تعذّر تشغيل الصوت", "Couldn't start audio")}
+            {audio === "denied" ? t("نحتاج إذن الميكروفون لتسمع وتتكلّم", "Microphone permission is needed to listen and talk") : audio === "none" ? t("لا يوجد ميكروفون على الجهاز", "No microphone found") : audio === "full" ? t("الغرفة الصوتية مكتملة (٨ أشخاص)", "The voice room is full (8 people)") : t("تعذّر تشغيل الصوت", "Couldn't start audio")}
           </div>
         )}
         {activeRoom.myIdentityMode === "temp" && (
@@ -124,7 +124,7 @@ export default function RoomsScreen() {
                 >
                   {s.name[0]}
                 </div>
-                <span className={`text-[11px] ${i === 0 ? "font-bold text-rachat-coral" : "text-neutral-500"}`}>{s.isMe ? s.name : i === 0 ? t("بيتكلم", "Speaking") : t("مستمع", "Listening")}</span>
+                <span className={`text-[11px] ${i === 0 ? "font-bold text-rachat-coral" : "text-neutral-500"}`}>{s.isMe ? s.name : i === 0 ? t("يتحدّث", "Speaking") : t("مستمع", "Listening")}</span>
               </div>
             ))}
           </div>
@@ -163,7 +163,7 @@ export default function RoomsScreen() {
       />
       <div className="flex-1 overflow-y-auto px-3.5">
         <SponsoredCard index={2} placement="rooms" />
-        {rooms.length === 0 && <p className="py-10 text-center text-xs text-neutral-500">{t("مفيش غرف مفتوحة دلوقتي — اعمل غرفة بزرار +", "No open rooms right now — create one with +")}</p>}
+        {rooms.length === 0 && <p className="py-10 text-center text-xs text-neutral-500">{t("لا توجد غرف مفتوحة الآن — أنشئ غرفة بزرّ +", "No open rooms right now — create one with +")}</p>}
         {rooms.map((r) => (
           <div key={r.id} className="mb-2.5 rounded-2xl bg-rachat-card p-3.5">
             <div className="flex items-center justify-between gap-2">

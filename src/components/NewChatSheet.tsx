@@ -56,12 +56,12 @@ export function NewChatSheet({ onClose }: { onClose: () => void }) {
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rachat-gold/20 text-rachat-gold">
             <Users size={17} />
           </div>
-          <span className="text-sm font-bold text-rachat-papyrus">{t("إنشاء جروب جديد", "Create new group")}</span>
+          <span className="text-sm font-bold text-rachat-papyrus">{t("إنشاء مجموعة جديدة", "Create new group")}</span>
         </button>
 
         <button onClick={() => setBc(true)} className="mb-4 flex w-full items-center gap-3 rounded-xl bg-rachat-black px-3.5 py-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rachat-red/20 text-rachat-red"><Send size={17} /></div>
-          <span className="text-sm font-bold text-rachat-papyrus">{t("رسالة لأكتر من شخص", "Message several people")}</span>
+          <span className="text-sm font-bold text-rachat-papyrus">{t("رسالة لأكثر من شخص", "Message several people")}</span>
         </button>
         <button onClick={() => { onClose(); navigate("/friends"); }} className="mb-4 flex w-full items-center gap-3 rounded-xl bg-rachat-black px-3.5 py-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rachat-gold/20 text-rachat-gold"><UserPlus size={17} /></div>

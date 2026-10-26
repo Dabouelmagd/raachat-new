@@ -159,17 +159,17 @@ export function FileViewer({ a, onClose }: { a: Attachment; onClose: () => void 
         {k === "pdf" && (
           <div className="flex h-full w-full max-w-3xl flex-col gap-2">
             <iframe title={a.name} src={a.url} className="min-h-0 w-full flex-1 rounded-lg bg-white" />
-            <p className="text-center text-[11px] text-white/50">{t("لو المعاينة مش ظاهرة، نزّلي الملف وافتحيه من جهازك.", "If the preview doesn't show, download the file and open it on your device.")}</p>
+            <p className="text-center text-[11px] text-white/50">{t("إن لم تظهر المعاينة، نزِّل الملف وافتحه من جهازك.", "If the preview doesn't show, download the file and open it on your device.")}</p>
           </div>
         )}
         {k === "text" && (
-          <pre dir="auto" className="h-full w-full max-w-3xl overflow-auto whitespace-pre-wrap break-words rounded-lg bg-rachat-card p-4 font-mono text-xs leading-5 text-rachat-papyrus">{a.text ?? t("مفيش معاينة للنص", "No text preview")}</pre>
+          <pre dir="auto" className="h-full w-full max-w-3xl overflow-auto whitespace-pre-wrap break-words rounded-lg bg-rachat-card p-4 font-mono text-xs leading-5 text-rachat-papyrus">{a.text ?? t("لا تتوفّر معاينة للنصّ", "No text preview")}</pre>
         )}
         {k === "other" && (
           <div className="flex flex-col items-center gap-3 text-center text-white">
             <span className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/10"><FileText size={38} /></span>
             <div className="text-sm font-bold">{labelOf(a)}</div>
-            <p className="max-w-xs text-xs text-white/60">{t("المتصفح مش بيعرض النوع ده. نزّلي الملف وافتحيه ببرنامجه.", "Browsers can't display this type. Download it and open it with its app.")}</p>
+            <p className="max-w-xs text-xs text-white/60">{t("المتصفح لا يعرض هذا النوع. نزِّل الملف وافتحه ببرنامجه.", "Browsers can't display this type. Download it and open it with its app.")}</p>
           </div>
         )}
       </div>

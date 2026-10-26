@@ -6,7 +6,7 @@ import { expectNoPageErrors, openApp, stubCapacitor, tab } from "../helpers";
  * الموبيل يرجعني داخل الابلكشن»).
  *
  * سلوك Capacitor الافتراضي: مفيش تاريخ تصفّح ⇒ **التطبيق يتقفل**. فالمستخدم
- * اللي فاتح شيت أو داخل محادثة ويدوس رجوع كان بيلاقي التطبيق اتقفل، وأي حاجة
+ * اللي فاتح شيت أو داخل محادثة ويدوس رجوع كان بيلاقي التطبيق أُغلِق، وأي حاجة
  * كان بيكتبها تضيع.
  *
  * **إزاي نجرّبه في المتصفح:** بنحقن جسر Capacitor وهمي **بنفس شكل الحقيقي**
@@ -16,7 +16,7 @@ import { expectNoPageErrors, openApp, stubCapacitor, tab } from "../helpers";
  * 🔴 **والشكل ده هو التصحيح (١٩ أكتوبر ٢٠٢٦):** النسخة الأولى كانت بتحقن
  * `Plugins: { App: … }` **مملوءًا** — وده مش شكل الجسر الحقيقي، فالاختبارات
  * التلاتة كانت خضرا والزرار **ميت على الجهاز** لأن `Capacitor.Plugins.App`
- * بترجّع `undefined` دايمًا هناك. دلوقتي الوكيل مابيتخلقش إلا بـ`registerPlugin`
+ * بترجّع `undefined` دايمًا هناك. الآن الوكيل مابيتخلقش إلا بـ`registerPlugin`
  * زي الواقع، فالتلاتة بيسقطوا على الكود اللي بيقرا `Plugins` مباشرةً.
  */
 type BackWin = Window & {
@@ -63,7 +63,7 @@ test("الرجوع بيقفل النافذة المفتوحة ومابيقفلش
 
   await pressBack(page);
   await expect(dialog).toBeHidden();
-  // والأهم: النافذة اتقفلت **من غير** إن التطبيق يتصغّر أو يتقفل
+  // والأهم: النافذة أُغلِقت **من غير** إن التطبيق يتصغّر أو يتقفل
   expect(await minimized(page)).toBe(0);
   expectNoPageErrors(page);
 });
@@ -86,9 +86,9 @@ test("الرجوع من شاشة الشريط السفلي بيصغّر التط
   await stubApp(page);
   await openApp(page);
 
-  // تبويب الجروبات — كان ناقصًا من قايمة الجذور المكتوبة بالإيد، فالرجوع منه
+  // تبويب المجموعات — كان ناقصًا من قايمة الجذور المكتوبة بالإيد، فالرجوع منه
   // كان بيطلّع المستخدم من التبويب بدل ما يصغّر
-  await tab(page, /الجروبات|Groups/);
+  await tab(page, /المجموعات|Groups/);
   await pressBack(page);
   expect(await minimized(page)).toBe(1);
   expect(await page.evaluate(() => (window as unknown as BackWin).__rcExit ?? 0)).toBe(0);

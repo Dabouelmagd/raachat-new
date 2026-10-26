@@ -2,22 +2,22 @@ import { expect, test } from "@playwright/test";
 import { clearOverlays, expectNoPageErrors, openApp, tab } from "../helpers";
 
 /**
- * **الستوري الممول — موضع `story`.**
+ * **القصص الممول — موضع `story`.**
  *
  * الموضع كان **مباعًا في اللوحة بـ٢٥٠ ج/يوم ومش معروضًا في التطبيق خالص**:
  * `adsFor("story")` مكانش بيتنادى من أي مكان، يعني المعلن يدفع على مكان عمره
  * ما ظهر لحد، والإحصاءات تفضل صفرًا بلا أي خطأ (اتكشف ١٨ أكتوبر ٢٠٢٦).
  *
- * وبيظهر **في آخر شريط القصص ومتعلّم بـ«إعلان»** — مش وسط ستوريز الناس،
+ * وبيظهر **في آخر شريط القصص ومتعلّم بـ«إعلان»** — مش وسط قصصز الناس،
  * عشان المستخدم ما يفتكرش إنه من حد يعرفه.
  */
-test("🔴 الستوري الممول بيظهر في شريط القصص ومتعلّم إعلان", async ({ page }) => {
+test("🔴 القصص الممول بيظهر في شريط القصص ومتعلّم إعلان", async ({ page }) => {
   await openApp(page);
   await tab(page, /الدردشات|Chats/);
   await clearOverlays(page);
 
   const circle = page.getByRole("button", { name: /^إعلان — / });
-  await expect(circle, "مفيش ستوري ممول في الشريط — الموضع مباع ومش بيتعرض").toBeVisible();
+  await expect(circle, "مفيش قصص ممول في الشريط — الموضع مباع ومش بيتعرض").toBeVisible();
   expectNoPageErrors(page);
 });
 

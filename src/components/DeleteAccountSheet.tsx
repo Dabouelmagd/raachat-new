@@ -55,27 +55,27 @@ export function DeleteAccountSheet({ onClose }: { onClose: () => void }) {
         {step === "warn" ? (
           <>
             <ul className="mb-4 list-disc space-y-1.5 ps-5 text-[12.5px] leading-relaxed text-rachat-papyrus">
-              <li>{t("اسمك وصورتك ورقمك/إيميلك بيتمسحوا ومبيرجعوش.", "Your name, photo and phone/email are erased and can't be restored.")}</li>
-              <li>{t("رسائلك بتتحذف من كل المحادثات، وStories وسجل مكالماتك بيتمسحوا.", "Your messages are removed from all chats; your stories and call history are erased.")}</li>
-              <li>{t("بتخرج من كل الجروبات، والغرف اللي أنت مضيفها بتتقفل.", "You leave all groups, and rooms you host are closed.")}</li>
-              <li>{t("رصيد المحفظة (لو موجود) بيضيع. اصرفه قبل الحذف.", "Any wallet balance is lost. Spend it before deleting.")}</li>
-              <li>{t("سجلات المدفوعات بتتحفظ بدون أي بيانات تعرّف بيك، للالتزامات المحاسبية.", "Payment records are kept without any identifying data, for accounting obligations.")}</li>
+              <li>{t("يُمحى اسمك وصورتك ورقمك وبريدك، ولا يمكن استرجاعها.", "Your name, photo and phone/email are erased and can't be restored.")}</li>
+              <li>{t("تُحذف رسائلك من كل المحادثات، وتُمحى قصصك وسجلّ مكالماتك.", "Your messages are removed from all chats; your stories and call history are erased.")}</li>
+              <li>{t("تخرج من كل المجموعات، والغرف التي تستضيفها تُغلق.", "You leave all groups, and rooms you host are closed.")}</li>
+              <li>{t("يُفقَد رصيد المحفظة إن وُجد، فاصرفه قبل الحذف.", "Any wallet balance is lost. Spend it before deleting.")}</li>
+              <li>{t("تُحفظ سجلّات المدفوعات دون أي بيانات تعرّف بك، للالتزامات المحاسبية.", "Payment records are kept without any identifying data, for accounting obligations.")}</li>
             </ul>
             {err && <p role="alert" className="mb-2 text-xs text-rachat-red">{err}</p>}
             <button disabled={busy} onClick={sendCode} className="w-full rounded-xl bg-rachat-red py-3 text-sm font-bold text-white disabled:opacity-50">
-              {busy ? t("جاري الإرسال…", "Sending…") : t("ابعتلي كود التأكيد", "Send me a confirmation code")}
+              {busy ? t("جاري الإرسال…", "Sending…") : t("أرسِل لي كود التأكيد", "Send me a confirmation code")}
             </button>
-            <button onClick={onClose} className="mt-2 w-full rounded-xl py-2.5 text-sm text-neutral-300">{t("لأ، خليني", "No, keep my account")}</button>
+            <button onClick={onClose} className="mt-2 w-full rounded-xl py-2.5 text-sm text-neutral-300">{t("لا، أبقِني", "No, keep my account")}</button>
           </>
         ) : (
           <>
-            <p className="mb-2 text-xs text-rachat-papyrus">{t("بعتنا كود تأكيد على", "We sent a confirmation code to")} <b dir="ltr">{hint}</b>{!API_ON && <span className="text-rachat-gold"> ({t("كود التجربة", "demo code")}: {DEMO_CODE})</span>}</p>
+            <p className="mb-2 text-xs text-rachat-papyrus">{t("أرسلنا كود تأكيد إلى", "We sent a confirmation code to")} <b dir="ltr">{hint}</b>{!API_ON && <span className="text-rachat-gold"> ({t("كود التجربة", "demo code")}: {DEMO_CODE})</span>}</p>
             <input value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }} inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={10} placeholder="______"
               aria-label={t("كود التأكيد", "Confirmation code")} className="mb-3 w-full rounded-xl bg-rachat-black px-3 py-3 text-center text-lg tracking-[0.4em] text-rachat-papyrus outline-none ring-1 ring-rachat-maroon focus:ring-rachat-red" />
             {balance > 0 && (
               <label className="mb-3 flex items-start gap-2 rounded-xl bg-rachat-black/60 p-3 text-xs text-rachat-papyrus">
                 <input type="checkbox" checked={forfeit} onChange={(e) => setForfeit(e.target.checked)} className="mt-0.5" />
-                <span>{t(`فاهم إن رصيد محفظتي (${balance} ج.م) هيضيع مع حذف الحساب`, `I understand my wallet balance (${balance} EGP) will be lost`)}</span>
+                <span>{t(`أدرك أنّ رصيد محفظتي (${balance} ج.م) سيضيع مع حذف الحساب`, `I understand my wallet balance (${balance} EGP) will be lost`)}</span>
               </label>
             )}
             {err && <p role="alert" className="mb-2 text-xs text-rachat-red">{err}</p>}

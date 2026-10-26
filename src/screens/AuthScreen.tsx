@@ -106,7 +106,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
     : targetOk; // forgot · otp
 
   const go = (m: Mode) => { setMode(m); setStep("form"); setError(""); setPass(""); setBirth(""); setNeedBirth(false); setDigits(Array(6).fill("")); };
-  const fail = (e: unknown) => { setError((e as Error).message || t("حصلت مشكلة، حاول تاني", "Something went wrong, try again")); setBusy(false); };
+  const fail = (e: unknown) => { setError((e as Error).message || t("حدث خطأ، حاول مرة أخرى", "Something went wrong, try again")); setBusy(false); };
 
   /** يطلب كود ويروح لخطوة الكود (التسجيل · النسيان · الدخول بكود) */
   const sendCode = async () => {
@@ -139,7 +139,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
   const useCode = async (full: string) => {
     if (!API_ON) {
       if (full === MOCK_OTP) setTimeout(onDone, 300);
-      else setError(t("الكود غير صحيح، حاول مرة تانية", "Incorrect code, please try again"));
+      else setError(t("الكود غير صحيح، حاول مرة أخرى", "Incorrect code, please try again"));
       return;
     }
     setBusy(true);
@@ -159,7 +159,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
         setBusy(false);
         return;
       }
-      setError(msg || t("الكود غير صحيح، حاول مرة تانية", "Incorrect code, please try again"));
+      setError(msg || t("الكود غير صحيح، حاول مرة أخرى", "Incorrect code, please try again"));
       setBusy(false);
       if (code !== "under_age" && code !== "invalid_birth_date") {
         setDigits(Array(6).fill(""));
@@ -207,11 +207,11 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
     : t("تسجيل الدخول", "Sign in");
 
   const sub =
-    step === "code" ? t("اكتب كود التحقق اللي وصلك", "Enter the verification code we sent you")
-    : mode === "signup" ? t("اسمك وإيميلك وكلمة سر — وكود تأكيد مرة واحدة بس", "Your name, email and a password — plus a one-time confirmation code")
-    : mode === "forgot" ? t("هنبعتلك كود على إيميلك تعمل بيه كلمة سر جديدة", "We'll email you a code to set a new password")
+    step === "code" ? t("اكتب كود التحقّق الذي وصلك", "Enter the verification code we sent you")
+    : mode === "signup" ? t("اسمك وبريدك وكلمة سرّ — وكود تأكيد مرة واحدة فقط", "Your name, email and a password — plus a one-time confirmation code")
+    : mode === "forgot" ? t("سنرسل كودًا إلى بريدك تُنشئ به كلمة سرّ جديدة", "We'll email you a code to set a new password")
     : mode === "otp" ? t("للحسابات القديمة أو الدخول بالرقم", "For older accounts or signing in with a phone number")
-    : t("بإيميلك وكلمة السر", "With your email and password");
+    : t("ببريدك وكلمة السرّ", "With your email and password");
 
   const field = "rounded-xl bg-rachat-card px-4 py-3.5 text-base outline-none ring-1 ring-rachat-maroon/50 focus:ring-rachat-red";
   const link = "text-sm font-bold text-rachat-coral";
@@ -240,14 +240,14 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
                   className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold ${method === m ? "bg-rachat-red text-white" : "text-neutral-400"} ${!channels[m] ? "opacity-40" : ""}`}
                 >
                   {m === "phone" ? <Phone size={16} /> : <Mail size={16} />}
-                  {m === "phone" ? t("التليفون", "Phone") : t("الإيميل", "Email")}
+                  {m === "phone" ? t("الهاتف", "Phone") : t("البريد الإلكتروني", "Email")}
                 </button>
               ))}
             </div>
           )}
           {mode === "otp" && !channels.phone && (
             <p role="status" className="rounded-xl bg-rachat-card px-3 py-2 text-[11.5px] leading-5 text-rachat-gold">
-              {t("الدخول بالرقم موقوف مؤقتًا — استخدم الإيميل.", "Signing in with a phone number is temporarily unavailable — please use email.")}
+              {t("الدخول بالرقم موقوف مؤقتًا — استخدم البريد الإلكتروني.", "Signing in with a phone number is temporarily unavailable — please use email.")}
             </p>
           )}
 
@@ -255,7 +255,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={t("اسمك زي ما تحب يظهر", "Your name as you'd like it shown")}
+              placeholder={t("اسمك كما تحبّ أن يظهر", "Your name as you'd like it shown")}
               aria-label={t("الاسم", "Name")}
               className={field}
             />
@@ -288,7 +288,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={codeChannel === "phone" ? "01xxxxxxxxx" : "name@example.com"}
-            aria-label={codeChannel === "phone" ? t("رقم التليفون", "Phone number") : t("الإيميل", "Email")}
+            aria-label={codeChannel === "phone" ? t("رقم الهاتف", "Phone number") : t("البريد الإلكتروني", "Email")}
             className={`${field} text-left`}
           />
 
@@ -316,13 +316,13 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
           )}
 
           <button disabled={!formOk || busy} onClick={() => void submitForm()} className="rounded-xl bg-rachat-red py-3.5 font-extrabold text-white disabled:opacity-40">
-            {mode === "login" ? t("دخول", "Sign in") : mode === "signup" ? t("ابعتلي كود التأكيد", "Send me the confirmation code") : t("ابعتلي الكود", "Send me the code")}
+            {mode === "login" ? t("دخول", "Sign in") : mode === "signup" ? t("أرسِل لي كود التأكيد", "Send me the confirmation code") : t("أرسِل لي الكود", "Send me the code")}
           </button>
 
           {error && <p className="text-center text-sm text-rachat-coral" role="alert">{error}</p>}
 
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-1">
-            {mode !== "login" && <button onClick={() => go("login")} className={link}>{t("عندي حساب — دخول", "I have an account — sign in")}</button>}
+            {mode !== "login" && <button onClick={() => go("login")} className={link}>{t("لديّ حساب — دخول", "I have an account — sign in")}</button>}
             {mode !== "signup" && <button onClick={() => go("signup")} className={link}>{t("حساب جديد", "New account")}</button>}
             {mode === "login" && <button onClick={() => go("forgot")} className={link}>{t("نسيت كلمة السر؟", "Forgot password?")}</button>}
             {mode !== "otp" && <button onClick={() => go("otp")} className="text-sm text-neutral-400 underline">{t("دخول بكود لمرة واحدة", "Sign in with a one-time code")}</button>}
@@ -332,7 +332,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
             <div className="rounded-2xl border border-dashed border-rachat-gold/50 bg-rachat-card p-3.5">
               <div className="mb-1 text-xs font-bold text-rachat-gold">{t("حساب تجريبي للمعاينة", "Demo account for preview")}</div>
               <p className="mb-3 text-[11px] leading-5 text-neutral-500">
-                {t("ادخل مباشرة بحساب «كريم الشناوي» ببياناته الوهمية. أو جرّب الدخول بكود", "Jump straight in with the demo account “Karim El-Shennawy” and its mock data. Or try the one-time code")} <span dir="ltr" className="font-bold text-rachat-papyrus">{MOCK_OTP}</span>.
+                {t("ادخل مباشرة بحساب «كريم الشناوي» ببياناته التجريبية، أو جرِّب الدخول بكود", "Jump straight in with the demo account “Karim El-Shennawy” and its mock data. Or try the one-time code")} <span dir="ltr" className="font-bold text-rachat-papyrus">{MOCK_OTP}</span>.
               </p>
               <button onClick={onDone} className="w-full rounded-xl bg-rachat-gold py-3 text-sm font-extrabold text-rachat-ink">
                 {t("ادخل بالحساب التجريبي", "Enter the demo account")}
@@ -342,7 +342,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
 
           <p className="mt-auto pt-4 text-center text-[11px] leading-5 text-neutral-500">
             {t("بالمتابعة أنت توافق على ", "By continuing you agree to the ")}<a href={LEGAL.terms} target="_blank" rel="noreferrer" className="underline">{t("الشروط", "Terms")}</a>{t(" و", " and ")}<a href={LEGAL.privacy} target="_blank" rel="noreferrer" className="underline">{t("سياسة الخصوصية", "Privacy Policy")}</a>.
-            {!API_ON && " " + t("نسخة تجريبية: مفيش رسالة بتتبعت فعلاً.", "Demo version: no message is actually sent.")}
+            {!API_ON && " " + t("نسخة تجريبية: لا تُرسَل رسالة فعلًا.", "Demo version: no message is actually sent.")}
           </p>
         </div>
       ) : (
@@ -387,7 +387,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
                 className={`${field} text-left`}
               />
               <p className="px-1 pt-1 text-[11px] leading-4 text-rachat-sand/70">
-                {t("ده أول دخول ليك، ورع شات للبالغين (١٨ سنة أو أكثر). كودك لسه صالح.",
+                {t("هذا أول دخول لك، ورع شات للبالغين (١٨ سنة أو أكثر). وكودك ما زال صالحًا.",
                    "This is your first sign-in, and Raa Chat is for adults (18+). Your code is still valid.")}
               </p>
               <button
@@ -416,7 +416,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
               disabled={!passOk || !digits.every(Boolean) || busy}
               onClick={() => void useCode(digits.join(""))}
               className="rounded-xl bg-rachat-red py-3.5 font-extrabold text-white disabled:opacity-40"
-            >{t("اعمل كلمة السر الجديدة", "Set the new password")}</button>
+            >{t("أنشئ كلمة السرّ الجديدة", "Set the new password")}</button>
           )}
 
           {error && <p className="text-center text-sm text-rachat-coral" role="alert">{error}</p>}

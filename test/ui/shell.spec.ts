@@ -37,7 +37,7 @@ test("زر البحث موجود وبيفتح شاشة البحث", async ({ pag
 });
 
 test("التابات الأساسية كلها بتفتح من غير أخطاء", async ({ page }) => {
-  for (const t of [/الجروبات|Groups/, /الغرف|Rooms/, /الخدمات|Services/, /الحساب|Account/, /الدردشات|Chats/]) {
+  for (const t of [/المجموعات|Groups/, /الغرف|Rooms/, /الخدمات|Services/, /الحساب|Account/, /الدردشات|Chats/]) {
     await tab(page, t);
     await expect(page.locator("header, .bg-rachat-black").first()).toBeVisible();
   }

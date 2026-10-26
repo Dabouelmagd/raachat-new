@@ -1,10 +1,10 @@
 /**
- * تحقّق في **وضع الـ API** (بقى في الـ CI من ١٥ أكتوبر ٢٠٢٦): لما تنضم لجروب عام، هل كلامه القديم بيبان؟
+ * تحقّق في **وضع الـ API** (بقى في الـ CI من ١٥ أكتوبر ٢٠٢٦): لما تنضم لمجموعة عامة، هل كلامه القديم بيبان؟
  *
  * ليه يدوي: اختبارات `test/ui/` بتشتغل على بناء الديمو اللي **مابيعملش ولا نداء
  * شبكة**، والعطل ده بالتحديد في **تحميل البيانات من السيرفر**: الواجهة كانت
  * بتجيب رسايل المحادثات **مرة واحدة** وقت تشغيل التطبيق، فأي محادثة بتدخلها بعد
- * كده (جروب عام · قناة · محادثة جاية من السوكت) تبان **فاضية** لحد التحديث.
+ * كده (مجموعة عامة · قناة · محادثة جاية من السوكت) تبان **فاضية** لحد التحديث.
  *
  * الخطوات (محتاج postgres شغّال على 5432):
  *   1) cd /home/claude/raachat-new && VITE_API_URL=http://localhost:4112 npx vite build -c vite.single.config.ts
@@ -110,21 +110,21 @@ async function main() {
   await page.waitForTimeout(2500);
   const dlg = page.locator('[role="dialog"]');
   if (await dlg.count()) {
-    const skip = page.getByRole("button", { name: /لاحقًا|تخطّى|تخطي|مش دلوقتي|إغلاق|Later|Skip|Not now|Close/ });
+    const skip = page.getByRole("button", { name: /لاحقًا|تخطّى|تخطي|ليس الآن|إغلاق|Later|Skip|Not now|Close/ });
     if (await skip.count()) await skip.first().click(); else await page.keyboard.press("Escape");
     await page.waitForTimeout(600);
   }
   await page.evaluate(() => document.querySelectorAll(".fixed.inset-0").forEach((e) => e.remove()));
 
-  // تاب الجروبات → «اكتشف جروبات» → انضمام
-  await page.getByRole("link", { name: /الجروبات|Groups/ }).click();
+  // تاب المجموعات → «اكتشف مجموعات» → انضمام
+  await page.getByRole("link", { name: /المجموعات|Groups/ }).click();
   await page.waitForTimeout(1500);
   const join = page.getByRole("button", { name: /^انضمام$|^Join$/ });
   out.push(`join-buttons=${await join.count()}`);
   await join.first().click();
   await page.waitForTimeout(2000);
 
-  // ندخل الجروب من قايمة «جروباتي» (من غير أي تحديث للصفحة — ده بيت القصيد)
+  // ندخل الجروب من قايمة «مجموعاتي» (من غير أي تحديث للصفحة — ده بيت القصيد)
   await page.getByText("جروب الأخبار العام").first().click();
   await page.waitForTimeout(2000);
   const body = await page.locator("body").innerText();

@@ -94,8 +94,8 @@ export const INITIAL_MESSAGES: Message[] = [
  */
 export interface DemoChannel { id: string; name: string; about: string; members: number; initial: string; colorClass: string }
 export const DEMO_CHANNELS: DemoChannel[] = [
-  { id: "ch2", get name() { return tr("أخبار التقنية 📱", "Tech News 📱"); }, get about() { return tr("كل جديد في الموبايلات والتطبيقات", "Everything new in phones and apps"); }, members: 8420, get initial() { return tr("أ", "T"); }, colorClass: "bg-rachat-red" },
-  { id: "ch3", get name() { return tr("وظائف مصر 💼", "Egypt Jobs 💼"); }, get about() { return tr("فرص شغل جديدة كل يوم", "New job openings every day"); }, members: 15300, get initial() { return tr("و", "J"); }, colorClass: "bg-[#7a4a2a]" },
+  { id: "ch2", get name() { return tr("أخبار التقنية 📱", "Tech News 📱"); }, get about() { return tr("كل جديد في الهواتف والتطبيقات", "Everything new in phones and apps"); }, members: 8420, get initial() { return tr("أ", "T"); }, colorClass: "bg-rachat-red" },
+  { id: "ch3", get name() { return tr("وظائف مصر 💼", "Egypt Jobs 💼"); }, get about() { return tr("فرص عمل جديدة كل يوم", "New job openings every day"); }, members: 15300, get initial() { return tr("و", "J"); }, colorClass: "bg-[#7a4a2a]" },
   { id: "ch4", get name() { return tr("مواعيد الصلاة 🕌", "Prayer Times 🕌"); }, get about() { return tr("مواعيد الصلاة والأذكار اليومية", "Daily prayer times and remembrances"); }, members: 42100, get initial() { return tr("م", "P"); }, colorClass: "bg-rachat-maroon" },
 ];
 

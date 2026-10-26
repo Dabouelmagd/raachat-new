@@ -56,11 +56,11 @@ export function LiveBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
     <span
-      aria-label={tx("فيها ناس دلوقتي", "People in here now")}
+      aria-label={tx("يوجد أشخاص الآن", "People in here now")}
       className="flex shrink-0 items-center gap-1 rounded-full bg-rachat-red/20 px-2 py-0.5 text-[11px] font-extrabold text-rachat-coral"
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rachat-coral" />
-      {num(count)} {tx("دلوقتي", "live")}
+      {num(count)} {tx("الآن", "live")}
     </span>
   );
 }
@@ -76,5 +76,5 @@ export function roomStatusText(
 ) {
   if (joined) return tx("أنت داخل الغرفة", "You're in this room");
   if (count > 0) return tx("اضغط للانضمام", "Tap to join");
-  return tx("فاضية — ادخل وابدأ الكلام", "Empty — join and start talking");
+  return tx("فارغة — انضمّ وابدأ الحديث", "Empty — join and start talking");
 }

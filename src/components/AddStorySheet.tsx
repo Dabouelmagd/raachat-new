@@ -39,7 +39,7 @@ export function AddStorySheet({ onClose }: { onClose: () => void }) {
           style={{ background: image ? `center / cover url(${image})` : `linear-gradient(135deg, ${PALETTE[colorIdx][0]}, ${PALETTE[colorIdx][1]})` }}
         >
           {image && <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />}
-          <span className="relative drop-shadow">{caption || (image ? "" : t("اكتب نص القصة هنا…", "Write your story text here…"))}</span>
+          <span className="relative drop-shadow">{caption || (image ? "" : t("اكتب نصّ القصة هنا…", "Write your story text here…"))}</span>
           {image && (
             <button onClick={() => setImage(undefined)} aria-label={t("إزالة الصورة", "Remove photo")} className="absolute end-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50"><X size={14} /></button>
           )}

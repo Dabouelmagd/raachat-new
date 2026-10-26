@@ -21,9 +21,9 @@ export default function GroupsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <Header title={tt("الجروبات", "Groups")} right={<button onClick={() => navigate("/new-group")}><Plus size={22} /></button>} />
+      <Header title={tt("المجموعات", "Groups")} right={<button onClick={() => navigate("/new-group")}><Plus size={22} /></button>} />
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <h2 className="mb-2 mt-1 text-sm font-extrabold">{tt("جروباتي", "My groups")}</h2>
+        <h2 className="mb-2 mt-1 text-sm font-extrabold">{tt("مجموعاتي", "My groups")}</h2>
         <div className="space-y-2">
           {mine.map((t) => (
             <button key={t.id} onClick={() => navigate(`/chat/${t.id}`)}
@@ -36,14 +36,14 @@ export default function GroupsScreen() {
               <UnreadBadge count={t.unread} />
             </button>
           ))}
-          {mine.length === 0 && <p className="py-4 text-center text-xs text-neutral-500">{tt("لسه مفيش جروبات — أنشئ واحد أو انضم من تحت", "No groups yet — create one or join below")}</p>}
+          {mine.length === 0 && <p className="py-4 text-center text-xs text-neutral-500">{tt("لا توجد مجموعات بعد — أنشئ واحدة أو انضمّ من الأسفل", "No groups yet — create one or join below")}</p>}
           <button onClick={() => navigate("/new-group")}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-rachat-red/60 py-3 text-sm font-bold text-rachat-coral">
-            <Plus size={16} /> {tt("إنشاء جروب جديد", "Create new group")}
+            <Plus size={16} /> {tt("إنشاء مجموعة جديدة", "Create new group")}
           </button>
         </div>
 
-        <h2 className="mb-2 mt-6 text-sm font-extrabold">{tt("اكتشف جروبات", "Discover groups")}</h2>
+        <h2 className="mb-2 mt-6 text-sm font-extrabold">{tt("اكتشف مجموعات", "Discover groups")}</h2>
         <div className="space-y-2">
           {(API_ON ? (remote ?? []).map((g) => ({ ...g, memberIds: [] as string[], desc: g.desc })) : PUBLIC_GROUPS).map((g) => (
             <div key={g.id} className="flex items-center gap-3 rounded-2xl bg-rachat-card p-3">

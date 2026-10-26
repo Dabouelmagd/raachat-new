@@ -57,7 +57,7 @@ export function TranslateSheet({ onClose, call = false }: { onClose: () => void;
         <div className="rounded-xl border border-dashed border-rachat-gold/50 p-3">
           <p className="mb-1 text-xs font-bold text-rachat-gold">{t("نسخة تجريبية", "Demo version")}</p>
           <p className="mb-2 text-[11px] leading-5 text-neutral-400">
-            {t(`الديمو بيترجم حوالي ${num(PHRASES.length)} عبارة شائعة بين العربية والإنجليزية والصينية والفرنسية. الباك إند هيربط محرك ترجمة حقيقي لأي جملة وأي لغة. جرّبي كتابة:`, `The demo translates about ${PHRASES.length} common phrases between Arabic, English, Chinese and French. The backend will connect a real translation engine for any sentence and any language. Try typing:`)}
+            {t(`تترجم النسخة التجريبية نحو ${num(PHRASES.length)} عبارة شائعة بين العربية والإنجليزية والصينية والفرنسية. وسيربط الخادم محرّك ترجمة حقيقيًّا لأي جملة وأي لغة. جرّب كتابة:`, `The demo translates about ${PHRASES.length} common phrases between Arabic, English, Chinese and French. The backend will connect a real translation engine for any sentence and any language. Try typing:`)}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {EXAMPLES.map((i) => (
@@ -83,7 +83,7 @@ export function TranslatedLine({ text, to, mine }: { text: string; to: TLang; mi
   return (
     <div className={`mt-1.5 border-t pt-1.5 text-[12.5px] leading-5 ${mine ? "border-white/25" : "border-black/15"}`}>
       <span className="mb-0.5 flex items-center gap-0.5 text-[10px] font-bold opacity-70"><Languages size={10} />{TLANG_NAMES[to]}</span>
-      {out.text ? <div dir="auto">{out.text}</div> : <span className="text-[11px] italic opacity-60">{t("الترجمة الكاملة تحتاج الباك إند", "Full translation needs the backend")}</span>}
+      {out.text ? <div dir="auto">{out.text}</div> : <span className="text-[11px] italic opacity-60">{t("الترجمة الكاملة تحتاج الخادم", "Full translation needs the backend")}</span>}
     </div>
   );
 }

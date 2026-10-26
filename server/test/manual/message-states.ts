@@ -1,8 +1,8 @@
 /**
- * تحقّق في **وضع الـ API**: حالات الرسالة التلاتة — **اتبعتت ← وصلت ← اتقرت**.
+ * تحقّق في **وضع الـ API**: حالات الرسالة التلاتة — **أُرسِلت ← وصلت ← قُرئت**.
  *
  * ليه هنا مش في `test/ui/`: الحالات دي **كلها من السيرفر والسوكت**. «وصلت»
- * بتتسجّل أول ما جهاز الطرف التاني **يتصل بالسوكت** (`markDelivered`)، و«اتقرت»
+ * بتتسجّل أول ما جهاز الطرف التاني **يتصل بالسوكت** (`markDelivered`)، و«قُرئت»
  * أول ما **يفتح المحادثة** — وبناء الديمو مابيعملش ولا نداء شبكة، فالحالات
  * تتولد فيه من بيانات مزروعة، ومفيش فيه طريق نجرّب بيه الانتقال الحقيقي.
  * واختبارات السيرفر (`delivered.test.ts`) بتفحص الأعمدة والردود — **مش العلامة
@@ -13,7 +13,7 @@
  *   2) cd server && npx tsx test/manual/message-states.ts
  *
  * الحكم: بيخرج بـ **٢** لو أي حالة ما ظهرتش بالترتيب الصح. والعلامة بتتقرا من
- * `aria-label` (اتبعتت/وصلت/اتقرت) مش من لون ولا كلاس — ده اللي قارئ الشاشة
+ * `aria-label` (أُرسِلت/وصلت/قُرئت) مش من لون ولا كلاس — ده اللي قارئ الشاشة
  * بيقوله فعلًا، وبيتغيّر مع المعنى مش مع التنسيق.
  */
 import { createRequire } from "node:module";
@@ -113,7 +113,7 @@ async function main() {
 
   /** العلامة على آخر رسالة بعتّها: بنقرا الأسماء المتاحة لقارئ الشاشة */
   const tickOf = async (page: import("playwright").Page) => {
-    for (const label of ["اتقرت", "وصلت", "اتبعتت"]) {
+    for (const label of ["قُرئت", "وصلت", "أُرسِلت"]) {
       if (await page.getByLabel(label, { exact: true }).count()) return label;
     }
     return "مفيش";
@@ -128,27 +128,27 @@ async function main() {
     fail.push(`${step}: ${got} ≠ ${want}`);
   };
 
-  // ١) داليا بتبعت ومريم **عمرها ما اتصلت** → لازم «اتبعتت» بس
+  // ١) داليا بتبعت ومريم **عمرها ما اتصلت** → لازم «أُرسِلت» بس
   const mine = await openAs(me);
   await mine.getByText("مريم").first().click();
   await mine.waitForTimeout(1200);
   const box = mine.getByPlaceholder(/اكتب رسالة|Type a message/);
   await box.fill(TEXT);
   await mine.getByRole("button", { name: /إرسال|Send/ }).click();
-  await expectTick(mine, "اتبعتت", "١) بعد الإرسال ومريم مش متصلة");
+  await expectTick(mine, "أُرسِلت", "١) بعد الإرسال ومريم مش متصلة");
 
   // ٢) مريم بتفتح التطبيق بس **مش بتفتح المحادثة** → السوكت بيتصل فتبقى «وصلت»
   const hers = await openAs(her);
   await expectTick(mine, "وصلت", "٢) بعد ما جهاز مريم اتصل");
 
-  // ٣) مريم بتفتح المحادثة → «اتقرت» (وبيوصل لداليا على السوكت من غير تحديث)
+  // ٣) مريم بتفتح المحادثة → «قُرئت» (وبيوصل لداليا على السوكت من غير تحديث)
   await hers.getByText("داليا").first().click();
   await hers.waitForTimeout(1500);
-  await expectTick(mine, "اتقرت", "٣) بعد ما مريم فتحت المحادثة");
+  await expectTick(mine, "قُرئت", "٣) بعد ما مريم فتحت المحادثة");
 
-  // 🔴 تشخيص: لو بعد إعادة التحميل بقت «اتقرت»، يبقى **الداتا سليمة والبثّ
+  // 🔴 تشخيص: لو بعد إعادة التحميل بقت «قُرئت»، يبقى **الداتا سليمة والبثّ
   // هو المكسور** — يعني المستخدم بيبعت والطرف التاني يقرا والعلامة عنده
-  // مافيهاش حركة لحد ما يعمل تحديث. ولو فضلت «اتبعتت» يبقى السيرفر نفسه.
+  // مافيهاش حركة لحد ما يعمل تحديث. ولو فضلت «أُرسِلت» يبقى السيرفر نفسه.
   await mine.reload();
   await mine.waitForTimeout(2500);
   await mine.evaluate(() => document.querySelectorAll(".fixed.inset-0").forEach((e) => e.remove()));
@@ -171,5 +171,5 @@ async function main() {
 
 main().then(() => {
   if (fail.length) { console.error("\n❌ حالات ما ظهرتش صح:\n- " + fail.join("\n- ")); process.exit(2); }
-  console.log("\n✅ التلات حالات ظهرت بالترتيب: اتبعتت ← وصلت ← اتقرت");
+  console.log("\n✅ التلات حالات ظهرت بالترتيب: أُرسِلت ← وصلت ← قُرئت");
 }).catch((e) => { console.error(e); process.exit(1); });

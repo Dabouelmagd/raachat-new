@@ -81,7 +81,7 @@ export default function AccountScreen() {
             <ShieldCheck size={22} className="text-rachat-gold" />
             <div className="min-w-0 flex-1">
               <div className="font-extrabold text-rachat-papyrus">{t("لوحة التحكم", "Dashboard")}</div>
-              <div className="text-[11px] text-neutral-500">{adminErr ? t("تعذّر الفتح، جرّبي تاني", "Couldn't open, try again") : t("دخول مباشر بدون تسجيل تاني", "Direct sign-in, no second login")}</div>
+              <div className="text-[11px] text-neutral-500">{adminErr ? t("تعذّر الفتح، حاول مرة أخرى", "Couldn't open, try again") : t("دخول مباشر دون تسجيل مرة أخرى", "Direct sign-in, no second login")}</div>
             </div>
             <Chev size={18} className="text-neutral-500" />
           </button>
@@ -139,7 +139,7 @@ export default function AccountScreen() {
         </button>
 
         <button onClick={() => setWpOpen(true)} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">
-          {t("خلفية الشات", "Chat wallpaper")}
+          {t("خلفية المحادثة", "Chat wallpaper")}
           <Chev size={15} className="text-neutral-500" />
         </button>
         <button onClick={() => setBlockedOpen(true)} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">

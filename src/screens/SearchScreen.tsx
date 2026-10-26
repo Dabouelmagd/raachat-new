@@ -38,21 +38,21 @@ export default function SearchScreen() {
   const seq = useRef(0);
 
   const kindLabel: Record<Kind, string> = {
-    message: t("رسائل", "Messages"), chat: t("محادثات", "Chats"), person: t("أشخاص", "People"), group: t("جروبات", "Groups"),
-    room: t("غرف", "Rooms"), service: t("خدمات", "Services"), offer: t("عروض", "Offers"), setting: t("إعدادات", "Settings"), story: t("ستوري", "Stories"),
+    message: t("رسائل", "Messages"), chat: t("محادثات", "Chats"), person: t("أشخاص", "People"), group: t("مجموعات", "Groups"),
+    room: t("غرف", "Rooms"), service: t("خدمات", "Services"), offer: t("عروض", "Offers"), setting: t("إعدادات", "Settings"), story: t("قصص", "Stories"),
   };
   const filters: { id: Filter; label: string; kinds?: Kind[] }[] = [
     { id: "all", label: t("الكل", "All") },
     { id: "message", label: t("رسائل", "Messages"), kinds: ["message", "chat"] },
     { id: "person", label: t("أشخاص", "People"), kinds: ["person"] },
-    { id: "group", label: t("جروبات", "Groups"), kinds: ["group"] },
+    { id: "group", label: t("مجموعات", "Groups"), kinds: ["group"] },
     { id: "room", label: t("غرف", "Rooms"), kinds: ["room"] },
     { id: "service", label: t("خدمات وعروض", "Services & offers"), kinds: ["service", "offer"] },
     { id: "setting", label: t("إعدادات", "Settings"), kinds: ["setting"] },
   ];
   const steps = [
     t("فهم السؤال", "Understanding the question"),
-    t("البحث في الرسائل والجهات", "Searching chats & contacts"),
+    t("البحث في الرسائل وجهات الاتصال", "Searching chats & contacts"),
     t("البحث في الخدمات والإعدادات", "Searching services & settings"),
     t("تجميع الإجابة", "Composing the answer"),
   ];
@@ -121,7 +121,7 @@ export default function SearchScreen() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && commit(q)}
-            placeholder={deep ? t("اسأل أي حاجة… «فاتورة الكهرباء»", "Ask anything… “electricity bill”") : t("ابحث في الرسائل والأشخاص والخدمات", "Search chats, people and services")}
+            placeholder={deep ? t("اسأل عن أي شيء… «فاتورة الكهرباء»", "Ask anything… “electricity bill”") : t("ابحث في الرسائل والأشخاص والخدمات", "Search chats, people and services")}
             aria-label={t("بحث", "Search")}
             className="min-w-0 flex-1 bg-transparent py-3 text-sm text-rachat-papyrus outline-none placeholder:text-neutral-500"
           />
@@ -139,7 +139,7 @@ export default function SearchScreen() {
           <Sparkles size={16} className={deep ? "text-rachat-gold" : "text-neutral-500"} />
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-extrabold text-rachat-papyrus">{t("بحث عميق بالذكاء الاصطناعي", "Deep AI search")}</span>
-            <span className="block text-[10.5px] leading-4 text-neutral-500">{t("بيفهم سؤالك ومرادفاته، ويدوّر في كل حاجة، ويلخّصلك الإجابة", "Understands your question and synonyms, searches everything and summarizes")}</span>
+            <span className="block text-[10.5px] leading-4 text-neutral-500">{t("يفهم سؤالك ومرادفاته، ويبحث في كل شيء، ويلخّص لك الإجابة", "Understands your question and synonyms, searches everything and summarizes")}</span>
           </span>
           <span className={`relative h-5 w-9 shrink-0 rounded-full ${deep ? "bg-rachat-red" : "bg-neutral-500/60"}`}>
             <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-rachat-cream transition-all ${deep ? "right-0.5" : "left-0.5"}`} />
@@ -172,7 +172,7 @@ export default function SearchScreen() {
                 </div>
               </>
             )}
-            <p className="mb-2 text-[11px] font-bold text-neutral-500">{t("جرّب تسأل", "Try asking")}</p>
+            <p className="mb-2 text-[11px] font-bold text-neutral-500">{t("جرِّب أن تسأل", "Try asking")}</p>
             <div className="flex flex-col gap-2">
               {SUGGESTIONS().map((s) => (
                 <button key={s} onClick={() => setQ(s)} className="flex items-center gap-2.5 rounded-xl bg-rachat-card px-3.5 py-3 text-start text-xs text-rachat-papyrus">
@@ -213,7 +213,7 @@ export default function SearchScreen() {
             <p className="mb-1 mt-3 text-[11px] text-neutral-500">
               {res.results.length > 0
                 ? t(`${res.results.length} نتيجة · ${res.tookMs} م.ث`, `${res.results.length} ${res.results.length === 1 ? "result" : "results"} · ${res.tookMs} ms`)
-                : t("مفيش نتائج", "No results")}
+                : t("لا توجد نتائج", "No results")}
             </p>
 
             {grouped.map(([kind, docs]) => {
@@ -238,11 +238,11 @@ export default function SearchScreen() {
 
             {res.results.length === 0 && (
               <div className="mt-6 text-center text-xs text-neutral-500">
-                {!deep && <button onClick={() => setDeep(true)} className="mt-2 rounded-full bg-rachat-red px-4 py-2 font-bold text-white">{t("جرّب البحث العميق", "Try deep search")}</button>}
+                {!deep && <button onClick={() => setDeep(true)} className="mt-2 rounded-full bg-rachat-red px-4 py-2 font-bold text-white">{t("جرِّب البحث العميق", "Try deep search")}</button>}
               </div>
             )}
             <p className="mt-4 text-center text-[10px] leading-4 text-neutral-600">
-              {t("نسخة الديمو بتبحث في بياناتها المحلية. الباك إند هيوصّلها بنموذج لغوي وبحث دلالي حقيقي.", "The demo searches its local data. The backend will connect a real language model and semantic search.")}
+              {t("النسخة التجريبية تبحث في بياناتها المحلية. وسيصلها الخادم بنموذج لغوي وبحث دلالي حقيقي.", "The demo searches its local data. The backend will connect a real language model and semantic search.")}
             </p>
           </>
         )}

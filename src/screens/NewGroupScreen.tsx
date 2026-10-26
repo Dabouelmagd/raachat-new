@@ -44,7 +44,7 @@ export default function NewGroupScreen() {
   return (
     <div className="flex h-full flex-col">
       {editing && <PhotoEditorSheet src={editing} onCancel={() => setEditing(null)} onDone={(d) => { setPhoto(d); setEditing(null); }} />}
-      <Header title={step === "pick" ? t("أعضاء الجروب", "Group members") : t("اسم الجروب", "Group name")} showBack />
+      <Header title={step === "pick" ? t("أعضاء المجموعة", "Group members") : t("اسم المجموعة", "Group name")} showBack />
 
       {step === "pick" ? (
         <>
@@ -54,11 +54,11 @@ export default function NewGroupScreen() {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("ابحث في جهات الاتصال", "Search contacts")} className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-600" />
             </div>
             <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-neutral-500">
-              <span>{t("اختر أعضاء الجروب", "Choose group members")} ({num(selected.length)} {t("محدد", "selected")})</span>
+              <span>{t("اختر أعضاء المجموعة", "Choose group members")} ({num(selected.length)} {t("محدد", "selected")})</span>
               <button onClick={toggleAll} className="font-bold text-rachat-coral">{allShown ? t("إلغاء تحديد الكل", "Deselect all") : t("تحديد الكل", "Select all")}</button>
             </div>
             <p className="mb-3 flex items-center gap-1.5 rounded-lg bg-rachat-gold/10 px-2.5 py-1.5 text-[11px] text-rachat-gold">
-              <InfinityIcon size={14} /> {t("لا يوجد حد أقصى لعدد أعضاء الجروب", "There is no limit on the number of group members")}
+              <InfinityIcon size={14} /> {t("لا يوجد حدّ أقصى لعدد أعضاء المجموعة", "There is no limit on the number of group members")}
             </p>
             {shown.map((c) => {
               const active = selected.includes(c.id);
@@ -104,7 +104,7 @@ export default function NewGroupScreen() {
             {photo && <button onClick={() => setEditing(photo)} className="flex items-center gap-1 text-xs font-bold text-rachat-gold"><Pencil size={13} /> {t("تعديل الصورة", "Edit photo")}</button>}
             {photo && <button onClick={() => setPhoto(undefined)} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><Trash2 size={13} /> {t("إزالة الصورة", "Remove photo")}</button>}
           </div>
-          <label className="mb-2 text-[11px] text-neutral-500">{t("اسم الجروب", "Group name")}</label>
+          <label className="mb-2 text-[11px] text-neutral-500">{t("اسم المجموعة", "Group name")}</label>
           <input
             autoFocus
             value={name}
@@ -136,7 +136,7 @@ export default function NewGroupScreen() {
             onClick={finish}
             className="mt-auto w-full rounded-xl bg-gradient-to-br from-rachat-red to-rachat-coral py-3 text-sm font-bold text-white disabled:opacity-40"
           >
-            {t("إنشاء الجروب", "Create group")}
+            {t("إنشاء المجموعة", "Create group")}
           </button>
         </div>
       )}

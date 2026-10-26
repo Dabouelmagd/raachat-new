@@ -2,10 +2,10 @@ import { expect, test, type Locator } from "@playwright/test";
 import { clearOverlays, expectNoPageErrors, openApp, tab } from "../helpers";
 
 /**
- * **تمييز الغرفة الصوتية اللي فيها ناس دلوقتي** (بطلب داليا ٢٦ أكتوبر ٢٠٢٦).
+ * **تمييز الغرفة الصوتية اللي يوجد أشخاص الآن** (بطلب داليا ٢٦ أكتوبر ٢٠٢٦).
  *
  * الغرف مالهاش «غير مقروء» (حضور صوتي مافيهوش رسايل)، فالإشارة هي **الحضور
- * الحيّ**: اسم الغرفة بولد + شارة «N دلوقتي» لما يكون فيها ناس، وعادي بلا شارة
+ * الحيّ**: اسم الغرفة بولد + شارة «N الآن» لما يكون فيها ناس، وعادي بلا شارة
  * لما تكون فاضية.
  *
  * 🔴 والحكم على **وزن الخط المحسوب** مش على اسم الكلاس — نفس درس «مفيش فرق»
@@ -18,7 +18,7 @@ import { clearOverlays, expectNoPageErrors, openApp, tab } from "../helpers";
  */
 
 const weight = (l: Locator) => l.evaluate((el) => Number(getComputedStyle(el).fontWeight));
-const LIVE = /فيها ناس دلوقتي|People in here now/;
+const LIVE = /يوجد أشخاص الآن|People in here now/;
 
 test("🔴 شاشة الغرف: الحيّة بولد ومعاها شارة، والفاضية عادية بلا شارة", async ({ page }) => {
   await openApp(page);
@@ -66,7 +66,7 @@ test("الغرفة الفاضية بتقول إنها فاضية مش «صفر �
   await openApp(page);
   await tab(page, /الغرف|Rooms/);
   await clearOverlays(page);
-  await expect(page.getByText(/فاضية — ادخل وابدأ الكلام|Empty — join and start talking/).first()).toBeVisible();
+  await expect(page.getByText(/فارغة — انضمّ وابدأ الحديث|Empty — join and start talking/).first()).toBeVisible();
   // وممنوع يطلع صفر في أي صيغة
   await expect(page.getByText(/(^|\s)(٠|0)\s*(مستمع|مشارك|listening|people)/)).toHaveCount(0);
   expectNoPageErrors(page);

@@ -25,7 +25,7 @@ export default function ChatsScreen() {
   const [pinNote, setPinNote] = useState("");
   const favs = useFavorites();
   const [filter, setFilter] = useState<Filter>("all");
-  const FILTERS: [Filter, string, string][] = [["all", "الكل", "All"], ["unread", "غير المقروء", "Unread"], ["dm", "الخاصة", "Direct"], ["group", "الجروبات", "Groups"], ["channel", "القنوات", "Channels"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
+  const FILTERS: [Filter, string, string][] = [["all", "الكل", "All"], ["unread", "غير المقروء", "Unread"], ["dm", "الخاصة", "Direct"], ["group", "المجموعات", "Groups"], ["channel", "القنوات", "Channels"], ["room", "الغرف", "Rooms"], ["fav", "المفضلة", "Favorites"]];
   const ordered = [...threads.filter((t) => t.pinned), ...threads.filter((t) => !t.pinned)];
   const shown = ordered.filter((x) => filter === "all" || (filter === "unread" && (x.unread ?? 0) > 0) || (filter === "dm" && x.type === "dm") || (filter === "group" && x.type === "group") || (filter === "channel" && x.type === "channel") || (filter === "fav" && favs.includes(x.id)));
   const [showNewChat, setShowNewChat] = useState(false);
@@ -43,7 +43,7 @@ export default function ChatsScreen() {
     try {
       await setPinned(t.id, !t.pinned);
     } catch {
-      setPinNote(tx("التثبيت ما نجحش — حاول تاني", "Pinning failed — try again"));
+      setPinNote(tx("لم ينجح التثبيت — حاول مرة أخرى", "Pinning failed — try again"));
     }
   };
 
@@ -88,7 +88,7 @@ export default function ChatsScreen() {
             <LiveBadge count={liveCount(r)} />
           </button>
         ))}
-        {filter === "room" && rooms.length === 0 && <p className="mt-10 text-center text-xs text-neutral-500">{tx("مفيش غرف صوتية دلوقتي", "No voice rooms right now")}</p>}
+        {filter === "room" && rooms.length === 0 && <p className="mt-10 text-center text-xs text-neutral-500">{tx("لا توجد غرف صوتية الآن", "No voice rooms right now")}</p>}
         {filter !== "room" && shown.map((t) => {
           const last = lastMessageFor(t.id);
           return (
@@ -133,11 +133,11 @@ export default function ChatsScreen() {
           );
         })}
         {filter !== "room" && shown.length === 0 && threads.length > 0 && (
-          <p className="mt-10 text-center text-xs text-neutral-500">{tx("مفيش نتائج في الفلتر ده", "Nothing in this filter")}</p>
+          <p className="mt-10 text-center text-xs text-neutral-500">{tx("لا توجد نتائج في هذه التصفية", "Nothing in this filter")}</p>
         )}
         {threads.length === 0 && (
           <p className="mt-10 text-center text-xs text-neutral-500">
-            {tx("مفيش محادثات لسه — ابدأ واحدة بالزرار تحت", "No chats yet — start one with the button below")}
+            {tx("لا توجد محادثات بعد — ابدأ واحدة بالزرّ في الأسفل", "No chats yet — start one with the button below")}
           </p>
         )}
       </div>

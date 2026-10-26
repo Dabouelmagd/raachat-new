@@ -24,7 +24,7 @@ export default function AdsScreen() {
       <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-6">
         {list === null && <p className="py-10 text-center text-sm text-neutral-500">{t("جاري التحميل…", "Loading…")}</p>}
         {err && <p role="alert" className="py-10 text-center text-sm text-rachat-red">{t("تعذّر تحميل الإعلانات", "Couldn't load ads")}</p>}
-        {list && !err && list.length === 0 && <p className="py-10 text-center text-sm text-neutral-500">{t("مفيش عروض دلوقتي", "No offers right now")}</p>}
+        {list && !err && list.length === 0 && <p className="py-10 text-center text-sm text-neutral-500">{t("لا توجد عروض الآن", "No offers right now")}</p>}
         {(list ?? []).map((ad) => (
           <article key={ad.id} className={`rounded-2xl bg-gradient-to-br ${ad.gradient} p-4 ring-1 ring-white/10`}>
             <div className="mb-1 flex items-center gap-2 text-[11px] text-white/75">

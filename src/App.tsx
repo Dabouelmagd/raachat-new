@@ -40,7 +40,7 @@ import { useLang, useT } from "./i18n";
 
 const RAIL = [
   { to: "/", label: ["الدردشات", "Chats"], icon: Cartouche, end: true },
-  { to: "/groups", label: ["الجروبات", "Groups"], icon: Pyramids, end: false },
+  { to: "/groups", label: ["المجموعات", "Groups"], icon: Pyramids, end: false },
   { to: "/rooms", label: ["الغرف", "Rooms"], icon: Lotus, end: false },
   { to: "/services", label: ["الخدمات", "Services"], icon: Scarab, end: false },
   { to: "/ads", label: ["الإعلانات", "Ads"], icon: Megaphone, end: false },
@@ -108,7 +108,7 @@ function WideShell() {
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <img src={logo} alt="" className="h-24 w-24 rounded-3xl opacity-90 shadow-[0_0_50px_rgba(225,82,62,0.25)]" />
               <h2 className="text-xl font-extrabold">{t("رع شات للويب", "Raa Chat Web")}</h2>
-              <p className="max-w-xs text-sm text-neutral-500">{t("اختار محادثة من القايمة عشان تبدأ، أو افتح الخدمات لدفع الفواتير.", "Pick a chat from the list to start, or open Services to pay bills.")}</p>
+              <p className="max-w-xs text-sm text-neutral-500">{t("اختر محادثة من القائمة للبدء، أو افتح الخدمات لدفع الفواتير.", "Pick a chat from the list to start, or open Services to pay bills.")}</p>
             </div>} />
         </Routes>
       </section>

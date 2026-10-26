@@ -56,8 +56,8 @@ test("كتابة رسالة شغالة بعد ما القايمة تتقفل", a
   await openSheet(page);
   await page.keyboard.press("Escape");
 
-  // ندخل أول دردشة ونكتب فعلًا. (المؤشر على صفوف القايمة بالظبط — صف الستوريز
-  // فوقيها وكان بيتمسك بالغلط فيفتح عارض الستوري.)
+  // ندخل أول دردشة ونكتب فعلًا. (المؤشر على صفوف القايمة بالظبط — صف القصصز
+  // فوقيها وكان بيتمسك بالغلط فيفتح عارض القصص.)
   await page.locator("button.w-full.rounded-2xl.bg-rachat-card").first().click();
   const box = page.getByPlaceholder(/اكتب رسالة|Type a message/);
   await expect(box).toBeVisible();

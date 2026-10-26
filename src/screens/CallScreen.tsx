@@ -135,10 +135,10 @@ function DemoCall() {
       )}
 
       <div className="relative z-10 flex items-start justify-center gap-4">
-        <Btn on={muted} onClick={() => setMuted(!muted)} label={muted ? t("كتم", "Muted") : t("مايك", "Mic")}>
+        <Btn on={muted} onClick={() => setMuted(!muted)} label={muted ? t("كتم", "Muted") : t("ميكروفون", "Mic")}>
           {muted ? <MicOff size={22} /> : <Mic size={22} />}
         </Btn>
-        <Btn on={speaker} onClick={() => setSpeaker(!speaker)} label={t("سماعة", "Speaker")}><Volume2 size={22} /></Btn>
+        <Btn on={speaker} onClick={() => setSpeaker(!speaker)} label={t("سمّاعة", "Speaker")}><Volume2 size={22} /></Btn>
         <Btn on={tset.on} onClick={() => setShowTr(true)} label={t("ترجمة", "Translate")}><Languages size={22} /></Btn>
         {isVideo && (
           <>

@@ -19,19 +19,19 @@ const btn = (page: import("@playwright/test").Page, name: RegExp) => page.getByR
 test("الافتراضي دخول بإيميل وكلمة سر — مش كود", async ({ page }) => {
   await open(page);
   await expect(page.getByRole("heading", { name: /^تسجيل الدخول$/ })).toBeVisible();
-  await expect(page.getByLabel("الإيميل")).toBeVisible();
+  await expect(page.getByLabel("البريد الإلكتروني")).toBeVisible();
   await expect(page.getByLabel("كلمة السر", { exact: true })).toBeVisible();
   await expect(btn(page, /^دخول$/)).toBeVisible();
   // ومسار الكود فاضل متاح للحسابات القديمة ودخول الرقم
   await expect(btn(page, /دخول بكود لمرة واحدة/)).toBeVisible();
 });
 
-test("زرار الدخول مقفول لحد ما الإيميل وكلمة السر يتكتبوا", async ({ page }) => {
+test("زرار الدخول مقفول لحد ما البريد الإلكتروني وكلمة السر يتكتبوا", async ({ page }) => {
   await open(page);
   const send = btn(page, /^دخول$/);
   await expect(send).toBeDisabled();
-  await page.getByLabel("الإيميل").fill("dalia@example.com");
-  await expect(send).toBeDisabled(); // الإيميل لوحده مايكفيش
+  await page.getByLabel("البريد الإلكتروني").fill("dalia@example.com");
+  await expect(send).toBeDisabled(); // البريد الإلكتروني لوحده ميكروفونفيش
   await page.getByLabel("كلمة السر", { exact: true }).fill("كلمة-سر");
   await expect(send).toBeEnabled();
 });
@@ -42,9 +42,9 @@ test("الحساب الجديد بياخد اسم، وكلمة السر أقل �
   await expect(page.getByRole("heading", { name: /^حساب جديد$/ })).toBeVisible();
   const name = page.getByLabel("الاسم");
   await expect(name).toBeVisible(); // الاسم كان مفقود تمامًا قبل كده
-  const send = btn(page, /ابعتلي كود التأكيد/);
+  const send = btn(page, /أرسِل لي كود التأكيد/);
   await name.fill("داليا");
-  await page.getByLabel("الإيميل").fill("dalia@example.com");
+  await page.getByLabel("البريد الإلكتروني").fill("dalia@example.com");
   await page.getByLabel("كلمة السر", { exact: true }).fill("1234567");
   await expect(send).toBeDisabled(); // ٧ حروف
   await page.getByLabel("كلمة السر", { exact: true }).fill("12345678");
@@ -69,9 +69,9 @@ const adultDate = () => dobFor(30);
 test("رع شات ١٨+: تاريخ الميلاد مطلوب، والأقل من ١٨ مابيقدرش يكمّل", async ({ page }) => {
   await open(page);
   await btn(page, /^حساب جديد$/).click();
-  const send = btn(page, /ابعتلي كود التأكيد/);
+  const send = btn(page, /أرسِل لي كود التأكيد/);
   await page.getByLabel("الاسم").fill("داليا");
-  await page.getByLabel("الإيميل").fill("dalia@example.com");
+  await page.getByLabel("البريد الإلكتروني").fill("dalia@example.com");
   await page.getByLabel("كلمة السر", { exact: true }).fill("كلمة-سر-كفاية");
 
   // الخانة موجودة ومكتوب تحتها إن التطبيق للبالغين
@@ -105,13 +105,13 @@ test("نسيت كلمة السر: إيميل → كود + كلمة سر جديد
   await open(page);
   await btn(page, /^نسيت كلمة السر؟$/).click();
   await expect(page.getByRole("heading", { name: /^نسيت كلمة السر$/ })).toBeVisible();
-  await page.getByLabel("الإيميل").fill("dalia@example.com");
-  await btn(page, /^ابعتلي الكود$/).click();
+  await page.getByLabel("البريد الإلكتروني").fill("dalia@example.com");
+  await btn(page, /^أرسِل لي الكود$/).click();
   // خطوة الكود: ٦ خانات + كلمة السر الجديدة، والتأكيد مش تلقائي عشان الكلمة لازم تتكتب
   await expect(page.getByLabel(/^خانة ١$/)).toBeVisible();
   const newPass = page.getByLabel("كلمة السر الجديدة", { exact: true });
   await expect(newPass).toBeVisible();
-  const set = btn(page, /اعمل كلمة السر الجديدة/);
+  const set = btn(page, /أنشئ كلمة السرّ الجديدة/);
   await expect(set).toBeDisabled();
   for (let i = 1; i <= 6; i++) await page.getByLabel(new RegExp(`^خانة ${"١٢٣٤٥٦"[i - 1]}$`)).fill(String(i));
   await expect(set).toBeDisabled(); // الكود كامل بس كلمة السر لسه فاضية
@@ -122,10 +122,10 @@ test("نسيت كلمة السر: إيميل → كود + كلمة سر جديد
 test("التنقّل بين دخول وحساب جديد والرجوع", async ({ page }) => {
   await open(page);
   await btn(page, /^حساب جديد$/).click();
-  await btn(page, /عندي حساب — دخول/).click();
+  await btn(page, /لديّ حساب — دخول/).click();
   await expect(page.getByRole("heading", { name: /^تسجيل الدخول$/ })).toBeVisible();
   await btn(page, /دخول بكود لمرة واحدة/).click();
   await expect(page.getByRole("heading", { name: /^دخول بكود لمرة واحدة$/ })).toBeVisible();
-  await expect(btn(page, /^التليفون$/)).toBeVisible(); // دخول الرقم لسه هنا
-  await expect(btn(page, /^الإيميل$/)).toBeVisible();
+  await expect(btn(page, /^الهاتف$/)).toBeVisible(); // دخول الرقم لسه هنا
+  await expect(btn(page, /^البريد الإلكتروني$/)).toBeVisible();
 });

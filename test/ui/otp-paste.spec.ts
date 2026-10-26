@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { DIST, expectNoPageErrors, requireBuild } from "../helpers";
 
 /**
- * **لصق كود التحقق** (بطلب داليا ١٣ أكتوبر): المستخدم بينسخ الكود من الإيميل
+ * **لصق كود التحقق** (بطلب داليا ١٣ أكتوبر): المستخدم بينسخ الكود من البريد الإلكتروني
  * ويلزقه في أول خانة — لازم يتوزّع على الست خانات.
  *
  * قبل كده كان بيتحط **رقم واحد** بس (الخانة `maxLength={1}`) والباقي يضيع،
@@ -16,8 +16,8 @@ const open = async (page: import("@playwright/test").Page) => {
   await page.goto("file://" + DIST);
   // «نسيت كلمة السر» هو المسار اللي مابيأكّدش تلقائي، فالخانات تفضل بانة للفحص
   await page.getByRole("button", { name: /^نسيت كلمة السر؟$|^Forgot password\?$/ }).click();
-  await page.getByLabel(/^الإيميل$|^Email$/, { exact: false }).first().fill("dalia@example.com");
-  await page.getByRole("button", { name: /^ابعتلي الكود$|^Send me the code$/ }).click();
+  await page.getByLabel(/^البريد الإلكتروني$|^Email$/, { exact: false }).first().fill("dalia@example.com");
+  await page.getByRole("button", { name: /^أرسِل لي الكود$|^Send me the code$/ }).click();
   await expect(page.getByLabel(/خانة ١|Digit 1/)).toBeVisible();
 };
 
@@ -136,8 +136,8 @@ test("خانة الكود الأولى بتتركّز من غير أي مؤقّ�
   await page.clock.pauseAt(T);
   await page.goto("file://" + DIST);
   await page.getByRole("button", { name: /^نسيت كلمة السر؟$|^Forgot password\?$/ }).click();
-  await page.getByLabel(/^الإيميل$|^Email$/, { exact: false }).first().fill("dalia@example.com");
-  await page.getByRole("button", { name: /^ابعتلي الكود$|^Send me the code$/ }).click();
+  await page.getByLabel(/^البريد الإلكتروني$|^Email$/, { exact: false }).first().fill("dalia@example.com");
+  await page.getByRole("button", { name: /^أرسِل لي الكود$|^Send me the code$/ }).click();
 
   const b = boxes(page);
   await expect(b[0]!).toBeVisible();

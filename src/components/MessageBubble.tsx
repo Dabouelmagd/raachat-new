@@ -111,10 +111,10 @@ export function MessageBubble({ message, replyTo, onReply, onVoiceReply, canRepl
             <time dateTime={message.at ? new Date(message.at).toISOString() : undefined} title={message.at ? fullStamp(message.at) : undefined}>{message.time}</time>
             {isMe && (
               message.read
-                ? <CheckCheck size={13} className="text-sky-400" aria-label={t("اتقرت", "Read")} />
+                ? <CheckCheck size={13} className="text-sky-400" aria-label={t("قُرئت", "Read")} />
                 : message.delivered
                   ? <CheckCheck size={13} aria-label={t("وصلت", "Delivered")} />
-                  : <Check size={13} aria-label={t("اتبعتت", "Sent")} />
+                  : <Check size={13} aria-label={t("أُرسِلت", "Sent")} />
             )}
           </div>
         )}
@@ -155,7 +155,7 @@ export function MessageBubble({ message, replyTo, onReply, onVoiceReply, canRepl
       {moreEmoji && !message.deleted && (
         <div
           role="group"
-          aria-label={t("اختاري إيموجي", "Pick an emoji")}
+          aria-label={t("اختر إيموجي", "Pick an emoji")}
           className={`mt-1 grid max-h-40 w-[260px] max-w-full grid-cols-8 gap-0.5 overflow-y-auto rounded-2xl bg-rachat-card p-1.5 shadow-lg shadow-black/30 ${isMe === rtl ? "self-start" : "self-end"}`}
         >
           {EMOJIS.map((e) => (

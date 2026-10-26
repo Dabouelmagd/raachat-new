@@ -50,7 +50,7 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
     try {
       await votePoll(message.id, next);
     } catch (e) {
-      setErr((e as Error).message || t("الصوت ما اتسجّلش، حاول تاني", "Vote not saved, try again"));
+      setErr((e as Error).message || t("لم يُسجَّل الصوت، حاول مرة أخرى", "Vote not saved, try again"));
     }
     setBusy(false);
   };
@@ -60,7 +60,7 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
     try {
       await closePoll(message.id);
     } catch (e) {
-      setErr((e as Error).message || t("القفل ما نجحش", "Could not close"));
+      setErr((e as Error).message || t("لم ينجح الإغلاق", "Could not close"));
     }
   };
 
@@ -68,12 +68,12 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
     <div className="w-full min-w-0 space-y-2">
       <p className="break-words text-sm font-extrabold" dir="auto">{poll.question}</p>
       <p className="text-[10px] font-bold opacity-70">
-        {poll.multi ? t("أكتر من إجابة مسموحة", "Multiple answers") : t("إجابة واحدة", "One answer")}
+        {poll.multi ? t("أكثر من إجابة مسموحة", "Multiple answers") : t("إجابة واحدة", "One answer")}
         {/* القاعدة بتبان **قبل** التصويت: المستخدم يعرف هل اسمه هيبان ولا لأ */}
         <span className="ms-1">· {poll.hideVoters
           ? t("الأصوات مخفية عن الأعضاء", "Votes hidden from members")
-          : t("الأعضاء يشوفوا مين صوّت", "Members can see who voted")}</span>
-        {poll.closed && <span className="ms-1">· {t("اتقفل", "Closed")}</span>}
+          : t("يرى الأعضاء مَن صوّت", "Members can see who voted")}</span>
+        {poll.closed && <span className="ms-1">· {t("أُغلِق", "Closed")}</span>}
       </p>
 
       <div className="space-y-1.5">
@@ -106,18 +106,18 @@ export function PollCard({ message, isMe }: { message: Message; isMe: boolean })
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold opacity-70">
         <span>{total === 0
-          ? t("محدش صوّت لسه", "No votes yet")
+          ? t("لم يصوّت أحد بعد", "No votes yet")
           : people != null
             ? t(`${n(people)} صوّتوا`, `${people} voted`)
             : t(`${n(total)} صوت`, `${total} votes`)}</span>
         {!poll.hideVoters && total > 0 && (
           <button onClick={() => setShowVoters((v) => !v)} aria-expanded={showVoters} className="underline">
-            {showVoters ? t("إخفاء الأصوات", "Hide votes") : t("مين صوّت", "See votes")}
+            {showVoters ? t("إخفاء الأصوات", "Hide votes") : t("مَن صوّت", "See votes")}
           </button>
         )}
         {isMe && !poll.closed && (
           <button onClick={() => void close()} className="flex items-center gap-1 underline">
-            <Lock size={10} /> {t("اقفل الاستطلاع", "Close poll")}
+            <Lock size={10} /> {t("أغلِق الاستطلاع", "Close poll")}
           </button>
         )}
       </div>

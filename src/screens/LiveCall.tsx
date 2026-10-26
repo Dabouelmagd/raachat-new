@@ -90,13 +90,13 @@ export default function LiveCall() {
     }
     function onEnded(m: { callId: string; reason: string }) {
       if (m.callId !== callId) return;
-      const msg = m.reason === "rejected" ? t("اتقفل في وشك", "Call declined") : m.reason === "missed" ? t("مفيش رد", "No answer") : m.reason === "dropped" ? t("الاتصال انقطع", "Connection lost") : "";
+      const msg = m.reason === "rejected" ? t("أُغلِقت المكالمة", "Call declined") : m.reason === "missed" ? t("لا يوجد ردّ", "No answer") : m.reason === "dropped" ? t("انقطع الاتصال", "Connection lost") : "";
       finish(false, "ended", msg);
     }
 
-    if (!sock) return finish(false, "ended", t("مفيش اتصال بالسيرفر", "Not connected to the server"));
+    if (!sock) return finish(false, "ended", t("لا يوجد اتصال بالخادم", "Not connected to the server"));
     const media = await getLocalMedia(mode === "video");
-    if ("error" in media) return finish(false, "ended", media.error === "denied" ? t("محتاجين إذن المايك", "Microphone permission is needed") : media.error === "none" ? t("مفيش مايك على الجهاز", "No microphone found") : t("تعذّر تشغيل المايك", "Couldn't start the microphone"));
+    if ("error" in media) return finish(false, "ended", media.error === "denied" ? t("نحتاج إذن الميكروفون", "Microphone permission is needed") : media.error === "none" ? t("لا يوجد ميكروفون على الجهاز", "No microphone found") : t("تعذّر تشغيل الميكروفون", "Couldn't start the microphone"));
     local.current = media.stream;
     if (!media.videoOk) setCamOn(false);
     if (localVideo.current) localVideo.current.srcObject = media.stream;
@@ -118,13 +118,13 @@ export default function LiveCall() {
 
     if (incomingId) {
       setPhase("connecting");
-      sock.emit("call:answer", { callId: incomingId, accept: true }, (r: { error?: string }) => { if (r?.error) finish(false, "ended", t("المكالمة خلصت", "The call has ended")); });
+      sock.emit("call:answer", { callId: incomingId, accept: true }, (r: { error?: string }) => { if (r?.error) finish(false, "ended", t("انتهت المكالمة", "The call has ended")); });
     } else {
       startRingtone();
       sock.emit("call:invite", { threadId, mode }, (r: { callId?: string; error?: string }) => {
         if (!r?.callId) {
           const e = r?.error;
-          return finish(false, "ended", e === "offline" ? t("الطرف التاني مش متصل دلوقتي", "They're offline right now") : e === "busy" ? t("الخط مشغول", "Line is busy") : t("تعذّر بدء المكالمة", "Couldn't start the call"));
+          return finish(false, "ended", e === "offline" ? t("الطرف الآخر غير متصل الآن", "They're offline right now") : e === "busy" ? t("الخط مشغول", "Line is busy") : t("تعذّر بدء المكالمة", "Couldn't start the call"));
         }
         callId = r.callId;
       });
@@ -158,7 +158,7 @@ export default function LiveCall() {
       {tset.on && phase === "connected" && (
         <p className="relative z-10 mb-3 max-w-sm rounded-xl bg-black/50 px-3 py-2 text-center text-[11px] text-rachat-gold">
           <Languages size={12} className="me-1 inline" />
-          {t("الترجمة الفورية للمكالمات الحقيقية محتاجة تحويل الكلام لنص (لسه مش متوصّلة) — الترجمة شغالة في الشات.", "Live translation on real calls needs speech-to-text (not connected yet) — translation works in chat.")}
+          {t("الترجمة الفورية للمكالمات الحقيقية تحتاج تحويل الكلام إلى نصّ (غير موصولة بعد) — والترجمة تعمل في المحادثات.", "Live translation on real calls needs speech-to-text (not connected yet) — translation works in chat.")}
         </p>
       )}
       {showTr && <TranslateSheet call onClose={() => setShowTr(false)} />}
@@ -168,9 +168,9 @@ export default function LiveCall() {
       )}
 
       <div className="relative z-10 flex items-start justify-center gap-4">
-        <button onClick={toggleMic} aria-label={t("مايك", "Mic")} className="flex flex-col items-center gap-1.5 text-[11px] text-neutral-300">
+        <button onClick={toggleMic} aria-label={t("ميكروفون", "Mic")} className="flex flex-col items-center gap-1.5 text-[11px] text-neutral-300">
           <span className={`flex h-12 w-12 items-center justify-center rounded-full ${muted ? "bg-rachat-cream text-rachat-ink" : "bg-white/10 text-white"}`}>{muted ? <MicOff size={22} /> : <Mic size={22} />}</span>
-          {muted ? t("كتم", "Muted") : t("مايك", "Mic")}
+          {muted ? t("كتم", "Muted") : t("ميكروفون", "Mic")}
         </button>
         <button onClick={() => setShowTr(true)} className="flex flex-col items-center gap-1.5 text-[11px] text-neutral-300">
           <span className={`flex h-12 w-12 items-center justify-center rounded-full ${tset.on ? "bg-rachat-cream text-rachat-ink" : "bg-white/10 text-white"}`}><Languages size={22} /></span>

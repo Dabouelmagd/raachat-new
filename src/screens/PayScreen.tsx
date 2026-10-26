@@ -64,12 +64,12 @@ export default function PayScreen() {
         const q = await quoteApi(svc.key, amount, code.trim());
         setDiscount(q.discount);
         setOfferMsg(t(`تم تطبيق الخصم: وفّرت ${fmt(q.discount)} ج.م`, `Discount applied: you saved ${fmt(q.discount)} EGP`));
-      } catch { setDiscount(0); setOfferMsg(t("كود غير صحيح أو مش لنفس الخدمة", "Invalid code or not for this service")); }
+      } catch { setDiscount(0); setOfferMsg(t("كود غير صحيح أو ليس لنفس الخدمة", "Invalid code or not for this service")); }
       return;
     }
     const o = OFFERS.find((x) => x.code === code.trim().toUpperCase());
     if (!o) { setDiscount(0); setOfferMsg(t("كود غير صحيح", "Invalid code")); return; }
-    if (!o.appliesTo.includes(svc.key)) { setDiscount(0); setOfferMsg(t("الكود ده مش لنفس الخدمة", "This code doesn't apply to this service")); return; }
+    if (!o.appliesTo.includes(svc.key)) { setDiscount(0); setOfferMsg(t("هذا الكود ليس لنفس الخدمة", "This code doesn't apply to this service")); return; }
     const d = Math.min(+(amount * o.percent / 100).toFixed(2), o.max);
     setDiscount(d);
     setOfferMsg(t(`تم تطبيق الخصم: وفّرت ${fmt(d)} ج.م`, `Discount applied: you saved ${fmt(d)} EGP`));
@@ -86,21 +86,21 @@ export default function PayScreen() {
           if (!r.txn) {
             setPin("");
             setError(
-              r.error === "pin" ? t("الرقم السري غير صحيح", "Incorrect PIN")
-              : r.error === "locked" ? t("الرقم السري مقفول مؤقتًا، حاول بعد شوية", "PIN temporarily locked, try again later")
-              : r.error === "balance" ? t("الرصيد غير كافي", "Insufficient balance")
+              r.error === "pin" ? t("الرقم السرّي غير صحيح", "Incorrect PIN")
+              : r.error === "locked" ? t("الرقم السرّي مقفول مؤقتًا، حاول بعد قليل", "PIN temporarily locked, try again later")
+              : r.error === "balance" ? t("الرصيد غير كافٍ", "Insufficient balance")
               // سقوف الفئة ١٨–٢١ — رسالة السيرفر بتحدد السقف اللي اتعدّى
-              : r.error === "limit" ? (r.message ?? t("العملية فوق السقف المسموح لسنك", "This is above the limit allowed for your age"))
-              : t("حصل خطأ، حاول تاني", "Something went wrong, try again"));
+              : r.error === "limit" ? (r.message ?? t("العملية فوق السقف المسموح لسنّك", "This is above the limit allowed for your age"))
+              : t("حدث خطأ، حاول مرة أخرى", "Something went wrong, try again"));
             return;
           }
           setTxn(r.txn); setStep("receipt");
           notify(t("تم الدفع بنجاح", "Payment successful"), `${svc.label} · ${total.toLocaleString(loc())} ${t("ج.م", "EGP")}`);
           return;
         }
-        if (next !== MOCK_PIN) { setPin(""); setError(t("الرقم السري غير صحيح", "Incorrect PIN")); return; }
+        if (next !== MOCK_PIN) { setPin(""); setError(t("الرقم السرّي غير صحيح", "Incorrect PIN")); return; }
         const paid = payBill(svc.label + (svc.key === "topup" ? "" : ""), total);
-        if (!paid) { setPin(""); setError(t("الرصيد غير كافي", "Insufficient balance")); return; }
+        if (!paid) { setPin(""); setError(t("الرصيد غير كافٍ", "Insufficient balance")); return; }
         setTxn(paid); setStep("receipt");
         notify(t("تم الدفع بنجاح", "Payment successful"), `${svc.label} · ${total.toLocaleString(loc())} ${t("ج.م", "EGP")}`);
       }, 250);
@@ -161,14 +161,14 @@ export default function PayScreen() {
 
         {step === "pin" && (
           <div className="flex flex-col items-center gap-6 pt-6">
-            <p className="text-sm text-neutral-300">{t("اكتب الرقم السري لتأكيد الدفع", "Enter your PIN to confirm payment")}</p>
+            <p className="text-sm text-neutral-300">{t("اكتب الرقم السرّي لتأكيد الدفع", "Enter your PIN to confirm payment")}</p>
             <div className="flex gap-3" dir="ltr">
               {[0, 1, 2, 3].map((i) => (
                 <span key={i} className={`h-4 w-4 rounded-full ${pin.length > i ? "bg-rachat-red" : "bg-rachat-card ring-1 ring-rachat-maroon"}`} />
               ))}
             </div>
             {error && <p className="text-sm text-rachat-coral">{error}</p>}
-            {API_ON ? (!hasPin && <p className="text-[11px] text-rachat-gold">{t("أول مرة: اختار رقم سري من ٤ أرقام هيتحفظ لمحفظتك", "First time: choose a 4-digit PIN for your wallet")}</p>) : <p className="text-[11px] text-neutral-600">{t("رقم التجربة", "Demo PIN")}: <span className="font-extrabold text-rachat-gold">{MOCK_PIN}</span></p>}
+            {API_ON ? (!hasPin && <p className="text-[11px] text-rachat-gold">{t("أول مرة: اختر رقمًا سرّيًا من ٤ أرقام يُحفظ لمحفظتك", "First time: choose a 4-digit PIN for your wallet")}</p>) : <p className="text-[11px] text-neutral-600">{t("رقم التجربة", "Demo PIN")}: <span className="font-extrabold text-rachat-gold">{MOCK_PIN}</span></p>}
             <div className="grid w-64 grid-cols-3 gap-3" dir="ltr">
               {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((d, i) =>
                 d === "" ? <span key={i} /> : (

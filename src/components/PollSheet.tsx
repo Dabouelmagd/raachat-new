@@ -37,7 +37,7 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
       await createPoll(threadId, question.trim(), filled, multi, hideVoters);
       onClose();
     } catch (e) {
-      setErr((e as Error).message || t("الاستطلاع ما اتبعتش، حاول تاني", "Poll not sent, try again"));
+      setErr((e as Error).message || t("لم يُرسَل الاستطلاع، حاول مرة أخرى", "Poll not sent, try again"));
       setBusy(false);
     }
   };
@@ -58,14 +58,14 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
               onChange={(e) => setQuestion(e.target.value)}
               maxLength={300}
               dir="auto"
-              placeholder={t("اسأل سؤالك", "Ask a question")}
+              placeholder={t("اكتب سؤالك", "Ask a question")}
               aria-label={t("السؤال", "Question")}
               className="w-full rounded-xl bg-rachat-black px-3 py-2.5 text-rachat-papyrus outline-none placeholder:text-neutral-600"
             />
           </label>
 
           <div>
-            <span className="mb-1 block text-[11px] font-bold text-neutral-400">{t("الاختيارات", "Options")}</span>
+            <span className="mb-1 block text-[11px] font-bold text-neutral-400">{t("الخيارات", "Options")}</span>
             <div className="space-y-2">
               {options.map((o, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -79,14 +79,14 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
                     className="min-w-0 flex-1 rounded-xl bg-rachat-black px-3 py-2.5 text-rachat-papyrus outline-none placeholder:text-neutral-600"
                   />
                   {options.length > 2 && (
-                    <button onClick={() => setOptions((x) => x.filter((_, j) => j !== i))} aria-label={t("شيل الاختيار", "Remove option")} className="shrink-0 text-neutral-500"><X size={16} /></button>
+                    <button onClick={() => setOptions((x) => x.filter((_, j) => j !== i))} aria-label={t("احذف الخيار", "Remove option")} className="shrink-0 text-neutral-500"><X size={16} /></button>
                   )}
                 </div>
               ))}
             </div>
             {options.length < MAX_OPTIONS && (
               <button onClick={() => setOptions((o) => [...o, ""])} className="mt-2 flex items-center gap-1.5 text-xs font-bold text-rachat-gold">
-                <Plus size={14} /> {t("اختيار كمان", "Add option")}
+                <Plus size={14} /> {t("خيار آخر", "Add option")}
               </button>
             )}
           </div>
@@ -97,7 +97,7 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
             aria-checked={multi}
             className="flex w-full items-center justify-between rounded-xl bg-rachat-black px-3 py-2.5 text-start text-xs font-bold text-rachat-papyrus"
           >
-            {t("يسمح بأكتر من إجابة", "Allow multiple answers")}
+            {t("يسمح بأكثر من إجابة", "Allow multiple answers")}
             <span className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 ${multi ? "justify-end bg-rachat-red" : "justify-start bg-neutral-700"}`}>
               <span className="h-4 w-4 rounded-full bg-white" />
             </span>
@@ -119,8 +119,8 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
               {t("الأصوات مخفية عن الأعضاء", "Hide votes from members")}
               <span className="block text-[10px] font-bold opacity-60">
                 {hideVoters
-                  ? t("الأعضاء يشوفوا الأرقام بس، مش الأسماء", "Members see counts only, not names")
-                  : t("الأعضاء يشوفوا مين صوّت بالأسماء", "Members can see who voted, by name")}
+                  ? t("يرى الأعضاء الأرقام فقط، لا الأسماء", "Members see counts only, not names")
+                  : t("يرى الأعضاء أسماء مَن صوّت", "Members can see who voted, by name")}
               </span>
             </span>
             <span className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 ${hideVoters ? "justify-end bg-rachat-red" : "justify-start bg-neutral-700"}`}>
@@ -137,7 +137,7 @@ export function PollSheet({ threadId, onClose }: { threadId: string; onClose: ()
             disabled={!ready || busy}
             className="w-full rounded-xl bg-rachat-red py-2.5 text-sm font-extrabold text-white disabled:opacity-40"
           >
-            {busy ? t("بيتبعت…", "Sending…") : t("ابعت الاستطلاع", "Send poll")}
+            {busy ? t("جارٍ الإرسال…", "Sending…") : t("أرسِل الاستطلاع", "Send poll")}
           </button>
         </div>
       </div>

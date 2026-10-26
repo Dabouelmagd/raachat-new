@@ -47,7 +47,7 @@ export function CameraSheet({ onClose, onDone }: { onClose: () => void; onDone: 
         v.srcObject = s; v.muted = true; await v.play();
         setErr("");
       } catch {
-        setErr(t("مقدرناش نفتح الكاميرا أو الميكروفون. اسمحي بالإذن من إعدادات الجهاز وجرّبي تاني.", "Couldn't open the camera or microphone. Allow access in your device settings and try again."));
+        setErr(t("تعذّر فتح الكاميرا أو الميكروفون. امنح الإذن من إعدادات الجهاز ثم حاول مرة أخرى.", "Couldn't open the camera or microphone. Allow access in your device settings and try again."));
       }
     })();
     return () => { dead = true; };
@@ -84,7 +84,7 @@ export function CameraSheet({ onClose, onDone }: { onClose: () => void; onDone: 
 
   const start = () => {
     const c = canvasRef.current, s = streamRef.current;
-    if (!c || !s || typeof MediaRecorder === "undefined") { setErr(t("التسجيل مش مدعوم على المتصفح ده.", "Recording isn't supported in this browser.")); return; }
+    if (!c || !s || typeof MediaRecorder === "undefined") { setErr(t("التسجيل غير مدعوم في هذا المتصفح.", "Recording isn't supported in this browser.")); return; }
     const out = (c as HTMLCanvasElement).captureStream(30);
     s.getAudioTracks().forEach((a) => out.addTrack(a));
     const mime = pickMime();
@@ -130,7 +130,7 @@ export function CameraSheet({ onClose, onDone }: { onClose: () => void; onDone: 
 
       {result ? (
         <div className="flex flex-col items-center gap-2 px-4 py-4">
-          {tooBig && <p role="alert" className="text-xs text-rachat-coral">{t("الفيديو أكبر من ١٠ ميجا، سجّلي مدة أقصر.", "Video is over 10 MB, record a shorter clip.")}</p>}
+          {tooBig && <p role="alert" className="text-xs text-rachat-coral">{t("الفيديو أكبر من ١٠ ميجابايت، سجِّل مدة أقصر.", "Video is over 10 MB, record a shorter clip.")}</p>}
           <div className="flex gap-3">
             <button onClick={() => { URL.revokeObjectURL(result.url); setResult(null); }} className="flex items-center gap-1.5 rounded-full bg-white/15 px-5 py-2.5 text-sm font-bold text-white"><RotateCcw size={16} />{t("إعادة", "Retake")}</button>
             <button disabled={!!tooBig} onClick={() => onDone(result.file)} className="flex items-center gap-1.5 rounded-full bg-rachat-gold px-6 py-2.5 text-sm font-extrabold text-rachat-ink disabled:opacity-40"><Check size={16} />{t("استخدام", "Use")}</button>
