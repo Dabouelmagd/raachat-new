@@ -61,9 +61,6 @@ export default function AccountScreen() {
     setExporting(false);
   };
   const [wpOpen, setWpOpen] = useState(false);
-  const [hidePhone, setHidePhone] = useState(true);
-  const [blockShots, setBlockShots] = useState(true);
-  const [addByAll, setAddByAll] = useState(false);
   const theme = useTheme();
   const t = useT();
   const Chev = useDir() === "rtl" ? ChevronLeft : ChevronRight;
@@ -98,7 +95,11 @@ export default function AccountScreen() {
             <div className="font-extrabold text-rachat-papyrus">{p.name}</div>
             <div className="truncate text-[11px] text-neutral-500">{p.status}</div>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-emerald-400">
-              <ShieldCheck size={13} /> {t("محمي · تشفير مفعّل", "Protected · encryption on")}
+              {/* 🔴 كانت «محمي · تشفير مفعّل» — ودي بتتقرا «رسائلك مشفّرة من طرف إلى طرف»،
+                  والسياسة المنشورة تقول العكس صريح: «المحادثات ليست مشفّرة من طرف إلى طرف؛
+                  لذلك لا تشارك بيانات شديدة الحساسية فيها». فالنصّ بقى **بحرف السياسة**:
+                  اللي مشفَّر هو الاتصال بالخادم (TLS)، والمحادثات نفسها لأ. */}
+              <ShieldCheck size={13} /> {t("الاتصال بالخادم مشفّر (TLS)", "Connection to server encrypted (TLS)")}
             </div>
           </div>
           <Ankh size={19} className="text-rachat-gold" />
@@ -111,9 +112,20 @@ export default function AccountScreen() {
         </div>
 
         <p className="mb-2 mt-4 text-[11px] font-bold text-neutral-500">{t("الخصوصية", "Privacy")}</p>
-        <ToggleRow label={t("إخفاء رقم الهاتف عن غير جهات الاتصال", "Hide my phone number from non-contacts")} value={hidePhone} onChange={setHidePhone} />
-        <ToggleRow label={t("حظر لقطة الشاشة في الدردشات السرية", "Block screenshots in secret chats")} value={blockShots} onChange={setBlockShots} />
-        <ToggleRow label={t("السماح لأي شخص بإضافتي لمجموعات", "Let anyone add me to groups")} value={addByAll} onChange={setAddByAll} />
+        {/* 🔴 كان هنا ثلاثة مفاتيح **كلها `useState` محدش بيقراها** — لا الواجهة ولا الخادم،
+            ومفيش حقل خصوصية واحد في `User` في المخطّط. واتنين منها كانا يوعدان بما لا يحدث:
+            «حظر لقطة الشاشة في الدردشات السرية» (مفتوح افتراضيًّا — و«الدردشات السرية» نوع
+            غير موجود أصلًا، وحظر لقطة الشاشة مستحيل في الويب)، و«السماح لأي شخص بإضافتي
+            لمجموعات» (مقفول افتراضيًّا — والخادم يسمح لأي مشرف بإضافة أي حساب).
+            والمفتاح الميت الذي يطمئن المستخدم أسوأ من غيابه. فحلّ محلّها ما هو **صحيح
+            فعلًا**: الرقم لا يخرج من الخادم لأي مستخدم (`publicUser` لا يضمّه)، والمحادثات
+            ليست مشفّرة من طرف إلى طرف — بحرف السياسة المنشورة. */}
+        <div className="mb-2 rounded-xl bg-rachat-card px-3.5 py-3">
+          <p className="text-xs text-rachat-papyrus">{t("رقم هاتفك لا يظهر لأي مستخدم آخر", "Your phone number is not shown to any other user")}</p>
+          <p className="mt-1 text-[11px] leading-5 text-neutral-400">
+            {t("المحادثات ليست مشفّرة من طرف إلى طرف؛ لذلك لا تشارك بيانات شديدة الحساسية فيها. والاتصال بين التطبيق والخادم مشفّر (TLS).", "Conversations are not end-to-end encrypted, so do not share highly sensitive data in them. The connection between the app and the server is encrypted (TLS).")}
+          </p>
+        </div>
         <ToggleRow label={t("الوضع الفاتح", "Light mode")} value={theme === "light"} onChange={(v) => setTheme(v ? "light" : "dark")} />
 
         <p className="mb-2 mt-4 text-[11px] font-bold text-neutral-500">{t("الأمان", "Security")}</p>

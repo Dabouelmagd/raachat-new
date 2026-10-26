@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 import { clearOverlays, expectNoPageErrors, openApp, openProfile, setBirthDate, tab, yearForAge } from "../helpers.js";
 
 /**
- * سن الخدمات: التطبيق مفتوح لكل الأعمار، والمحفظة ١٨+ بسقوف لحد ٢١.
+ * سن الخدمات: **رع شات للبالغين ١٨+** (الشروط البند ٢، من ١٣ أكتوبر ٢٠٢٦)، والمحفظة
+ * بسقوف لحد ٢١. والاختباران اللي كانا بيثبّتان «التطبيق مفتوح لكل الأعمار» سقطا في
+ * ٢٦ أكتوبر لما اتصلح نصّ التطبيق — **كانا بيحرسان التناقض نفسه**، والحارس اللي
+ * بيقرا الصفحات القانونية في `server/test/appMatchesTerms.test.ts`.
  * السيرفر هو اللي بيمنع فعلًا (اختباراته في server/test/wallet.test.ts) —
  * الاختبارات دي عن الشكل اللي المستخدم بيشوفه.
  */
@@ -15,11 +18,13 @@ test("الحساب التجريبي (بالغ) بيشوف المحفظة ومف�
   expectNoPageErrors(page);
 });
 
-test("حقل تاريخ الميلاد بيرفض الغلط وبيشرح إن التطبيق لكل الأعمار", async ({ page }) => {
+test("حقل تاريخ الميلاد بيرفض الغلط وبيقول إن رع شات للبالغين", async ({ page }) => {
   await openProfile(page);
   const birth = page.locator("#rc-birth");
   await expect(birth).toHaveValue("1995-06-12"); // تاريخ الديمو الافتراضي
-  await expect(page.getByText(/التطبيق مفتوح لكل الأعمار/)).toBeVisible();
+  // مطابق للشروط البند ٢ — ومنوع يرجع «مفتوح لكل الأعمار»
+  await expect(page.getByText(/رع شات للبالغين/)).toBeVisible();
+  await expect(page.getByText(/لكل الأعمار/)).toHaveCount(0);
 
   await birth.fill(`${yearForAge(-5)}-01-01`); // تاريخ في المستقبل
   await expect(page.getByRole("alert")).toContainText(/غير صحيح/);
@@ -33,15 +38,18 @@ test("حقل تاريخ الميلاد بيرفض الغلط وبيشرح إن �
   await expect(page.getByRole("button", { name: /حفظ التغييرات/ })).toBeEnabled();
 });
 
-test("القاصر: المحفظة مقفولة برسالة واضحة، وباقي التطبيق مفتوح", async ({ page }) => {
+test("🔴 اللي أقلّ من ١٨ بإقراره: المحفظة مقفولة، ومفيش طمأنة إن باقي التطبيق مفتوح له", async ({ page }) => {
   await openProfile(page);
   await setBirthDate(page, `${yearForAge(12)}-01-01`);
 
   await tab(page, /الخدمات|Services/);
   await expect(page.getByText(/خدمة من/)).toBeVisible();
   await expect(page.getByText(/محفظتك/)).toHaveCount(0);
-  // الرسالة لازم تطمّنه إن مفيش حاجة تانية مقفولة
-  await expect(page.getByText(/بقيّة رع شات مفتوحة لك/)).toBeVisible();
+  // 🔴 كان بيتأكد إن الرسالة بتقول «بقيّة رع شات مفتوحة لك» — وده مناقض للسياسة
+  // البند ١٠: الحساب اللي يتبيّن إنه دون ١٨ **يُغلق وتُمحى بياناته**. فطمأنة القاصر
+  // إن باقي التطبيق مفتوح له = التطبيق بيقول عكس المستند المنشور.
+  await expect(page.getByText(/بقيّة رع شات مفتوحة لك/)).toHaveCount(0);
+  await expect(page.getByText(/مخصَّص لمن بلغ/)).toBeVisible();
   // تاريخه محدد خلاص، فمفيش زرار «حدِّد تاريخ ميلادك»
   await expect(page.getByRole("button", { name: /حدِّد تاريخ ميلادك/ })).toHaveCount(0);
 

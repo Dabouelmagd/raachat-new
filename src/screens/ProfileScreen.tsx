@@ -99,8 +99,8 @@ export default function ProfileScreen() {
           {badBirth
             ? <span role="alert" className="text-rachat-coral">{t("تاريخ ميلاد غير صحيح", "That date of birth isn't valid")}</span>
             : isAdultDay(birthDate)
-              ? t(`التطبيق مفتوح لكل الأعمار. حسابك مفتوح له خدمات ${num(ADULT_AGE)}+ (المحفظة ودفع الفواتير).`, `Raa Chat is open to all ages. Your account has access to ${ADULT_AGE}+ services (wallet and bill payment).`)
-              : t(`التطبيق مفتوح لكل الأعمار — الشات والجروبات والغرف والستوري كلها متاحة. تاريخ الميلاد بيتحدد بيه خدمات ${num(ADULT_AGE)}+ بس (المحفظة ودفع الفواتير).`, `Raa Chat is open to all ages — chats, groups, rooms and stories are all available. Your date of birth only decides access to ${ADULT_AGE}+ services (wallet and bill payment).`)}
+              ? t(`رع شات للبالغين (${num(ADULT_AGE)} سنة أو أكثر). وحسابك سنّه محدَّد، فخدمات المحفظة ودفع الفواتير مفتوحة له.`, `Raa Chat is for adults (${ADULT_AGE}+). Your date of birth is set, so wallet and bill payment are available to you.`)
+              : t(`رع شات للبالغين (${num(ADULT_AGE)} سنة أو أكثر). والمحفظة ودفع الفواتير لا تُفتَح إلا لمن بلغ ${num(ADULT_AGE)} سنة، وتبقى مغلقة ما لم يُحدَّد تاريخ ميلادك. وتاريخ الميلاد إقرار منك، ولا نطلب مستندات لإثباته.`, `Raa Chat is for adults (${ADULT_AGE}+). Wallet and bill payment open only to those aged ${ADULT_AGE} or over, and stay closed until your date of birth is set. Your date of birth is your own declaration; we ask for no documents to prove it.`)}
         </p>
 
         <button onClick={save} disabled={!name.trim() || badBirth}

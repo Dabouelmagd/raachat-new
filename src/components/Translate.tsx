@@ -35,13 +35,22 @@ export function TranslateSheet({ onClose, call = false }: { onClose: () => void;
           <button onClick={onClose} aria-label={t("إغلاق", "Close")} className="text-neutral-500"><X size={18} /></button>
         </div>
 
+        {/* 🔴 السياسة المنشورة تَعِد بموافقة **صريحة ومنفصلة عن قبول الشروط** عند تفعيل
+            الترجمة، **لأنها ترسل النص إلى مزوّد خارجي** — والمفتاح ده كان مابيقولش ولا
+            كلمة عن كده. والمزوّد مذكور بالاسم في جدول الأطراف الثالثة في السياسة
+            (Google Cloud Translation)، فالنصّ هنا بيسمّيه زيّها. والسطر **تحت المفتاح
+            وقبل التفعيل** عن قصد: الموافقة اللي بتيجي بعد الإرسال مش موافقة. */}
         <button role="switch" aria-checked={s.on} onClick={() => setTranslate({ on: !s.on })}
-          className="mb-4 flex w-full items-center justify-between rounded-xl bg-rachat-black px-3.5 py-3">
+          className="flex w-full items-center justify-between rounded-xl bg-rachat-black px-3.5 py-3">
           <span className="text-sm font-bold">{call ? t("ترجمة المكالمة فورًا", "Translate the call live") : t("ترجمة الرسائل فورًا", "Translate messages live")}</span>
           <span className={`relative h-6 w-11 rounded-full ${s.on ? "bg-rachat-red" : "bg-neutral-700"}`}>
             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white ${s.on ? "right-0.5" : "left-0.5"}`} />
           </span>
         </button>
+        <p className="mb-4 mt-1.5 px-1 text-[11px] leading-5 text-neutral-400">
+          {t("بتفعيلك الترجمة توافق على إرسال نصّ الرسالة المطلوب ترجمتها إلى مزوّد الترجمة Google Cloud Translation. ولا يُرسَل شيء قبل التفعيل، ويمكنك إيقافه في أي وقت.",
+            "By turning translation on you agree to send the text to be translated to the translation provider, Google Cloud Translation. Nothing is sent before you turn it on, and you can turn it off at any time.")}
+        </p>
 
         <LangPick label={t("لغتي (أقرأ وأسمع بها)", "My language (I read and hear in)")} value={s.mine} onChange={(l) => setTranslate({ mine: l })} />
         <LangPick label={t("لغة الطرف الآخر (تُترجم لها كلماتي)", "Their language (my words are translated to)")} value={s.peer} onChange={(l) => setTranslate({ peer: l })} />

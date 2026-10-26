@@ -1204,9 +1204,9 @@ export const DICT: Record<string, { zh?: string; fr?: string }> = {
   "zh": "账号",
   "fr": "Compte"
  },
- "Protected · encryption on": {
-  "zh": "受保护 · 已开启加密",
-  "fr": "Protégé · chiffrement activé"
+ "Connection to server encrypted (TLS)": {
+  "zh": "与服务器的连接已加密 (TLS)",
+  "fr": "Connexion au serveur chiffrée (TLS)"
  },
  "Language": {
   "zh": "语言",
@@ -1220,17 +1220,9 @@ export const DICT: Record<string, { zh?: string; fr?: string }> = {
   "zh": "隐私",
   "fr": "Confidentialité"
  },
- "Hide my phone number from non-contacts": {
-  "zh": "对非联系人隐藏我的手机号",
-  "fr": "Masquer mon numéro aux non-contacts"
- },
- "Block screenshots in secret chats": {
-  "zh": "在密聊中禁止截屏",
-  "fr": "Bloquer les captures d'écran dans les discussions secrètes"
- },
- "Let anyone add me to groups": {
-  "zh": "允许任何人把我加入群组",
-  "fr": "Autoriser n'importe qui à m'ajouter à des groupes"
+ "Your phone number is not shown to any other user": {
+  "zh": "您的手机号不会显示给任何其他用户",
+  "fr": "Votre numéro n'est montré à aucun autre utilisateur"
  },
  "Light mode": {
   "zh": "浅色模式",

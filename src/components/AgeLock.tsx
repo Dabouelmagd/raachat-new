@@ -6,8 +6,16 @@ import { useProfile } from "../store/profile";
 
 /**
  * قفل خدمات ١٨+ (المحفظة ودفع الفواتير).
- * التطبيق نفسه مفتوح لكل الأعمار، فالرسالة بتوضّح ده عشان المستخدم ما يحسّش إنه مطرود.
- * فيه حالتين: تاريخ الميلاد لسه غير محدد (نوجّهه يحدده)، أو أقل من السن (مفيش حاجة يعملها).
+ *
+ * 🔴 والتعليق هنا كان بيقول «التطبيق نفسه مفتوح لكل الأعمار» — **وده مناقض للشروط
+ * المنشورة** من ١٣ أكتوبر ٢٠٢٦ (البند ٢: «رع شات للبالغين: ١٨ سنة أو أكثر»). الصحيح:
+ * التطبيق ١٨+، وكل حساب **جديد** بيتطلّب تاريخ ميلاد. واللي بيشوف القفل ده هم
+ * **الحسابات المنشأة قبل ١٣ أكتوبر** اللي سنّها لسه غير محدَّد — والسياسة (البند ١٠)
+ * بتقول إنها «تُعامَل معاملة غير محدَّدة السن احتياطًا: تبقى خدمات المحفظة مغلقة
+ * عليها» وبتفضل تستخدم باقي التطبيق لحد ما يُحدَّد. فحالتان:
+ *  • `unset` — غير محدَّد السن: نوجّهه يحدّد، وباقي التطبيق مفتوح له (مطابق للسياسة).
+ *  • غير كده — أقلّ من ١٨ بإقراره: مفيش طمأنة إن باقي التطبيق مفتوح له، لأن السياسة
+ *    بتقول إن الحساب ده بيُغلَق وبيُمحى. (والإغلاق نفسه لسه مش منفَّذًا — نقطة مفتوحة.)
  */
 export function AgeLock() {
   const t = useT();
@@ -30,8 +38,11 @@ export function AgeLock() {
               `The wallet and bill payment involve financial transactions, so they're available from age ${ADULT_AGE}.`)}
       </p>
       <p className="mt-3 text-[11.5px] leading-5 text-neutral-500">
-        {t("وبقيّة رع شات مفتوحة لك كالعادة: الرسائل والمجموعات والغرف الصوتية والمكالمات والقصص.",
-          "The rest of Raa Chat is open to you: messages, groups, voice rooms, calls and stories.")}
+        {unset
+          ? t("وبقيّة رع شات مفتوحة لك كالعادة: الرسائل والمجموعات والغرف الصوتية والمكالمات والقصص.",
+              "The rest of Raa Chat is open to you: messages, groups, voice rooms, calls and stories.")
+          : t(`ورع شات مخصَّص لمن بلغ ${num(ADULT_AGE)} سنة أو أكثر.`,
+              `And Raa Chat is intended for those aged ${ADULT_AGE} or over.`)}
       </p>
       {unset ? (
         <button onClick={() => nav("/profile")} className="mt-5 w-full rounded-xl bg-gradient-to-br from-rachat-red to-rachat-coral py-3 text-sm font-bold text-white">
