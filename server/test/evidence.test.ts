@@ -162,7 +162,17 @@ describe("حفظ الدليل وقت البلاغ", () => {
 });
 
 describe("الاحتفاظ والتسليم", () => {
-  it("🔴 بلاغات إيذاء الأطفال مابتتمسحش بعد سنتين، والباقي بيتمسح", async () => {
+  /**
+   * 🔴 **الاسمان القديمان لهذا الاختبار والذي يليه كانا «مابتتمسحش بعد سنتين»
+   * و«الكنس عمره ما بيلمس جدول الأدلة» — وسقطا في ٢٨ أكتوبر ٢٠٢٦ لأن السلوك
+   * تغيّر عمدًا، لا لأن الكود انكسر.** مذكرة المحامي حدّت الاحتفاظ بـ«سنة إلى
+   * ٣ سنوات كحد أقصى»، فالاحتفاظ الأبدي الذي كانا يحرسانه صار هو المخالفة.
+   * (الدرس المكتوب في `CLAUDE.md`: الاختبار الذي يوثّق سلوكًا غلط يحميه، فتُقرأ
+   * أسماء الاختبارات الساقطة قبل «تصليحها».)
+   *
+   * والمدة الأطول من الباقي لم تتغيّر: سنتان لبلاغ عادي، وثلاث لبلاغ إيذاء طفل.
+   */
+  it("🔴 بلاغ إيذاء الأطفال بيعيش أطول من الباقي — بيفضل بعد سنتين ونصف ويروح بعد التلاتة", async () => {
     const a = await env.login("01081100061", "مبلِّغ");
     const b = await env.login("01081100062", "مسيء");
     const th = (await api().post("/threads").set(b.auth).send({ type: "group", name: "ج", memberIds: [a.user.id] }).expect(201)).body;
@@ -171,17 +181,29 @@ describe("الاحتفاظ والتسليم", () => {
     await api().post("/reports").set(a.auth).send({ kind: "message", targetId: m1.id, reason: "child_safety" }).expect(201);
     await api().post("/reports").set(a.auth).send({ kind: "message", targetId: m2.id, reason: "spam" }).expect(201);
 
-    const old = new Date(Date.now() - 3 * 365.25 * 86_400_000);
-    await env.ctx.db.report.updateMany({ where: { targetId: { in: [m1.id, m2.id] } }, data: { status: "resolved", resolvedAt: old } });
-    await retentionSweep(env.ctx, "on");
+    const YEAR = 365.25 * 86_400_000;
+    const at = (y: number) => new Date(Date.now() - y * YEAR);
 
-    expect(await env.ctx.db.report.count({ where: { targetId: m1.id } }), "بلاغ إيذاء طفل اتمسح").toBe(1);
+    // سنتان ونصف: السبام عدّى مدته (سنتان) وبلاغ إيذاء الطفل لسه جوّه الـ٣
+    await env.ctx.db.report.updateMany({ where: { targetId: { in: [m1.id, m2.id] } }, data: { status: "resolved", resolvedAt: at(2.5) } });
+    await retentionSweep(env.ctx, "on");
+    expect(await env.ctx.db.report.count({ where: { targetId: m1.id } }), "بلاغ إيذاء طفل اتمسح بدري").toBe(1);
     expect(await env.ctx.db.report.count({ where: { targetId: m2.id } }), "بلاغ السبام ما اتمسحش").toBe(0);
+
+    // وبعد التلاتة يروح هو كمان — «للأبد» مش مدة
+    await env.ctx.db.report.updateMany({ where: { targetId: m1.id }, data: { resolvedAt: at(3.5) } });
+    await retentionSweep(env.ctx, "on");
+    expect(await env.ctx.db.report.count({ where: { targetId: m1.id } }), "عدّى الـ٣ سنين ولسه موجود").toBe(0);
   });
 
-  it("🔴 الكنس عمره ما بيلمس جدول الأدلة", async () => {
+  /**
+   * 🔴 الكنس بقى **بيلمس** جدول الأدلة بسقف ٣ سنين — والفحص هنا على الحدّ:
+   * دليل عمره سنة يفضل. (وحماية «البلاغ لسه مفتوح» متفحوصة في `retention.test.ts`.)
+   */
+  it("🔴 الكنس مابيلمسش دليلًا لسه جوّه مدته", async () => {
     const before = await env.ctx.db.evidence.count();
     expect(before).toBeGreaterThan(0); // وإلا الفحص بلا معنى
+    await env.ctx.db.evidence.updateMany({ data: { savedAt: new Date(Date.now() - 365.25 * 86_400_000) } });
     await retentionSweep(env.ctx, "on");
     expect(await env.ctx.db.evidence.count()).toBe(before);
   });

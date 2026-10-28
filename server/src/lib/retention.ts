@@ -32,6 +32,14 @@ const SESSION_GRACE_DAYS = 1;
 const MINOR_AD_DAYS = 2;
 /** البلاغات: سنتان من إغلاقها (منشور في سياسة الخصوصية) */
 const REPORT_YEARS = 2;
+/**
+ * بلاغات إيذاء الأطفال وأدلتها: **٣ سنوات كحد أقصى** (مذكرة المحامي ٢٨ أكتوبر ٢٠٢٦،
+ * ردًّا على سؤالنا عن المدة — أوصى بـ«سنة إلى ٣ سنوات كحد أقصى أو لحين انتهاء
+ * التحقيقات»). قبلها كانت مستثناة من الكنس **بلا أي سقف**، يعني محفوظة للأبد —
+ * وده نفسه مخالفة: الاحتفاظ بلا مدة محددة ممنوع في ١٥١/٢٠٢٠، والجدول المنشور كان
+ * ساكتًا عن الاستثناء من أصله.
+ */
+const EVIDENCE_YEARS = 3;
 
 /** الأعمدة اللي ممكن تشاور على ملف مرفوع — أي ملف بينها مابيتمسحش */
 type FileRef = { table: string; count: (name: string) => Promise<number> };
@@ -78,15 +86,39 @@ export async function retentionSweep(ctx: Ctx, mode: RetentionMode = "dry"): Pro
 
   // ٥) البلاغات: سنتان من إغلاقها. فيها `snippet` = نسخة من نص الرسالة المبلَّغ عنها.
   //
-  // 🔴 **وبلاغات `child_safety` مستثناة** (مذكرة المحامي ٢١ أكتوبر ٢٠٢٦): حذف
-  // أو إتلاف أدلة رقمية تتعلق بوقائع إيذاء أو استغلال أطفال ممكن يعرّض الإدارة
-  // للمساءلة بتهمة «إخفاء أدلة جريمة» أو عرقلة العدالة، والجهات الأمنية
-  // والقضائية ممكن تطلب السجلات بعد مدة تتجاوز السنتين بكتير. فمابتتمسحش
-  // تلقائيًا أبدًا — الحذف بقرار بشري بعد أمر قضائي أو إخطار رسمي بانتهاء
-  // التحقيق. والدليل نفسه في `Evidence` ومافيش أي مسار تلقائي بيلمسه.
+  // وبلاغات `child_safety` ليها مدة أطول (البند ٦ تحت) مش استثناء بلا سقف.
   const rCut = new Date(now - REPORT_YEARS * 365.25 * DAY);
   const rWhere = { status: "resolved", resolvedAt: { lt: rCut }, reason: { not: "child_safety" } };
   out.reports = wet ? (await db.report.deleteMany({ where: rWhere })).count : await db.report.count({ where: rWhere });
+
+  // ٦) بلاغات إيذاء الأطفال وأدلتها: ٣ سنوات كحد أقصى.
+  //
+  // السبب الأصلي للاستثناء لسه قائمًا — حذف أدلة رقمية لوقائع إيذاء أطفال ممكن
+  // يعرّض الإدارة للمساءلة، والجهات القضائية ممكن تطلب السجلات بعد السنتين —
+  // ولذلك المدة أطول من الباقي. إنما «للأبد» مش مدة، والمحامي حدّد السقف.
+  //
+  // 🔴 **والدليل مابيتمسحش طالما فيه بلاغ لسه مفتوح على نفس الواقعة**، مهما طال:
+  // السقف بيحمي من الاحتفاظ الأبدي، مش من إتلاف دليل في واقعة تحت المراجعة.
+  // والحكم على **الواقعة** (`kind:targetId`) مش على صفّ البلاغ، لأن `Evidence`
+  // واقعة واحدة لكل هدف مهما كان عدد المبلّغين.
+  const eCut = new Date(now - EVIDENCE_YEARS * 365.25 * DAY);
+  const csWhere = { reason: "child_safety", status: "resolved", resolvedAt: { lt: eCut } };
+  out.childSafetyReports = wet
+    ? (await db.report.deleteMany({ where: csWhere })).count
+    : await db.report.count({ where: csWhere });
+
+  const openCases = new Set(
+    (await db.report.findMany({ where: { status: "open" }, select: { kind: true, targetId: true } })).map(
+      (r) => `${r.kind}:${r.targetId}`,
+    ),
+  );
+  const aged = await db.evidence.findMany({
+    where: { savedAt: { lt: eCut } },
+    select: { id: true, kind: true, targetId: true },
+  });
+  const dropIds = aged.filter((e) => !openCases.has(`${e.kind}:${e.targetId}`)).map((e) => e.id);
+  out.evidence =
+    wet && dropIds.length ? (await db.evidence.deleteMany({ where: { id: { in: dropIds } } })).count : dropIds.length;
 
   return out;
 }

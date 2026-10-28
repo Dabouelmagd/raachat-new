@@ -108,5 +108,58 @@ describe("الحذف التلقائي (مدد الاحتفاظ المنشورة)
     expect(privacy).toMatch(/سنتان|سنتين/);
     expect(privacy).toMatch(/يومان|يومين/);
     expect(privacy).toMatch(/٢٤ ساعة/); // الستوري
+    // ٣ سنوات لبلاغات إيذاء الأطفال وأدلتها (مذكرة المحامي ٢٨ أكتوبر ٢٠٢٦)
+    expect(src).toContain("EVIDENCE_YEARS = 3");
+    expect(privacy, "الجدول المنشور لازم يذكر سقف الثلاث سنوات").toMatch(/ثلاث سنوات كحد أقصى/);
+    expect(privacy).toMatch(/3 years maximum/);
+  });
+
+  /**
+   * 🔴 قبل ٢٨ أكتوبر ٢٠٢٦ كانت بلاغات `child_safety` وأدلتها **مستثناة بلا سقف** —
+   * محفوظة للأبد، والجدول المنشور ساكت عن الاستثناء أصلًا. ومذكرة المحامي حدّدت
+   * «سنة إلى ٣ سنوات كحد أقصى»، فالاحتفاظ الأبدي نفسه بقى المخالفة.
+   *
+   * والفحص الحاسم هنا مش «اتمسح ولا لأ» — هو إن الدليل **مابيتمسحش والبلاغ لسه
+   * مفتوح** مهما طال عمره: السقف ضد الاحتفاظ الأبدي، مش رخصة لإتلاف دليل في
+   * واقعة تحت المراجعة.
+   */
+  it("🔴 بلاغ إيذاء الأطفال ودليله: ٣ سنوات سقفًا — والدليل بيفضل طالما البلاغ مفتوح", async () => {
+    const db = env.ctx.db;
+    const r = await env.login("01080000009", "مبلِّغة");
+    const YEAR = 365.25 * DAY;
+    const evi = (kind: string, targetId: string, savedAt: Date) =>
+      db.evidence.create({ data: { kind, targetId, text: "محتوى", incidentAt: savedAt, savedAt, reportedAt: savedAt } });
+    const rep = (targetId: string, status: string, resolvedAt: Date | null) =>
+      db.report.create({
+        data: { reporterId: r.user.id, kind: "message", targetId, reason: "child_safety", status,
+                resolvedAt, createdAt: resolvedAt ?? ago(4 * YEAR) },
+      });
+
+    await rep("m-old", "resolved", ago(4 * YEAR));   // مقفول من ٤ سنين → يروح
+    await rep("m-recent", "resolved", ago(YEAR));    // مقفول من سنة → يفضل
+    await rep("m-open", "open", null);               // لسه مفتوح → يفضل
+    await evi("message", "m-old", ago(4 * YEAR));    // دليله يروح
+    await evi("message", "m-open", ago(4 * YEAR));   // 🔴 قديم لكن بلاغه مفتوح → يفضل
+    await evi("message", "m-recent", ago(YEAR));     // لسه جوّه المدة → يفضل
+
+    const dry = await retentionSweep(env.ctx, "dry");
+    expect(dry.childSafetyReports).toBe(1);
+    expect(dry.evidence).toBe(1);
+    expect(await db.evidence.count()).toBe(3); // الجافة مابتمسحش
+
+    const wet = await retentionSweep(env.ctx, "on");
+    expect(wet.childSafetyReports).toBe(1);
+    expect(wet.evidence).toBe(1);
+    expect(await db.report.count({ where: { targetId: "m-old" } })).toBe(0);
+    expect(await db.report.count({ where: { targetId: "m-recent" } })).toBe(1);
+    expect(await db.report.count({ where: { targetId: "m-open" } })).toBe(1);
+    expect(await db.evidence.count({ where: { targetId: "m-old" } })).toBe(0);
+    expect(
+      await db.evidence.count({ where: { targetId: "m-open" } }),
+      "دليل واقعة لسه بلاغها مفتوح ممنوع يتمسح مهما طال عمره",
+    ).toBe(1);
+    expect(await db.evidence.count({ where: { targetId: "m-recent" } })).toBe(1);
+
+    expect(await retentionSweep(env.ctx, "on")).toMatchObject({ childSafetyReports: 0, evidence: 0 });
   });
 });

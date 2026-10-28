@@ -157,3 +157,70 @@ test("بريد سلامة الأطفال بريد حقيقي — مفيش خان
   const arVer = `الإصدار ${ar(ver![1])}٫${ar(ver![2])}`;
   expect(text, `الإصدار العربي مش مطابق للإنجليزي (${ver![0]} ← ${arVer})`).toContain(arVer);
 });
+
+/**
+ * 🔴 **مذكرة المحامي ٢٨ أكتوبر ٢٠٢٦ — ما وافق عليه صراحةً، مكتوبًا كحارس.**
+ *
+ * وصل رد المحامي على مذكرتنا فوافق على ثلاث صياغات بعينها. والسبب في تثبيتها
+ * هنا أن أيًّا منها لو ارتدّت لا يظهر أثرها في أي شاشة ولا في أي اختبار آخر:
+ * الصفحة تُقرأ مرة واحدة عند الرفع للمتجر، والتراجع الصامت فيها يصل للعميل.
+ */
+test.describe("مذكرة المحامي (٢٨ أكتوبر ٢٠٢٦)", () => {
+  test("🔴 المكالمات مشفّرة من طرف إلى طرف، والرسائل النصية لا — مفصولتان بوضوح", async ({ page }) => {
+    await page.goto(legalUrl("privacy"));
+    const body = page.locator("body");
+
+    // الشقّ الذي كان ناقصًا: النصّ كان ينفي التشفير عن «المحادثات» عمومًا، وهو
+    // دقيق للرسائل ويبخس حقّ المكالمات — والمحامي: «موافق وموصى به بشدة».
+    await expect(body).toContainText(/المكالمات الصوتية والمرئية مشفّرة تمامًا من طرف إلى طرف/);
+    await expect(body).toContainText(/لا تمر على خوادم الشركة/);
+    await expect(body).toContainText(/Voice and video calls are fully end-to-end encrypted/);
+
+    // والشقّ الذي لا يجوز أن يسقط مع التعديل: الرسائل النصية **ليست** مشفّرة
+    // طرفًا لطرف. إسقاطه يحوّل الفقرة إلى ادعاء أمان عام يتصرّف المستخدم بناءً عليه.
+    await expect(body).toContainText(/الرسائل النصية ليست مشفّرة من طرف إلى طرف/);
+    await expect(body).toContainText(/Text messages are not end-to-end encrypted/);
+  });
+
+  test("🔴 سجل أدلة بلاغات إيذاء الأطفال مُفصَح عنه، وله سقف ثلاث سنوات", async ({ page }) => {
+    await page.goto(legalUrl("privacy"));
+    const text = await page.locator("body").innerText();
+
+    // كان غير مذكور في السياسة **ولا مرة** رغم أنه يحوز محتوى مبلَّغًا عنه.
+    expect(text, "سجل الأدلة لازم يكون مُفصَحًا عنه بسنده القانوني").toMatch(/أدلة بلاغات إيذاء الأطفال/);
+    expect(text).toMatch(/AES-256/);
+    expect(text).toMatch(/المصلحة المشروعة وحماية النظام العام/);
+    expect(text).toMatch(/Child-safety report evidence/);
+
+    // والسقف: كان الاحتفاظ **بلا مدة** (للأبد)، وهو نفسه مخالف — والمحامي حدّ ٣ سنوات.
+    expect(text, "جدول الاحتفاظ لازم يذكر سقف الثلاث سنوات").toMatch(/ثلاث سنوات كحد أقصى/);
+    expect(text).toMatch(/3 years maximum/);
+  });
+
+  test("🔴 عبارة زمن الاستجابة بلا أي رقم — رقم منشور = التزام تعاقدي ملزم", async ({ page }) => {
+    await page.goto(legalUrl("community"));
+    const text = await page.locator("body").innerText();
+
+    await expect(page.locator("body")).toContainText(
+      /نعمل على مراجعة البلاغات والرد عليها في أقرب وقت ممكن، وفقًا لأولوية البلاغ وحجم البلاغات الواردة/,
+    );
+
+    // 🔴 والحارس الحقيقي هو المنع: «لا تقم بنشر رقم زمني محدد أبدًا». ومهلة
+    // الاعتراض (٣٠ يومًا) مهلة **للمستخدم** لا وعد منّا، فهي خارج النمط عمدًا.
+    expect(text, "مفيش رقم زمني للرد — ده التزام تعاقدي").not.toMatch(
+      /(نرد|الرد|نراجع|المراجعة)[^.\n]{0,20}خلال[^.\n]{0,12}[٠-٩0-9]/,
+    );
+    expect(text).not.toMatch(/within \d+ (hours?|business days?)/i);
+  });
+
+  test("المصطلحات موحَّدة: «المجموعات» و«القصص» في الصفحات العربية", async ({ page }) => {
+    for (const f of ["privacy", "terms", "community"]) {
+      await page.goto(legalUrl(f));
+      const text = await page.locator("body").innerText();
+      // النسخة الإنجليزية تُبقي Stories/groups لأن واجهة التطبيق الإنجليزية كذلك،
+      // فالفحص على المصطلح العربي وحده: «الجروبات» و«الـ Stories» اختفتا.
+      expect(text, `«جروب» لسه في ${f}`).not.toMatch(/جروب/);
+      expect(text, `«الـ Stories» لسه في ${f}`).not.toMatch(/الـ\s*Stories/);
+    }
+  });
+});
