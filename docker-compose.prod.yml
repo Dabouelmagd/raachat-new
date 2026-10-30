@@ -39,6 +39,10 @@ services:
       RESEND_KEY: ${RESEND_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       GOOGLE_TRANSLATE_KEY: ${GOOGLE_TRANSLATE_KEY:-}
+      # الترجمة المجانية (خدمة libretranslate تحت) — ليها الأولوية على مفتاح جوجل.
+      # `${VAR-...}` بشرطة من غير نقطتين **عن قصد**: مش موجود في `.env.production`
+      # = الافتراضي شغّال، وقيمة **فاضية** هناك = إيقاف صريح (يرجع لجوجل أو 501).
+      LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL-http://libretranslate:5000}
       STUN_URLS: ${STUN_URLS:-stun:stun.l.google.com:19302}
       TURN_URLS: ${TURN_URLS:-}
       TURN_SECRET: ${TURN_SECRET:-}
@@ -130,6 +134,27 @@ services:
           if [ $$ok -eq 1 ]; then echo "backup $$ts ok"; sleep 86400; else sleep 900; fi
         done
 
+  # ترجمة مجانية self-hosted (Argos/LibreTranslate) — المزوّد الافتراضي لمسار
+  # `/translate` بدل مفتاح جوجل المدفوع. النص مابيخرجش من السيرفر خالص.
+  libretranslate:
+    image: libretranslate/libretranslate:v1.9.6
+    restart: unless-stopped
+    environment:
+      # لغات التطبيق الأربعة بس — كل لغة زيادة = رام زيادة على سيرفر مشترك
+      LT_LOAD_ONLY: "ar,en,zh,fr"
+      # بينزّل موديلات اللغات دي عند أول تشغيل لو مش موجودة (بتتحفظ في الـ volume
+      # فمابيعيدش التنزيل). أول قيام ممكن ياخد دقايق — والـ api بيرجّع 502 واضحة
+      # في الفترة دي والواجهة بتهدى، فمفيش كسر.
+      LT_UPDATE_MODELS: "true"
+      # الخدمة للـ api بس — مفيش حد بيفتح واجهتها
+      LT_DISABLE_WEB_UI: "true"
+    volumes: [lt_models:/home/libretranslate/.local]
+    # سقف رام صريح: السيرفر 4 جيجا ومشترك مع مشاريع تانية — من غيره ضغط ترجمة
+    # عالي ممكن يجوّع القاعدة والـ api. اللي يتعدّاه بيتقتل ويرجع بـ restart،
+    # والـ api بيترجم 502 لكل نداء في الفترة دي بدل ما السيرفر كله يقع.
+    mem_limit: 2g
+    # ⚠️ مفيش ports: عمدًا — الوصول من جوه شبكة compose بس (api → libretranslate:5000)
+
   # TURN للمكالمات: docker compose -f docker-compose.prod.yml --profile turn up -d
   turn:
     profiles: ["turn"]
@@ -147,3 +172,5 @@ volumes:
   caddy_data:
   caddy_config:
   backups:
+  # موديلات الترجمة (~مئات الميجا) — بتتنزّل مرة واحدة وتفضل عبر إعادة الإنشاء
+  lt_models:

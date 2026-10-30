@@ -64,7 +64,8 @@ describe("متغيرات الإنتاج توصل للكونتينر فعلًا",
     for (const k of [
       "DATABASE_URL", "JWT_SECRET", "CORS_ORIGIN", "OWNER_CONTACTS",
       "RESEND_KEY", "EMAIL_FROM",          // كود التحقق بالإيميل (الطريق الوحيد حاليًا)
-      "GOOGLE_TRANSLATE_KEY",              // الترجمة المدفوعة
+      "GOOGLE_TRANSLATE_KEY",              // الترجمة المدفوعة (احتياطي)
+      "LIBRETRANSLATE_URL",                // الترجمة المجانية — من غير السطر الخدمة شغّالة ومحدش بيكلّمها
       "STUN_URLS", "TURN_URLS", "TURN_SECRET", // المكالمات
       "VAPID_PUBLIC", "VAPID_PRIVATE", "VAPID_SUBJECT", // الإشعارات
       "RETENTION",                         // الحذف التلقائي (الدرس الأصلي)

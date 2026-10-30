@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# يضبط مفتاح الترجمة (Google Cloud Translation v2) في .env.production، وبيفحصه
-# بنداء حقيقي قبل ما يسيبه مضبوط.
+# يضبط مفتاح الترجمة **المدفوعة** (Google Cloud Translation v2) في .env.production،
+# وبيفحصه بنداء حقيقي قبل ما يسيبه مضبوط.
+#
+# ⚠️ من ٣٠ أكتوبر ٢٠٢٦ المزوّد الافتراضي هو LibreTranslate المجاني (خدمة جوه
+# compose، وليها الأولوية على المفتاح ده) — فالمفتاح هنا احتياطي بس، ومش هيتستخدم
+# إلا لو LIBRETRANSLATE_URL اتوقّف صراحةً (قيمة فاضية في .env.production).
 # المفتاح مابيظهرش على الشاشة ولا بيتسجّل في history.
 # التشغيل:  cd /opt/rachat && bash scripts/set-translate-key.sh
 #

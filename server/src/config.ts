@@ -43,6 +43,14 @@ const Env = z.object({
   RESEND_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
   GOOGLE_TRANSLATE_KEY: z.string().optional(),
+  /**
+   * LibreTranslate self-hosted — المزوّد **المجاني** للترجمة، وبياخد الأولوية
+   * على مفتاح جوجل لو الاتنين متضبطين (ليه ندفع والنص أصلًا مابيخرجش من
+   * سيرفرنا؟). في الإنتاج الافتراضي جاي من compose (`http://libretranslate:5000`
+   * — خدمة في نفس الشبكة الداخلية)، وقيمة **فاضية** في `.env.production`
+   * بتوقّفه صراحةً فيرجع المسار لمفتاح جوجل أو 501.
+   */
+  LIBRETRANSLATE_URL: z.string().optional(),
   // WebRTC: STUN/TURN (TURN_SECRET = static-auth-secret بتاع coturn؛ بيتولّد منه اسم/كلمة سر مؤقتة لكل مستخدم)
   STUN_URLS: z.string().default("stun:stun.l.google.com:19302"),
   TURN_URLS: z.string().optional(),

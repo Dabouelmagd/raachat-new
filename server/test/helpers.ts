@@ -99,6 +99,12 @@ export async function startTestEnv() {
       const body = JSON.parse(init.body);
       return new Response(JSON.stringify({ data: { translations: [{ translatedText: `[${body.target}] ${body.q}`, detectedSourceLanguage: "ar" }] } }), { status: 200 });
     }
+    // LibreTranslate (المزوّد المجاني) — شكل ردّه مختلف عن جوجل، والأقواس مختلفة
+    // عن قصد عشان الاختبار يعرف مين اللي ترجم فعلًا من النص نفسه.
+    if (u.includes("libretranslate")) {
+      const body = JSON.parse(init.body);
+      return new Response(JSON.stringify({ translatedText: `(${body.target}) ${body.q}`, detectedLanguage: { language: "ar", confidence: 90 } }), { status: 200 });
+    }
     throw new Error("unexpected fetch " + u);
   }) as typeof fetch;
   const pushed: { sub: PushSub; payload: PushPayload }[] = [];
