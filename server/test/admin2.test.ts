@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { startTestEnv } from "./helpers.js";
+import { startTestEnv, testEmail } from "./helpers.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 let owner: Awaited<ReturnType<typeof env.login>>;
@@ -9,7 +9,7 @@ afterAll(async () => { await env?.stop(); }, 60_000);
 const api = () => request(env.app);
 const staff = async (phone: string, key: string) => {
   const roles = (await api().get("/admin/roles").set(owner.auth)).body as { id: string; key: string }[];
-  await api().post("/admin/staff").set(owner.auth).send({ contact: phone, roleId: roles.find((r) => r.key === key)!.id }).expect(201);
+  await api().post("/admin/staff").set(owner.auth).send({ contact: testEmail(phone), roleId: roles.find((r) => r.key === key)!.id }).expect(201);
   return env.login(phone);
 };
 
@@ -105,9 +105,12 @@ describe("لوحة الإدارة — المرحلة التانية", () => {
     // قفل التسجيل: الجديد يترفض والموجود يدخل
     await api().put("/admin/settings").set(owner.auth).send({ registrationOpen: false }).expect(200);
     expect((await api().get("/public/settings").expect(200)).body.registrationOpen).toBe(false);
-    await api().post("/auth/otp/request").send({ channel: "phone", target: "01096000099" }).expect(204);
-    const code = env.sent.filter((x) => x.target === "01096000099").at(-1)!.code;
-    expect((await api().post("/auth/otp/verify").send({ channel: "phone", target: "01096000099", code, birthDate: "1990-01-01" }).expect(403)).body.code).toBe("registration_closed");
+    // قفل التسجيل بيتفحص على قناة **الإيميل** — هي القناة الوحيدة اللي بتعمل
+    // حسابًا بعد ٥ نوفمبر ٢٠٢٦ (الرقم بقى اسمًا بديلًا للدخول وبس).
+    const newReg = "newreg@example.com";
+    await api().post("/auth/otp/request").send({ channel: "email", target: newReg }).expect(204);
+    const code = env.sent.filter((x) => x.target === newReg).at(-1)!.code;
+    expect((await api().post("/auth/otp/verify").send({ channel: "email", target: newReg, code, birthDate: "1990-01-01" }).expect(403)).body.code).toBe("registration_closed");
     await env.login("01096000031"); // موجود
     await api().put("/admin/settings").set(owner.auth).send({ registrationOpen: true }).expect(200);
     // الصيانة

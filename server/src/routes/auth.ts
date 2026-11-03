@@ -15,8 +15,11 @@ export function authRoutes(ctx: Ctx) {
    * لوحده من غير أي نشر للواجهة.
    */
   r.get("/auth/channels", wrap(async (_req, res) => {
-    const ready = (ch: "phone" | "email") => ctx.sender.ready?.(ch) !== false;
-    res.json({ phone: ready("phone"), email: ready("email") });
+    // 🔴 الدخول بالرقم بقى بيوصّل الكود على **إيميل الحساب** مش بـSMS — فجاهزيته
+    // جاهزية الإيميل. (قبل كده كانت `ready("phone")` فالخيار كان مقفولًا طول ما
+    // الـSMS موقوف، وهو الوضع من ١٣ أكتوبر.)
+    const emailReady = ctx.sender.ready?.("email") !== false;
+    res.json({ phone: emailReady, email: emailReady });
   }));
 
   r.post("/auth/otp/request", wrap(async (req, res) => {

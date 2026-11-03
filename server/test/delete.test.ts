@@ -1,16 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { startTestEnv } from "./helpers.js";
+import { startTestEnv, testEmail } from "./helpers.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 let owner: Awaited<ReturnType<typeof env.login>>;
 beforeAll(async () => { env = await startTestEnv(); owner = await env.login("01099000001", "داليا"); }, 120_000);
 afterAll(async () => { await env?.stop(); }, 60_000);
 const api = () => request(env.app);
-const codeFor = (phone: string) => env.sent.filter((s) => s.target === phone).at(-1)!.code;
+// الكود بيتوصّل على **إيميل الحساب** مش على الرقم (٥ نوفمبر ٢٠٢٦).
+const codeFor = (phone: string) => env.sent.filter((s) => s.target === testEmail(phone)).at(-1)!.code;
 
 describe("حذف الحساب", () => {
-  it("يحتاج OTP، يمسح البيانات ويخفي الهوية، ويقفل الجلسات، والرقم يتسجّل من جديد كحساب جديد", async () => {
+  it("يحتاج OTP، يمسح البيانات ويخفي الهوية، ويقفل الجلسات، والهوية تتحرّر فينفع حساب جديد بنفس الرقم والإيميل", async () => {
     const a = await env.login("01094000001", "سارة"), b = await env.login("01094000002", "باقي");
     const g = (await api().post("/threads").set(a.auth).send({ type: "group", name: "ج", memberIds: [b.user.id] }).expect(201)).body;
     const dm = (await api().post("/threads").set(a.auth).send({ type: "dm", memberIds: [b.user.id] }).expect(201)).body;
@@ -22,7 +23,11 @@ describe("حذف الحساب", () => {
     await api().delete("/me").send({ code: "123456" }).expect(401);
     await api().delete("/me").set(a.auth).send({ code: "000000" }).expect(401); // كود غلط
     const o = (await api().post("/me/delete/otp").set(a.auth).expect(200)).body;
-    expect(o).toMatchObject({ channel: "phone", balance: 0 }); expect(o.hint).not.toContain("01094000001");
+    // الكود بيتوصّل على **الإيميل** دايمًا، فالرد بيقول الإيميل — ولو فضل يقول
+    // «phone» و`hint` برقم الموبايل كان بيكدب على الشاشة.
+    expect(o).toMatchObject({ channel: "email", balance: 0 });
+    expect(o.hint).not.toContain("01094000001");
+    expect(o.hint, "الهنت مقنّع مش العنوان كامل").toContain("\u2022");
     await api().delete("/me").set(a.auth).send({ code: codeFor("01094000001") }).expect(204);
 
     await api().get("/me").set(a.auth).expect(401); // الجلسة اتقفلت
@@ -57,7 +62,7 @@ describe("حذف الحساب", () => {
     expect((await env.ctx.db.auditLog.findFirst({ where: { action: "حذف حساب", actorId: u.user.id } }))!.meta).toMatchObject({ forfeited: 150 });
 
     const roles = (await api().get("/admin/roles").set(owner.auth)).body as { id: string; key: string }[];
-    await api().post("/admin/staff").set(owner.auth).send({ contact: "01094000021", roleId: roles.find((x) => x.key === "support")!.id }).expect(201);
+    await api().post("/admin/staff").set(owner.auth).send({ contact: testEmail("01094000021"), roleId: roles.find((x) => x.key === "support")!.id }).expect(201);
     const st = await env.login("01094000021");
     await api().post("/me/delete/otp").set(st.auth).expect(200);
     expect((await api().delete("/me").set(st.auth).send({ code: codeFor("01094000021") }).expect(409)).body.code).toBe("staff_member");

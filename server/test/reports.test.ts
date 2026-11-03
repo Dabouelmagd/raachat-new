@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import fs from "node:fs";
 import path from "node:path";
-import { startTestEnv } from "./helpers.js";
+import { startTestEnv, testEmail } from "./helpers.js";
 import { REPORT_REASONS } from "../src/routes/reports.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
@@ -21,7 +21,7 @@ async function world(tag: string) {
 }
 const staff = async (phone: string, key: string) => {
   const roles = (await api().get("/admin/roles").set(owner.auth)).body as { id: string; key: string }[];
-  await api().post("/admin/staff").set(owner.auth).send({ contact: phone, roleId: roles.find((r) => r.key === key)!.id }).expect(201);
+  await api().post("/admin/staff").set(owner.auth).send({ contact: testEmail(phone), roleId: roles.find((r) => r.key === key)!.id }).expect(201);
   return env.login(phone);
 };
 

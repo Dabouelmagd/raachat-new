@@ -12,6 +12,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import { normalizeTarget } from "../src/auth.js";
 import { startTestEnv } from "./helpers.js";
 import { ADULT_AGE, assertSignupAge } from "../src/lib/age.js";
 import { todayCairo } from "../src/lib/cairo.js";
@@ -38,7 +39,17 @@ const birthFor = (years: number, days = 0) => {
 
 const codeFor = async (target: string, channel: "email" | "phone" = "email") => {
   await request(env.app).post("/auth/otp/request").send({ channel, target }).expect(204);
-  return env.sent.filter((s) => s.target === target).at(-1)!.code;
+  // 🔴 القناة «رقم» بتوصّل الكود على **إيميل الحساب** (٥ نوفمبر ٢٠٢٦)، فبندوّر
+  // بالإيميل المربوط مش بالرقم. والقراءة من القاعدة مش من اشتقاق اسم، عشان
+  // تشتغل مهما كان الحساب اتعمل منين.
+  let want = target;
+  if (channel === "phone") {
+    const u = await env.ctx.db.user.findUnique({
+      where: { phone: normalizeTarget("phone", target) }, select: { email: true },
+    });
+    want = u?.email ?? target;
+  }
+  return env.sent.filter((s) => s.target === want).at(-1)!.code;
 };
 
 describe("التسجيل بكلمة سر ١٨+", () => {

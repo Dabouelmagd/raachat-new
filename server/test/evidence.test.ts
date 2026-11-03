@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import fs from "node:fs";
 import path from "node:path";
-import { startTestEnv } from "./helpers.js";
+import { startTestEnv, testEmail } from "./helpers.js";
 import { retentionSweep } from "../src/lib/retention.js";
 import { openEvidence, sealEvidence, sha256 } from "../src/lib/evidence.js";
 
@@ -219,7 +219,7 @@ describe("الاحتفاظ والتسليم", () => {
     // مستخدم عادي — ومشرف محتوى كمان: الصلاحية مش في أي دور جاهز
     await api().get("/admin/evidence").set(a.auth).expect(403);
     const roles = (await api().get("/admin/roles").set(owner.auth)).body as { id: string; key: string }[];
-    await api().post("/admin/staff").set(owner.auth).send({ contact: "01081100079", roleId: roles.find((r) => r.key === "moderator")!.id }).expect(201);
+    await api().post("/admin/staff").set(owner.auth).send({ contact: testEmail("01081100079"), roleId: roles.find((r) => r.key === "moderator")!.id }).expect(201);
     const mod = await env.login("01081100079");
     await api().get("/admin/evidence").set(mod.auth).expect(403);
 

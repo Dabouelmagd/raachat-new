@@ -45,6 +45,9 @@ enum TxKind {
 model User {
   id          String    @id @default(cuid())
   phone       String?   @unique
+  /// الرقم اتأكّد بـSMS؟ NULL = مكتوب بالإيد (اسم بديل للدخول بس — **مابيدخلش**
+  /// مطابقة جهات الاتصال ولا البحث، وإلا أي حد يدّعي رقم حد تاني ويظهر مكانه).
+  phoneVerifiedAt DateTime?
   email       String?   @unique
   name        String
   status      String    @default("")

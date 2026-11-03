@@ -7,6 +7,14 @@ import EmbeddedPostgres from "embedded-postgres";
 import pg from "pg";
 import request from "supertest";
 import { createApp } from "../src/app.js";
+import { normalizeTarget } from "../src/auth.js";
+
+/**
+ * إيميل الحساب التجريبي المشتق من الرقم — **مصدر واحد** عشان `login()` وإضافة
+ * الموظفين في اختبارات اللوحة يوصلوا لنفس الحساب. والحساب بيتعمل بالإيميل لأن
+ * الرقم ماعادش بيعمل حسابًا (٥ نوفمبر ٢٠٢٦).
+ */
+export const testEmail = (phone: string) => `${phone.replace(/\D/g, "")}@test.local`;
 import { loadConfig } from "../src/config.js";
 import { createDb } from "../src/db.js";
 import { attachRealtime } from "../src/realtime.js";
@@ -128,10 +136,22 @@ export async function startTestEnv() {
    * سنًّا معيّنًا (سقوف ١٨–٢١ أو حارس المحفظة) يبعته صريح.
    */
   async function login(phone: string, name?: string, birthDate = "1990-01-01") {
-    await request(app).post("/auth/otp/request").send({ channel: "phone", target: phone }).expect(204);
-    const code = sent.filter((s) => s.target === phone).at(-1)!.code;
-    const r = await request(app).post("/auth/otp/verify").send({ channel: "phone", target: phone, code, birthDate }).expect(200);
+    // 🔴 الحساب بيتعمل بالإيميل — **الرقم ماعادش بيعمل حسابًا** (٥ نوفمبر ٢٠٢٦):
+    // بقى اسمًا بديلًا للدخول بيترجم لإيميل صاحبه، وده اللي قفل مصدر الحسابات
+    // المكرّرة. قبل كده الطقم كله كان بيبني مستخدميه من تسجيل بالرقم، فالتعديل
+    // ده هو اللي خلّى ١٣٥ اختبارًا يسقطوا من دالة واحدة.
+    const email = testEmail(phone);
+    await request(app).post("/auth/otp/request").send({ channel: "email", target: email }).expect(204);
+    const code = sent.filter((s) => s.target === email).at(-1)!.code;
+    const r = await request(app).post("/auth/otp/verify").send({ channel: "email", target: email, code, birthDate }).expect(200);
     const token = r.body.accessToken as string;
+    // والرقم بيتربط **متحقَّقًا** عشان الاختبارات القايمة تفضل معناها هو هو: كل
+    // رقم كان على حساب قبل التعديل ده كان متأكّدًا بـSMS فعلًا (ودي نفس منطق
+    // الـmigration). واللي عايز رقمًا **غير** متحقَّق يربطه بـ`POST /me/phone`.
+    await ctx.db.user.update({
+      where: { id: r.body.user.id as string },
+      data: { phone: normalizeTarget("phone", phone), phoneVerifiedAt: new Date() },
+    });
     if (name) await request(app).patch("/me").set("Authorization", `Bearer ${token}`).send({ name }).expect(200);
     return { token, refresh: r.body.refreshToken as string, user: r.body.user as { id: string; name: string }, auth: { Authorization: `Bearer ${token}` } };
   }

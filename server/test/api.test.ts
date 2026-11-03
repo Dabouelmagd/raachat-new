@@ -10,12 +10,12 @@ afterAll(async () => { await env?.stop(); }, 60_000);
 describe("auth", () => {
   it("OTP: خطأ في الكود ثم نجاح، ورفض إعادة الاستخدام", async () => {
     const { app, sent } = env;
-    await request(app).post("/auth/otp/request").send({ channel: "phone", target: "01011112222" }).expect(204);
+    await request(app).post("/auth/otp/request").send({ channel: "email", target: "otp1@example.com" }).expect(204);
     const code = sent.at(-1)!.code;
     const wrong = code === "000000" ? "111111" : "000000";
-    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code: wrong, birthDate: "1990-01-01" }).expect(401);
-    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code, birthDate: "1990-01-01" }).expect(200);
-    await request(app).post("/auth/otp/verify").send({ channel: "phone", target: "01011112222", code, birthDate: "1990-01-01" }).expect(401);
+    await request(app).post("/auth/otp/verify").send({ channel: "email", target: "otp1@example.com", code: wrong, birthDate: "1990-01-01" }).expect(401);
+    await request(app).post("/auth/otp/verify").send({ channel: "email", target: "otp1@example.com", code, birthDate: "1990-01-01" }).expect(200);
+    await request(app).post("/auth/otp/verify").send({ channel: "email", target: "otp1@example.com", code, birthDate: "1990-01-01" }).expect(401);
   });
   it("5 محاولات خاطئة تقفل الكود", async () => {
     const { app, sent } = env;
@@ -27,8 +27,8 @@ describe("auth", () => {
   });
   it("حد 5 طلبات في الساعة لنفس الهدف", async () => {
     const { app } = env;
-    for (let i = 0; i < 5; i++) await request(app).post("/auth/otp/request").send({ channel: "phone", target: "01099990000" }).expect(204);
-    await request(app).post("/auth/otp/request").send({ channel: "phone", target: "01099990000" }).expect(429);
+    for (let i = 0; i < 5; i++) await request(app).post("/auth/otp/request").send({ channel: "email", target: "ratelimit@example.com" }).expect(204);
+    await request(app).post("/auth/otp/request").send({ channel: "email", target: "ratelimit@example.com" }).expect(429);
   });
   it("رفض بدون توكن وهدف غير صالح", async () => {
     await request(env.app).get("/me").expect(401);
@@ -59,7 +59,7 @@ describe("threads & messages", () => {
     const owner = await env.login("01040000000", "المالك");
     const ids: string[] = [];
     for (let i = 1; i <= 60; i++) {
-      const u = await env.ctx.db.user.create({ data: { name: `عضو ${i}`, phone: `0105${String(i).padStart(7, "0")}` } });
+      const u = await env.ctx.db.user.create({ data: { name: `عضو ${i}`, phone: `0199${String(i).padStart(7, "0")}` } });
       ids.push(u.id);
     }
     const g = await request(env.app).post("/threads").set(owner.auth)

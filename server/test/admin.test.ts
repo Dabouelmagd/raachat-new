@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { io as client } from "socket.io-client";
-import { startTestEnv } from "./helpers.js";
+import { startTestEnv, testEmail } from "./helpers.js";
 
 let env: Awaited<ReturnType<typeof startTestEnv>>;
 let owner: Awaited<ReturnType<typeof env.login>>;
@@ -12,7 +12,7 @@ const api = () => request(env.app);
 const roles = async () => (await api().get("/admin/roles").set(owner.auth)).body as { id: string; key: string; permissions: string[]; system: boolean }[];
 const roleId = async (key: string) => (await roles()).find((r) => r.key === key)!.id;
 async function addStaff(phone: string, key: string, extra: Record<string, unknown> = {}) {
-  const r = await api().post("/admin/staff").set(owner.auth).send({ contact: phone, roleId: await roleId(key), ...extra });
+  const r = await api().post("/admin/staff").set(owner.auth).send({ contact: testEmail(phone), roleId: await roleId(key), ...extra });
   expect(r.status).toBe(201);
   return { ...(await env.login(phone)), staff: r.body };
 }
@@ -57,7 +57,7 @@ describe("admin RBAC", () => {
     expect(me.permissions).not.toContain("settings.manage");
     await api().post("/admin/roles").set(mgr.auth).send({ name: "خطر", permissions: ["settings.manage"] }).expect(403);
     await api().post("/admin/staff").set(mgr.auth).send({ contact: "01099000031", roleId: await roleId("accountant"), grant: ["settings.manage"] }).expect(403);
-    await api().post("/admin/staff").set(mgr.auth).send({ contact: "01099000031", roleId: await roleId("support") }).expect(201); // بصلاحيات يملكها
+    await api().post("/admin/staff").set(mgr.auth).send({ contact: testEmail("01099000031"), roleId: await roleId("support") }).expect(201); // بصلاحيات يملكها
     await api().patch(`/admin/staff/${mgr.user.id}`).set(mgr.auth).send({ grant: ["settings.manage"] }).expect(403);
     await api().patch(`/admin/staff/${owner.user.id}`).set(mgr.auth).send({ active: false }).expect(403);
     await api().delete(`/admin/staff/${owner.user.id}`).set(owner.auth).expect(403);
@@ -97,13 +97,13 @@ describe("admin RBAC", () => {
     await dropped;
     await api().get("/me").set(u.auth).expect(401); // الجلسات اتلغت فورًا
     await api().post("/auth/otp/request").send({ channel: "phone", target: "01099000050" }).expect(204);
-    const code = env.sent.filter((x) => x.target === "01099000050").at(-1)!.code;
+    const code = env.sent.filter((x) => x.target === testEmail("01099000050")).at(-1)!.code;
     expect((await api().post("/auth/otp/verify").send({ channel: "phone", target: "01099000050", code, birthDate: "1990-01-01" }).expect(403)).body.code).toBe("account_suspended");
     const list = (await api().get("/admin/users?status=banned").set(owner.auth).expect(200)).body;
     expect(list.map((x: any) => x.name)).toContain("مخالف");
     await api().patch(`/admin/users/${u.user.id}/status`).set(owner.auth).send({ status: "active" }).expect(200);
     await api().post("/auth/otp/request").send({ channel: "phone", target: "01099000050" }).expect(204);
-    const code2 = env.sent.filter((x) => x.target === "01099000050").at(-1)!.code;
+    const code2 = env.sent.filter((x) => x.target === testEmail("01099000050")).at(-1)!.code;
     await api().post("/auth/otp/verify").send({ channel: "phone", target: "01099000050", code: code2, birthDate: "1990-01-01" }).expect(200);
     sock.close();
   });

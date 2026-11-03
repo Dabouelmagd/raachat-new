@@ -250,6 +250,18 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
               {t("الدخول بالرقم موقوف مؤقتًا — استخدم البريد الإلكتروني.", "Signing in with a phone number is temporarily unavailable — please use email.")}
             </p>
           )}
+          {/*
+            🔴 لازم يعرف **قبل** ما يستنى: الكود بيروح على الإيميل مش رسالة نصية.
+            ومن غير السطر ده المستخدم يقعد يبصّ على رسائله مستنيًا SMS مش جايّة.
+            والصياغة شرطية («لو الرقم مربوط») عن قصد — الرد من السيرفر واحد سواء
+            الرقم مربوط بحساب ولا لأ، عشان مايبقاش وسيلة لمعرفة الأرقام المسجَّلة.
+          */}
+          {mode === "otp" && method === "phone" && channels.phone && (
+            <p role="status" className="rounded-xl bg-rachat-card px-3 py-2 text-[11.5px] leading-5 text-rachat-gold">
+              {t("الكود بيوصل على البريد الإلكتروني المربوط بالرقم — مش رسالة نصية. ولو الرقم مش مربوط بحساب، مش هيوصل كود.",
+                 "The code goes to the email linked to this number — not an SMS. If the number isn't linked to an account, no code will arrive.")}
+            </p>
+          )}
 
           {mode === "signup" && (
             <input

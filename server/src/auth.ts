@@ -1,11 +1,9 @@
 import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import type { Ctx } from "./context.js";
-import { todayCairo } from "./lib/cairo.js";
 import { assertSignupAge } from "./lib/age.js";
 import { HttpError, unauthorized } from "./lib/errors.js";
 import { getSettings } from "./lib/settings.js";
-import { smsCountSent, smsUnderDailyCap } from "./lib/sms.js";
 import { hashPassword, verifyPassword, wastePasswordTime } from "./lib/password.js";
 import { randomToken, sha256, signAccess, verifyAccess } from "./lib/tokens.js";
 
@@ -28,6 +26,33 @@ export function validTarget(channel: "phone" | "email", t: string): boolean {
   return channel === "phone" ? /^(\+?\d{8,15})$/.test(t) : /^\S+@\S+\.\S+$/.test(t);
 }
 
+/**
+ * 🔴 **الرقم اسم بديل للدخول، والكود بيروح لإيميل الحساب المربوط بيه** — الـSMS
+ * موقوف (٢٠ جنيه للرسالة عند Twilio ومجمّع مصري لسه بلا تعاقد)، فبدل ما الدخول
+ * بالرقم يفضل طريقًا مسدودًا، بقى بيترجم لإيميل صاحبه.
+ *
+ * وبترجّع `null` في تلات حالات: الرقم مش مربوط بحساب · الحساب مالوش إيميل
+ * (فمفيش مكان نبعت له) · الحساب ممحو. **وفي التلاتة الرد للمستخدم واحد بالظبط**
+ * — نفس مبدأ `bad_credentials`: الرد مايكشفش الأرقام المسجَّلة عندنا.
+ *
+ * والرقم **عمره ما بيعمل حساب** من المسار ده (شوفي `verifyOtp`) — ودي اللي بتقتل
+ * مصدر الحسابات المكرّرة: كان نفس الشخص يعمل حسابًا بالإيميل وحسابًا تانيًا بالرقم.
+ *
+ * ملحوظة للمستقبل: لما الـSMS يرجع، التحقق بالرقم يبقى إجراءً مستقلًا بيضبط
+ * `phoneVerifiedAt` — **مش** مسار دخول تاني، عشان الدخول يفضل طريقًا واحدًا.
+ */
+async function resolveOtpDelivery(
+  ctx: Ctx, channel: "phone" | "email", target: string,
+): Promise<{ email: string; userId: string } | null> {
+  if (channel === "email") return { email: target, userId: "" }; // الإيميل بيعمل حسابًا لوحده
+  const u = await ctx.db.user.findUnique({
+    where: { phone: target },
+    select: { id: true, email: true, deletedAt: true },
+  });
+  if (!u || u.deletedAt || !u.email) return null;
+  return { email: u.email, userId: u.id };
+}
+
 const hashCode = (ctx: Ctx, target: string, code: string) => sha256(`${ctx.config.JWT_SECRET}:${target}:${code}`);
 
 export async function requestOtp(ctx: Ctx, channel: "phone" | "email", rawTarget: string) {
@@ -36,34 +61,47 @@ export async function requestOtp(ctx: Ctx, channel: "phone" | "email", rawTarget
   // **الفحص قبل الكتابة**: القناة غير مضبوطة (مثلًا SMS) كانت بتعمل كود في
   // القاعدة وتستهلك حد الساعة وبعدين الإرسال يفشل بـ «تعذّر إرسال الكود» —
   // فالمستخدم يفضل يحاول على طريق مسدود من غير ما يعرف السبب.
-  if (ctx.sender.ready?.(channel) === false) {
-    throw new HttpError(503, "channel_unavailable", channel === "phone"
-      ? "التحقق بالرقم موقوف مؤقتًا — استخدم الإيميل"
-      : "التحقق بالإيميل موقوف مؤقتًا");
+  // الرقم بيترجم لإيميل صاحبه، فالقناة اللي بتوصّل فعلًا هي **الإيميل دايمًا**.
+  const delivery = await resolveOtpDelivery(ctx, channel, target);
+
+  if (ctx.sender.ready?.("email") === false) {
+    throw new HttpError(503, "channel_unavailable", "التحقق بالإيميل موقوف مؤقتًا");
   }
-  // سقف الفاتورة اليومي للـ SMS — **قبل الكتابة** زي فحص القناة فوقه، عشان
-  // الطلب المرفوض مايستهلكش حد الساعة بتاع الرقم.
-  if (channel === "phone" && !smsUnderDailyCap(ctx.config.SMS_DAILY_MAX, todayCairo())) {
-    console.warn(`⚠️ سقف الـ SMS اليومي خلص (${ctx.config.SMS_DAILY_MAX} رسالة) — التحقق بالرقم متوقف لباقي اليوم`);
-    throw new HttpError(429, "sms_quota", "سقف الرسائل اليومي خلص — استخدم الإيميل أو حاول بكرة");
+
+  // 🔴 رقم مش مربوط بحساب: **نفس الرد بالظبط** بلا كتابة وبلا إرسال، عشان الرد
+  // مايبقاش وسيلة لمعرفة الأرقام المسجَّلة عندنا. والانتظار بيبلّد فرق الزمن بين
+  // الحالتين — **بيبلّده مش بيلغيه**: الحالة الحقيقية فيها كتابة وإرسال إيميل،
+  // فمفيش تساوٍ تام، والبديل (نقول «الرقم مش مسجَّل») كشف أكبر بكتير.
+  if (!delivery) {
+    await wastePasswordTime(target);
+    return;
   }
+
+  // الحد على **هدف التوصيل** مش على اللي المستخدم كتبه — فالدخول بالرقم وبالإيميل
+  // لنفس الحساب بيتشاركوا نفس الميزانية، وده الصح: حساب واحد.
   const since = new Date(Date.now() - 3600_000);
-  const recent = await ctx.db.otpCode.count({ where: { channel, target, createdAt: { gte: since } } });
+  const recent = await ctx.db.otpCode.count({
+    where: { channel: "email", target: delivery.email, createdAt: { gte: since } },
+  });
   if (recent >= MAX_REQUESTS_PER_HOUR) throw new HttpError(429, "too_many", "محاولات كثيرة، حاول بعد ساعة");
 
   const dev = ctx.config.NODE_ENV !== "production" ? ctx.config.OTP_DEV_CODE : undefined;
   const code = dev ?? String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
-  await ctx.db.otpCode.updateMany({ where: { channel, target, usedAt: null }, data: { usedAt: new Date() } });
+  await ctx.db.otpCode.updateMany({
+    where: { channel: "email", target: delivery.email, usedAt: null }, data: { usedAt: new Date() },
+  });
   await ctx.db.otpCode.create({
-    data: { channel, target, codeHash: hashCode(ctx, target, code), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+    data: {
+      channel: "email", target: delivery.email,
+      codeHash: hashCode(ctx, delivery.email, code), expiresAt: new Date(Date.now() + OTP_TTL_MS),
+    },
   });
   try {
-    await ctx.sender.send(channel, target, code);
+    await ctx.sender.send("email", delivery.email, code);
   } catch (e) {
     console.error("OTP send failed:", (e as Error).message);
     throw new HttpError(503, "otp_unavailable", "تعذّر إرسال الكود الآن");
   }
-  if (channel === "phone") smsCountSent(todayCairo()); // الناجحة بس هي اللي بتتحاسب
 }
 
 export async function newSession(ctx: Ctx, userId: string, device: string) {
@@ -116,9 +154,24 @@ export async function verifyOtp(
   ctx: Ctx, channel: "phone" | "email", rawTarget: string, code: string, device: string,
   birthDate?: unknown,
 ) {
+  // 🔴 الدخول بالرقم: الكود متخزّن على **إيميل الحساب** مش على الرقم (شوفي
+  // `resolveOtpDelivery`)، و**الرقم مابيقدرش يعمل حسابًا** — ودي اللي بتقفل مصدر
+  // الحسابات المكرّرة: كان نفس الشخص يعمل حسابًا بالإيميل وتانيًا بالرقم.
+  if (channel === "phone") {
+    const delivery = await resolveOtpDelivery(ctx, channel, normalizeTarget(channel, rawTarget));
+    // رقم مش مربوط بحساب → **نفس خطأ الكود الغلط بالحرف**، مفيش كشف للأرقام.
+    if (!delivery) throw new HttpError(401, "invalid_code", "الكود غير صحيح أو منتهي");
+    const { otpId: id } = await checkOtp(ctx, "email", delivery.email, code);
+    await burnOtp(ctx, id);
+    const byPhone = await ctx.db.user.findUnique({ where: { id: delivery.userId } });
+    if (!byPhone) throw new HttpError(401, "invalid_code", "الكود غير صحيح أو منتهي");
+    if (byPhone.modStatus !== "active") throw new HttpError(403, "account_suspended", "الحساب موقوف");
+    const session = await newSession(ctx, byPhone.id, device);
+    return { ...session, user: byPhone };
+  }
+
   const { target, otpId } = await checkOtp(ctx, channel, rawTarget, code);
-  const where = channel === "phone" ? { phone: target } : { email: target };
-  let user = await ctx.db.user.findUnique({ where });
+  let user = await ctx.db.user.findUnique({ where: { email: target } });
   if (!user) {
     if (!(await getSettings(ctx)).registrationOpen) throw new HttpError(403, "registration_closed", "التسجيل الجديد مقفول مؤقتًا");
     // حساب جديد = إنشاء حساب، فحارس السن لازم يمرّ هنا كمان مش في /auth/register بس.
@@ -127,8 +180,10 @@ export async function verifyOtp(
     // مالهاش تاريخ ميلاد ودخولها مابيتأثرش).
     const birth = assertSignupAge(birthDate);
     await burnOtp(ctx, otpId);
-    const fallback = channel === "phone" ? `مستخدم ${target.slice(-4)}` : target.split("@")[0];
-    user = await ctx.db.user.create({ data: { ...where, name: fallback, birthDate: birth, wallet: { create: {} } } });
+    // الإيميل وحده هو اللي بيعمل حسابًا جديدًا — الرقم رجع فوق قبل ما يوصل هنا.
+    user = await ctx.db.user.create({
+      data: { email: target, name: target.split("@")[0], birthDate: birth, wallet: { create: {} } },
+    });
   } else {
     await burnOtp(ctx, otpId);
   }

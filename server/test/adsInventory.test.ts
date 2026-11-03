@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { startTestEnv } from "./helpers.js";
+import { startTestEnv, testEmail } from "./helpers.js";
 import { DEFAULT_PLACEMENTS, MONTH_DAYS, addDays, todayCairo } from "../src/lib/adsInventory.js";
 // @ts-expect-error دالة خالصة بـ JS عادي — مفيش types ولا تبعيات (نفس `uploadUrl.test.ts`)
 import { clearDraft, draftHasWork, draftKey, loadDraft, saveDraft } from "../../admin/src/draft.js";
@@ -99,7 +99,7 @@ describe("خريطة الإعلانات", () => {
   it("الصلاحيات: الدعم الفني ما يشوفش الإعلانات، المدير يدير، والمحاسب/المشرف 403", async () => {
     const roles = (await api().get("/admin/roles").set(owner.auth)).body as { id: string; key: string }[];
     const mk = async (phone: string, key: string) => {
-      await api().post("/admin/staff").set(owner.auth).send({ contact: phone, roleId: roles.find((r) => r.key === key)!.id }).expect(201);
+      await api().post("/admin/staff").set(owner.auth).send({ contact: testEmail(phone), roleId: roles.find((r) => r.key === key)!.id }).expect(201);
       return env.login(phone);
     };
     const mgr = await mk("01099000020", "manager"), acc = await mk("01099000021", "accountant");

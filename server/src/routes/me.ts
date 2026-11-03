@@ -53,7 +53,18 @@ export function meRoutes(ctx: Ctx) {
     const q = z.string().trim().max(100).default("").parse(req.query.q ?? "");
     const me = (req as AuthedRequest).userId;
     const users = await ctx.db.user.findMany({
-      where: { id: { not: me }, modStatus: { not: "deleted" }, ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }, { email: { contains: q.toLowerCase() } }] } : {}) },
+      where: {
+        id: { not: me }, modStatus: { not: "deleted" },
+        // البحث بالرقم على **المتحقَّق بس** — نفس سبب المطابقة في `contacts.ts`:
+        // رقم مكتوب بالإيد مايخلّيش صاحبه يتلاقى بالرقم ده.
+        ...(q
+          ? { OR: [
+              { name: { contains: q, mode: "insensitive" as const } },
+              { AND: [{ phone: { contains: q } }, { phoneVerifiedAt: { not: null } }] },
+              { email: { contains: q.toLowerCase() } },
+            ] }
+          : {}),
+      },
       orderBy: { name: "asc" },
       take: 50,
     });
@@ -94,13 +105,97 @@ export function meRoutes(ctx: Ctx) {
   /* ---------- حذف الحساب (في أي وقت) ----------
      1) POST /me/delete/otp  → كود تأكيد على رقم/إيميل الحساب نفسه
      2) DELETE /me {code, forfeitBalance?} → إخفاء هوية نهائي. الرصيد لو موجود لازم يتأكد التنازل عنه صراحة. */
-  const contactOf = (u: { phone: string | null; email: string | null }) => (u.phone ? ({ channel: "phone", target: u.phone } as const) : u.email ? ({ channel: "email", target: u.email } as const) : null);
+  // 🔴 **الإيميل الأول مش الرقم.** الكود بقى بيتوصّل على الإيميل دايمًا (الـSMS
+  // موقوف)، فلو فضلنا نرجّع `channel: "phone"` و`hint` برقم الموبايل كنا بنقول
+  // للمستخدم «بعتنا الكود على 012•••••11» والكود رايح لإيميله — كلام غلط على
+  // الشاشة. والرقم فاضل كبديل أخير عشان الحساب اللي مالوش إيميل يتكشف صريح تحت.
+  const contactOf = (u: { phone: string | null; email: string | null }) => (u.email ? ({ channel: "email", target: u.email } as const) : u.phone ? ({ channel: "phone", target: u.phone } as const) : null);
+  /** الحساب اللي مالوش إيميل مفيش مكان نبعت له الكود — **خطأ صريح مش نجاح ساكت**. */
+  const needEmail = (u: { email: string | null }) => {
+    if (!u.email) {
+      throw new HttpError(409, "email_required",
+        "الحساب ده مالوش إيميل، والكود بيتوصّل على الإيميل. أضِف إيميلك من شاشة الحساب الأول.");
+    }
+  };
   const mask = (t: string) => (t.includes("@") ? t.replace(/^(.).*(@.*)$/, "$1•••$2") : t.slice(0, 3) + "•••••" + t.slice(-2));
+
+  /**
+   * ربط رقم موبايل بالحساب — **اسم بديل للدخول وبس**.
+   *
+   * الرقم مابيتأكّدش بـSMS (موقوف)، فبيتخزّن `phoneVerifiedAt = NULL` ومابيدخلش
+   * مطابقة جهات الاتصال ولا البحث (شوفي `contacts.ts`). واللي بيحمي الخطوة دي هو
+   * **كود على إيميل الحساب**: إضافة اسم دخول جديد إجراء حسّاس، فجلسة مسروقة
+   * مايكفيهاش إنها جلسة — لازم توصل للإيميل كمان. نفس نمط حذف الحساب تحت.
+   *
+   * الخطوة الأولى من الواجهة: `POST /auth/otp/request {channel:"email", target:<إيميلك>}`.
+   */
+  r.post("/me/phone", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const b = z.object({ phone: z.string().min(6).max(32), code: z.string().min(4).max(10) }).parse(req.body ?? {});
+    const u = await ctx.db.user.findUnique({ where: { id: me }, select: { email: true } });
+    if (!u) throw notFound();
+    needEmail(u);
+    const phone = normalizeTarget("phone", b.phone);
+    if (!/^(\+?\d{8,15})$/.test(phone)) throw bad("invalid_phone", "رقم غير صحيح");
+    await consumeOtp(ctx, "email", u.email!, b.code);
+    // الرقم على حساب تاني: **مابناخدوش منه**. والرد بيقول «محجوز» عن قصد — من
+    // غيره المستخدم مايفهمش ليه الحفظ فشل. وده بيكشف إن الرقم مسجَّل عندنا،
+    // وهو نفس تنازل «الإيميل مستخدم» في التسجيل ولا مفيش طريق نشرح بيه الفشل.
+    const taken = await ctx.db.user.findUnique({ where: { phone }, select: { id: true } });
+    if (taken && taken.id !== me) throw new HttpError(409, "phone_taken", "الرقم ده مربوط بحساب تاني");
+    try {
+      await ctx.db.user.update({ where: { id: me }, data: { phone, phoneVerifiedAt: null } });
+    } catch {
+      // تسابق على نفس الرقم بين الفحص فوق والكتابة — القيد الفريد هو الحكم.
+      throw new HttpError(409, "phone_taken", "الرقم ده مربوط بحساب تاني");
+    }
+    const fresh = await ctx.db.user.findUnique({ where: { id: me } });
+    res.json(meUser(fresh!));
+  }));
+
+  r.delete("/me/phone", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    await ctx.db.user.update({ where: { id: me }, data: { phone: null, phoneVerifiedAt: null } });
+    const fresh = await ctx.db.user.findUnique({ where: { id: me } });
+    res.json(meUser(fresh!));
+  }));
+
+  /**
+   * إضافة إيميل لحساب **مالوش إيميل** — بيفكّ حبسة الحسابات القديمة اللي اتعملت
+   * بالرقم وبس: دي ماكانتش تقدر تدخل أصلًا من ١٣ أكتوبر (الـSMS موقوف)، ومن غير
+   * إيميل مفيش مكان نبعت لها كود.
+   *
+   * و**تغيير إيميل موجود مش مدعوم عن قصد** — ده مسار سيطرة على الحساب: جلسة
+   * مسروقة تبدّل الإيميل وتملك الحساب للأبد. تغييره يستلزم كودًا على القديم
+   * والجديد، وده قرار منفصل.
+   */
+  r.post("/me/email", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const b = z.object({ email: z.string().min(5).max(200), code: z.string().min(4).max(10) }).parse(req.body ?? {});
+    const u = await ctx.db.user.findUnique({ where: { id: me }, select: { email: true } });
+    if (!u) throw notFound();
+    if (u.email) throw new HttpError(409, "email_set", "الحساب له إيميل بالفعل، وتغييره مش متاح من هنا");
+    const email = normalizeTarget("email", b.email);
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw bad("invalid_email", "إيميل غير صحيح");
+    // الكود على **الإيميل الجديد** — هو الإثبات الوحيد الممكن إن صاحب الحساب
+    // بيملك العنوان ده فعلًا.
+    await consumeOtp(ctx, "email", email, b.code);
+    const taken = await ctx.db.user.findUnique({ where: { email }, select: { id: true } });
+    if (taken && taken.id !== me) throw new HttpError(409, "email_taken", "الإيميل ده مربوط بحساب تاني");
+    try {
+      await ctx.db.user.update({ where: { id: me }, data: { email } });
+    } catch {
+      throw new HttpError(409, "email_taken", "الإيميل ده مربوط بحساب تاني");
+    }
+    const fresh = await ctx.db.user.findUnique({ where: { id: me } });
+    res.json(meUser(fresh!));
+  }));
 
   r.post("/me/delete/otp", wrap(async (req, res) => {
     const u = await ctx.db.user.findUnique({ where: { id: (req as AuthedRequest).userId }, include: { wallet: { select: { balance: true } } } });
     const c = u && contactOf(u);
     if (!u || !c) throw notFound();
+    needEmail(u);
     await requestOtp(ctx, c.channel, c.target);
     res.json({ channel: c.channel, hint: mask(c.target), balance: Number(u.wallet?.balance ?? 0) });
   }));

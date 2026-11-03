@@ -151,9 +151,17 @@ export function adminRoutes(ctx: Ctx) {
     if (!role) throw bad("bad_role", "الدور مش موجود");
     assertGrantable(s, effectivePerms({ isOwner: false, grant: b.grant, revoke: b.revoke, role }));
     const where = channel === "phone" ? { phone: target } : { email: target };
-    // لو صاحب الرقم/الإيميل مسجّل بالتطبيق نستخدمه، وإلا نجهّز له حساب وهو يدخل بالكود عادي
-    const user = (await db.user.findUnique({ where })) ??
-      (await db.user.create({ data: { ...where, name: b.name ?? (channel === "phone" ? `موظف ${target.slice(-4)}` : target.split("@")[0]), wallet: { create: {} } } }));
+    // لو صاحب الرقم/الإيميل مسجّل بالتطبيق نستخدمه، وإلا نجهّز له حساب.
+    const found = await db.user.findUnique({ where });
+    // 🔴 **حساب جديد بالرقم ماينفعش** — الكود بيتوصّل على الإيميل دايمًا، فحساب
+    // بلا إيميل مفيش طريق يدخل بيه. والتعليق القديم هنا كان بيقول «يدخل بالكود
+    // عادي» وده **مستحيل من ١٣ أكتوبر** (الـSMS موقوف) — فالمسار ده كان بيعمل
+    // حسابات ميتة في سكوت، ودلوقتي بيقول السبب صريح.
+    if (!found && channel === "phone") {
+      throw bad("email_required", "لعضو جديد لازم إيميل — الكود بيتوصّل على الإيميل. أضِفه بإيميله، أو خلّيه يعمل حسابًا ويضيف رقمه بنفسه.");
+    }
+    const user = found ??
+      (await db.user.create({ data: { ...where, name: b.name ?? target.split("@")[0], wallet: { create: {} } } }));
     if (await db.staff.findUnique({ where: { userId: user.id } })) throw new HttpError(409, "already_staff", "ده عضو في الفريق بالفعل");
     const created = await db.staff.create({ data: { userId: user.id, roleId: role.id, grant: b.grant, revoke: b.revoke, addedById: s.userId }, include: staffInclude });
     await audit(s, "أضاف عضو للفريق", user.name, { role: role.name, grant: b.grant, revoke: b.revoke });

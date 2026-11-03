@@ -135,6 +135,22 @@ export async function setMyPassword(password: string, current?: string) {
   await api("/me/password", { body: { password, current } });
 }
 
+/**
+ * ربط رقم موبايل بالحساب — **اسم بديل للدخول** (الكود بيروح لإيميل الحساب).
+ * الرقم مابيتأكّدش بـSMS، فمابيدخلش مطابقة جهات الاتصال ولا البحث.
+ * محمي بكود على إيميل الحساب: إضافة اسم دخول إجراء حسّاس، فجلسة لوحدها مش كفاية.
+ */
+export async function linkMyPhone(phone: string, code: string) {
+  await api("/me/phone", { body: { phone, code } });
+}
+export async function unlinkMyPhone() {
+  await api("/me/phone", { method: "DELETE" });
+}
+/** إضافة إيميل لحساب مالوش إيميل — الكود بيروح على الإيميل الجديد نفسه. */
+export async function addMyEmail(email: string, code: string) {
+  await api("/me/email", { body: { email, code } });
+}
+
 /** تثبيت/فك تثبيت محادثة */
 export async function setPinned(threadId: string, pinned: boolean) {
   await api(`/threads/${threadId}/pin`, { method: pinned ? "PUT" : "DELETE" });

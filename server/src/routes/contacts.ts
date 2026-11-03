@@ -31,7 +31,14 @@ export function contactRoutes(ctx: Ctx) {
     const blocks = await ctx.db.block.findMany({ where: { OR: [{ blockerId: me }, { blockedId: me }] }, select: { blockerId: true, blockedId: true } });
     const hidden = new Set(blocks.flatMap((b) => [b.blockerId, b.blockedId]));
     const users = await ctx.db.user.findMany({
-      where: { phone: { in: [...variantToInput.keys()] }, id: { not: me }, modStatus: { not: "deleted" }, deletedAt: null },
+      where: {
+        phone: { in: [...variantToInput.keys()] },
+        // 🔴 **المتحقَّق بـSMS بس.** الرقم المكتوب بالإيد اسم بديل للدخول وخلاص —
+        // لو دخل المطابقة، أي حد يدّعي رقم حد تاني ويظهر **باسمه وصورته** عند كل
+        // واللي عندهم الرقم ده في تليفوناتهم. ده تمثّل شخصية مش اكتشاف.
+        phoneVerifiedAt: { not: null },
+        id: { not: me }, modStatus: { not: "deleted" }, deletedAt: null,
+      },
       select: { id: true, name: true, status: true, color: true, photoUrl: true, phone: true },
     });
     const matched = new Set<string>();
