@@ -118,12 +118,22 @@ export default function AccountScreen() {
             غير موجود أصلًا، وحظر لقطة الشاشة مستحيل في الويب)، و«السماح لأي شخص بإضافتي
             لمجموعات» (مقفول افتراضيًّا — والخادم يسمح لأي مشرف بإضافة أي حساب).
             والمفتاح الميت الذي يطمئن المستخدم أسوأ من غيابه. فحلّ محلّها ما هو **صحيح
-            فعلًا**: الرقم لا يخرج من الخادم لأي مستخدم (`publicUser` لا يضمّه)، والمحادثات
-            ليست مشفّرة من طرف إلى طرف — بحرف السياسة المنشورة. */}
+            فعلًا**: الرقم لا يخرج من الخادم لأي مستخدم (`publicUser` لا يضمّه)، والرسائل
+            النصية ليست مشفّرة من طرف إلى طرف — بحرف السياسة المنشورة.
+
+            🔴 **والشقّ الثاني أُضيف في ٣ نوفمبر ٢٠٢٦ لأن الصفحة سبقت الشاشة:** مذكرة
+            المحامي (٢٨ أكتوبر) فصلت المكالمات عن الرسائل، ونُفِّذ الفصل في `privacy.html`
+            (الإصدار ٢٫٤) **ولم يُنفَّذ هنا** — فظلّت الشاشة تنفي التشفير عن «المحادثات»
+            عمومًا بينما السياسة تؤكّده للمكالمات. نفس نمط الانحراف الذي وُجد هذا الحارس
+            أصلًا لمنعه، وقد عبَر منه لأن الحارس كان يفحص **ألّا تدّعي** الشاشة تشفيرًا،
+            لا أن تقول ما تقوله الصفحة. فصار الفحص على **تطابق الجملتين مع الصفحة نفسها**. */}
         <div className="mb-2 rounded-xl bg-rachat-card px-3.5 py-3">
           <p className="text-xs text-rachat-papyrus">{t("رقم هاتفك لا يظهر لأي مستخدم آخر", "Your phone number is not shown to any other user")}</p>
           <p className="mt-1 text-[11px] leading-5 text-neutral-400">
-            {t("المحادثات ليست مشفّرة من طرف إلى طرف؛ لذلك لا تشارك بيانات شديدة الحساسية فيها. والاتصال بين التطبيق والخادم مشفّر (TLS).", "Conversations are not end-to-end encrypted, so do not share highly sensitive data in them. The connection between the app and the server is encrypted (TLS).")}
+            {t("الرسائل النصية ليست مشفّرة من طرف إلى طرف؛ لذلك لا تشارك بيانات شديدة الحساسية فيها. والاتصال بين التطبيق والخادم مشفّر (TLS).", "Text messages are not end-to-end encrypted, so do not share highly sensitive data in them. The connection between the app and the server is encrypted (TLS).")}
+          </p>
+          <p className="mt-1 text-[11px] leading-5 text-neutral-400">
+            {t("أما المكالمات الصوتية والمرئية فمشفّرة من طرف إلى طرف ولا تمر على خوادمنا.", "Voice and video calls, however, are end-to-end encrypted and never pass through our servers.")}
           </p>
         </div>
         <ToggleRow label={t("الوضع الفاتح", "Light mode")} value={theme === "light"} onChange={(v) => setTheme(v ? "light" : "dark")} />
