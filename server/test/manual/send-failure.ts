@@ -73,12 +73,16 @@ async function main() {
     return { status: r.status, body: r.status === 204 ? null : await r.json() };
   };
   const login = async (phone: string, name: string) => {
-    await post("/auth/otp/request", { channel: "phone", target: phone });
-    const code = codes.filter((x) => x.target === phone).at(-1)!.code;
+        // 🔴 الحساب بيتعمل **بالإيميل** — الرقم ماعادش بيعمل حسابًا (٥ نوفمبر ٢٠٢٦):
+    // بقى اسمًا بديلًا للدخول بيترجم لإيميل صاحبه. والإيميل مشتق من الرقم عشان
+    // باقي السكربت يفضل يسمّي المستخدمين بأرقامهم زي ما هو.
+    const email = `${phone.replace(/\D/g, "")}@test.local`;
+    await post("/auth/otp/request", { channel: "email", target: email });
+    const code = codes.filter((x) => x.target === email).at(-1)!.code;
     // `birthDate` **مطلوب** لإنشاء أي حساب جديد من ١٣ أكتوبر (التطبيق ١٨+).
     // ومن غيره المسار بيرجّع `birth_date_required` و`v.user` تبقى undefined —
     // وده اللي كان مكسّر السكربتين دول في سكوت، لأنهم مكانوش في الـ CI.
-    const v = (await post("/auth/otp/verify", { channel: "phone", target: phone, code, birthDate: "1990-05-20" })).body as any;
+    const v = (await post("/auth/otp/verify", { channel: "email", target: email, code, birthDate: "1990-05-20" })).body as any;
     if (!v?.user?.id) throw new Error(`تسجيل الدخول فشل لـ ${phone}: ${JSON.stringify(v)}`);
     await fetch(`http://localhost:${API}/me`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${v.accessToken}` }, body: JSON.stringify({ name }) });
     return v;
