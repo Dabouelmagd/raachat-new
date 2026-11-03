@@ -106,7 +106,7 @@ describe("لوحة الإدارة — المرحلة التانية", () => {
     await api().put("/admin/settings").set(owner.auth).send({ registrationOpen: false }).expect(200);
     expect((await api().get("/public/settings").expect(200)).body.registrationOpen).toBe(false);
     // قفل التسجيل بيتفحص على قناة **الإيميل** — هي القناة الوحيدة اللي بتعمل
-    // حسابًا بعد ٥ نوفمبر ٢٠٢٦ (الرقم بقى اسمًا بديلًا للدخول وبس).
+    // حسابًا بعد ٣ نوفمبر ٢٠٢٦ (الرقم بقى اسمًا بديلًا للدخول وبس).
     const newReg = "newreg@example.com";
     await api().post("/auth/otp/request").send({ channel: "email", target: newReg }).expect(204);
     const code = env.sent.filter((x) => x.target === newReg).at(-1)!.code;

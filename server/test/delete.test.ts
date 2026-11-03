@@ -7,7 +7,7 @@ let owner: Awaited<ReturnType<typeof env.login>>;
 beforeAll(async () => { env = await startTestEnv(); owner = await env.login("01099000001", "داليا"); }, 120_000);
 afterAll(async () => { await env?.stop(); }, 60_000);
 const api = () => request(env.app);
-// الكود بيتوصّل على **إيميل الحساب** مش على الرقم (٥ نوفمبر ٢٠٢٦).
+// الكود بيتوصّل على **إيميل الحساب** مش على الرقم (٣ نوفمبر ٢٠٢٦).
 const codeFor = (phone: string) => env.sent.filter((s) => s.target === testEmail(phone)).at(-1)!.code;
 
 describe("حذف الحساب", () => {

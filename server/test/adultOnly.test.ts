@@ -39,7 +39,7 @@ const birthFor = (years: number, days = 0) => {
 
 const codeFor = async (target: string, channel: "email" | "phone" = "email") => {
   await request(env.app).post("/auth/otp/request").send({ channel, target }).expect(204);
-  // 🔴 القناة «رقم» بتوصّل الكود على **إيميل الحساب** (٥ نوفمبر ٢٠٢٦)، فبندوّر
+  // 🔴 القناة «رقم» بتوصّل الكود على **إيميل الحساب** (٣ نوفمبر ٢٠٢٦)، فبندوّر
   // بالإيميل المربوط مش بالرقم. والقراءة من القاعدة مش من اشتقاق اسم، عشان
   // تشتغل مهما كان الحساب اتعمل منين.
   let want = target;

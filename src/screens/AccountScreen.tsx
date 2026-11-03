@@ -153,7 +153,7 @@ export default function AccountScreen() {
           <span className="flex items-center gap-2"><KeyRound size={15} className="text-rachat-gold" /> {t("كلمة السر", "Password")}</span>
           <Chev size={15} className="text-neutral-500" />
         </button>
-        {/* الرقم اسم بديل للدخول — والكود بيوصل على الإيميل (٥ نوفمبر ٢٠٢٦) */}
+        {/* الرقم اسم بديل للدخول — والكود بيوصل على الإيميل (٣ نوفمبر ٢٠٢٦) */}
         <button onClick={() => setPhoneOpen(true)} className="mb-2 flex w-full items-center justify-between rounded-xl bg-rachat-card px-3.5 py-3 text-xs text-rachat-papyrus">
           <span className="flex items-center gap-2"><Phone size={15} className="text-rachat-gold" /> {t("رقم الموبايل للدخول", "Phone number for sign-in")}</span>
           <Chev size={15} className="text-neutral-500" />
