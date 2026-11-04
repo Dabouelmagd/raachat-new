@@ -56,9 +56,14 @@ if [ "${FORCE:-0}" = "1" ] || [ "$KNOWN" = 0 ]; then SVC="api caddy"; else
   # `site/` مستثنى: الموقع التعريفي **ملفات ثابتة نجنكس بيقراها من نسخة الريبو
   # مباشرةً** ومش جوه أي صورة — فتعديله `git pull` وخلاص. من غير الاستثناء ده
   # أي تغيير كلمة فيه بيعيد بناء الواجهة (دقايق و~٥ جيجا كاش) بلا أي أثر.
-  echo "$CHANGED" | grep -qvE '^(server/|docs/|site/|.*\.md$)' && SVC="$SVC caddy"
+  #
+  # و`mobile/` و`.github/` و`.env.production.example` **بنفس المنطق**: مشروعا
+  # Capacitor بيتبنوا على GitHub مش هنا ومش جوه أي صورة، ووظائف الـCI مابتدخلش
+  # صورة، والملف ده قالب. فمن غيرهم أي شغل على نسخ المتجر بيعيد بناء الواجهة
+  # **بلا أي أثر** — والقرص مشترك (نشرة الواجهة ≈٥ جيجا كاش).
+  echo "$CHANGED" | grep -qvE '^(server/|docs/|site/|mobile/|\.github/|\.env\.production\.example$|.*\.md$)' && SVC="$SVC caddy"
 fi
-[ -z "$SVC" ] && { echo "✅ تغييرات وثائق بس — مفيش حاجة تتبني"; echo "$NEW" > "$STATE"; exit 0; }
+[ -z "$SVC" ] && { echo "✅ مفيش حاجة تتبني (توثيق/موقع/موبايل/CI)"; echo "$NEW" > "$STATE"; exit 0; }
 echo "↪ بناء وتشغيل:$SVC"
 $DC up -d --build $SVC
 # باقي الخدمات (db / backup) لازم تفضل شغّالة: بدون بناء

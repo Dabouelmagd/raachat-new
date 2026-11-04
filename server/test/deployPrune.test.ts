@@ -119,4 +119,26 @@ describe("deploy-rachat.sh — اختيار الخدمات", () => {
   it("الموقع مع الواجهة: بناء (الواجهة هي السبب)", () => {
     expect(buildsCaddy(["site/index.html", "src/App.tsx"])).toBe(true);
   });
+
+  /**
+   * 🔴 شغل نسخ المتجر مابيلمسش الواجهة خالص: مشروعا Capacitor بيتبنوا على
+   * GitHub ومش جوه أي صورة، ووظائف الـCI مابتدخلش صورة، و
+   * `.env.production.example` قالب. فمن غير الاستثناء ده أي تعديل في
+   * `mobile/` بيعيد بناء الواجهة — **دقايق و≈٥ جيجا كاش على قرص مشترك، بلا
+   * أي أثر** (نفس سبب استثناء `site/` بالظبط).
+   */
+  it("الموبايل والـCI وقالب الإعداد: مفيش بناء", () => {
+    expect(buildsCaddy(["mobile/ios/App/App/Info.plist"])).toBe(false);
+    expect(buildsCaddy(["mobile/android/variables.gradle"])).toBe(false);
+    expect(buildsCaddy([".github/workflows/android.yml"])).toBe(false);
+    expect(buildsCaddy([".env.production.example"])).toBe(false);
+    expect(buildsCaddy(["mobile/README.md", ".github/workflows/ci.yml"])).toBe(false);
+  });
+
+  /** والاستثناء مايوسّعش نفسه: ملف تاني في نفس النشرة لسه بيبني. */
+  it("الموبايل مع الواجهة: بناء", () => {
+    expect(buildsCaddy(["mobile/ios/App/Podfile", "src/App.tsx"])).toBe(true);
+    // و`.env.production.example` مستثنى بالاسم الكامل — مش أي ملف بيبدأ بيه
+    expect(buildsCaddy([".env.production.example.bak"])).toBe(true);
+  });
 });
