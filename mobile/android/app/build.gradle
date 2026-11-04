@@ -12,8 +12,13 @@ android {
         // («Version code 1 has already been used»). فبياخد رقم تشغيلة
         // الوظيفة (`github.run_number`) وهو بيزيد لوحده ومابيرجعش.
         // والافتراضي ١ عشان البناء المحلي والتجريبي يفضل زي ما هو.
-        versionCode (System.getenv("ANDROID_VERSION_CODE") ?: "1") as Integer
-        versionName System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
+        //
+        // ⚠️ والأقواس صريحة عن قصد: `versionCode (x) as Integer` في جروفي
+        // بتتفسّر `(versionCode(x)) as Integer` — يعني بتنادي الـsetter بنصّ
+        // وبتحوّل الناتج الفاضي، والبناء بيقع بـ«Value is null» عند تقييم
+        // المشروع. (حصل فعلًا في ٤ نوفمبر ٢٠٢٦، وأول ما كشفه بناء GitHub.)
+        versionCode(Integer.parseInt(System.getenv("ANDROID_VERSION_CODE") ?: "1"))
+        versionName(System.getenv("ANDROID_VERSION_NAME") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

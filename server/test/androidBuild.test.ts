@@ -389,7 +389,17 @@ describe("حزمة جوجل بلاي", () => {
    */
   it("versionCode من متغيّر بيئة مش رقمًا مثبّتًا", () => {
     const g = read("mobile/android/app/build.gradle");
-    expect(g).toMatch(/versionCode\s*\(?System\.getenv\("ANDROID_VERSION_CODE"\)/);
+    expect(g).toMatch(/versionCode\(Integer\.parseInt\(System\.getenv\("ANDROID_VERSION_CODE"\)/);
+    // 🔴 والأقواس جزء من الحارس مش تنسيق: `versionCode (x) as Integer` في
+    // جروفي بتتفسّر `(versionCode(x)) as Integer` فالبناء بيقع بـ«Value is
+    // null». والحارس النصّي **عدّى عليها** (حصل فعلًا ٤ نوفمبر ٢٠٢٦) — نصّ
+    // مابيفرّقش بين جروفي صالح وجروفي بيتفسّر غلط، واللي كشفها بناء GitHub.
+    // والحكم على **الكود بعد شيل التعليقات** — درس متكرر: التعليق اللي
+    // بيشرح الممنوع بيكتبه بالضرورة، فالحارس بيسقط على ملف متصلّح.
+    const code = g.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code, "القوس المفتوح بلا نداء بيتفسّر غلط في جروفي").not.toMatch(
+      /versionCode\s+\(/,
+    );
     expect(g, "versionCode مثبّت على رقم").not.toMatch(/^\s*versionCode\s+\d+\s*$/m);
     expect(cmds(), "الوظيفة مش بتمرّر رقمًا بيزيد لوحده").toMatch(
       /ANDROID_VERSION_CODE:\s*\$\{\{\s*github\.run_number\s*\}\}/,
