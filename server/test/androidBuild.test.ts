@@ -336,3 +336,126 @@ describe("إضافات Capacitor في الواجهة", () => {
     });
   });
 });
+
+/**
+ * حزمة المتجر (AAB) ومستوى الـSDK.
+ *
+ * بلاي بترفض الرفع على مستويين: `targetSdk` أقلّ من ٣٦ (أندرويد ١٦، والمهلة
+ * خلصت ٣١ أغسطس ٢٠٢٦)، وحزمة **غير موقَّعة** بمفتاح رفع. والاتنين غلطهما
+ * **صامت عندنا**: جريدل بيبني وينجح في الحالتين، والرفض بيجي من بلاي بعد
+ * الرفع — فالحارس هنا هو الحاجة الوحيدة اللي بتقول قبل كده.
+ */
+describe("حزمة جوجل بلاي", () => {
+  const wf = () => read(".github/workflows/android.yml");
+  /** الأوامر بعد شيل التعليقات — التعليق بيشرح الممنوع فبيذكره بالضرورة. */
+  const cmds = () => wf().split("\n").map((l) => l.replace(/#.*$/, "")).join("\n");
+
+  it("targetSdk وcompileSdk ٣٦ على الأقل (شرط رفع بلاي)", () => {
+    const v = read("mobile/android/variables.gradle");
+    for (const key of ["targetSdkVersion", "compileSdkVersion"]) {
+      const n = Number(new RegExp(`${key}\\s*=\\s*(\\d+)`).exec(v)?.[1]);
+      expect(n, `${key} مش مقروء`).toBeGreaterThan(0);
+      expect(n, `${key} = ${n} — بلاي بترفض الرفع تحت ٣٦`).toBeGreaterThanOrEqual(36);
+    }
+  });
+
+  /**
+   * الزوج ده **مابيصحّش يفترق**: AGP 8.7 أقصى `compileSdk` بيعرفه ٣٥، فـ٣٦
+   * معاه بناء على SDK الـAGP نفسه مش فاهمه (وبيحتاج
+   * `suppressUnsupportedCompileSdk` اللي معناه «اسكت على التحذير»). وAGP 8.9
+   * بيتطلّب Gradle 8.11.1 — فالتلاتة سلسلة واحدة، وكسر حلقة منها بيطلّع عطلًا
+   * في البناء على جيت هب مش عندنا.
+   */
+  it("AGP وGradle متوافقان مع compileSdk ٣٦", () => {
+    const agp = /com\.android\.tools\.build:gradle:(\d+)\.(\d+)\.(\d+)/.exec(
+      read("mobile/android/build.gradle"),
+    );
+    expect(agp, "نسخة AGP مش مقروءة").toBeTruthy();
+    const [maj, min] = [Number(agp![1]), Number(agp![2])];
+    expect(maj * 100 + min, `AGP ${agp![0]} — compileSdk 36 محتاج 8.9+`).toBeGreaterThanOrEqual(809);
+
+    const g = /gradle-(\d+)\.(\d+)(?:\.(\d+))?-/.exec(
+      read("mobile/android/gradle/wrapper/gradle-wrapper.properties"),
+    );
+    expect(g, "نسخة Gradle مش مقروءة").toBeTruthy();
+    const gv = Number(g![1]) * 10000 + Number(g![2]) * 100 + Number(g![3] ?? 0);
+    expect(gv, "AGP 8.9 محتاج Gradle 8.11.1+").toBeGreaterThanOrEqual(81101);
+  });
+
+  /**
+   * 🔴 `versionCode` مكتوب بالإيد = **تاني رفعة بترفض** («Version code 1 has
+   * already been used»)، والرقم المستهلَك مابيرجعش أبدًا. فلازم يجي من
+   * متغيّر بيزيد لوحده.
+   */
+  it("versionCode من متغيّر بيئة مش رقمًا مثبّتًا", () => {
+    const g = read("mobile/android/app/build.gradle");
+    expect(g).toMatch(/versionCode\s*\(?System\.getenv\("ANDROID_VERSION_CODE"\)/);
+    expect(g, "versionCode مثبّت على رقم").not.toMatch(/^\s*versionCode\s+\d+\s*$/m);
+    expect(cmds(), "الوظيفة مش بتمرّر رقمًا بيزيد لوحده").toMatch(
+      /ANDROID_VERSION_CODE:\s*\$\{\{\s*github\.run_number\s*\}\}/,
+    );
+  });
+
+  it("مفيش ولا قيمة من مفتاح التوقيع مكتوبة في الريبو", () => {
+    const g = read("mobile/android/app/build.gradle");
+    // كل قيمة من البيئة — ولا `storePassword "..."` ولا مسار مفتاح مثبّت
+    for (const k of ["storePassword", "keyPassword", "keyAlias", "storeFile"]) {
+      const line = new RegExp(`${k}\\s+(.+)`).exec(g)?.[1] ?? "";
+      expect(line, `${k} مش من متغيّر بيئة`).toMatch(/System\.getenv|file\(System\.getenv/);
+    }
+    expect(g, "مفيش أي ملف مفتاح في الريبو").not.toMatch(/\.jks|\.keystore/);
+  });
+
+  /**
+   * 🔴 الفحص القبلي **قبل** البناء — وده ترتيب مش تفصيلة: سرّ ناقص مابيفشّلش
+   * جريدل، بيطلّع `.aab` غير موقَّعة والتشغيلة تخلص **خضرا**. فلو الفحص بعد
+   * البناء، إحنا بنكتشف بعد ما نبني؛ ولو مش موجود خالص، بلاي هي اللي تكتشف.
+   */
+  it("بيفحص الأسرار قبل البناء وبيسمّي الناقص", () => {
+    const s = cmds();
+    const check = s.indexOf("فحص أسرار التوقيع");
+    const build = s.indexOf("بناء AAB موقَّعة");
+    expect(check, "خطوة فحص الأسرار مش موجودة").toBeGreaterThan(-1);
+    expect(build, "خطوة بناء الـAAB مش موجودة").toBeGreaterThan(-1);
+    expect(check, "الفحص لازم يكون قبل البناء").toBeLessThan(build);
+    for (const k of [
+      "ANDROID_KEYSTORE_B64",
+      "ANDROID_KEYSTORE_PASSWORD",
+      "ANDROID_KEY_ALIAS",
+      "ANDROID_KEY_PASSWORD",
+    ]) {
+      expect(s, `${k} مش متفحوص`).toContain(k);
+    }
+    expect(s).toMatch(/exit 1/);
+  });
+
+  /**
+   * الفحص البعدي **إيجابي على الناتج نفسه**: `bundleRelease` بينجح موقَّعة أو
+   * مش موقَّعة، فمفيش حاجة تانية تفرّق. و`index.html` جوّاها لأن حزمة من غيره
+   * بتتثبّت وتفتح **فاضية**.
+   */
+  it("بيتحقق إن الـAAB موقَّعة وفيها الواجهة", () => {
+    const s = cmds();
+    // الاتنين مطلوبان: `jarsigner -verify` لوحده بينجح على حزمة غير موقَّعة
+    // كمان (بيطبع «jar is unsigned») — فالحكم على **نصّ النجاح** مش على
+    // تشغيل الأمر. ومفيش alternation عشان كلمة شاردة في تعليق ما تعدّيش.
+    expect(s, "مفيش نداء للتحقّق من التوقيع").toContain("jarsigner -verify");
+    expect(s, "مفيش حكم على نتيجة التحقّق").toContain("jar verified");
+    expect(s).toContain("base/assets/public/index.html");
+    expect(s).toMatch(/app-release\.aab/);
+  });
+
+  it("المفتاح بيتكتب برّه الريبو وبيتمسح", () => {
+    const s = cmds();
+    expect(s, "المفتاح لازم برّه مجلد الريبو عشان مايتلقطش في artifact").toContain("$RUNNER_TEMP/upload.jks");
+    expect(s, "مفيش مسح للمفتاح بعد البناء").toMatch(/trap 'rm -f "\$KS"' EXIT/);
+    expect(s).toMatch(/chmod 600 "\$KS"/);
+  });
+
+  it("مفيش || true في خطوات الحزمة (بتبلع الفشل)", () => {
+    const s = cmds();
+    const from = s.indexOf("فحص أسرار التوقيع");
+    expect(from).toBeGreaterThan(-1);
+    expect(s.slice(from), "|| true بيخلّي الفشل يعدّي").not.toMatch(/\|\|\s*true/);
+  });
+});

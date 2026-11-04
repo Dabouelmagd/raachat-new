@@ -7,8 +7,12 @@
 #
 # التنزيل: صفحة Actions ← آخر تشغيل لـ «APK للموبايل» ← Artifacts ← raachat-apk
 #
-# ⚠️ ده **debug APK** موقَّع بمفتاح التصحيح — للتجربة بس، ومش صالح للمتجر
-# (الرفع محتاج مفتاح إصدار حقيقي، وده سرّ يتحفظ في Secrets).
+# ⚠️ الناتج الافتراضي **debug APK** موقَّع بمفتاح التصحيح — للتجربة على جهاز
+# بس، ومش صالح للمتجر.
+#
+# ولحزمة **جوجل بلاي**: شغّلي الوظيفة يدويًا و`aab = true` — بتطلّع
+# `app-release.aab` موقَّعة بمفتاح الرفع من Secrets، وبتلاقيها في artifact
+# اسمه `raachat-aab` (مش Release عام: المفتاح ده مفتاح رفع، ونشره بلا داعي).
 name: APK للموبايل
 
 on:
@@ -18,6 +22,10 @@ on:
         description: "أصل الـ API بلا أي مسار (زي https://api.raachateg.com)"
         default: "https://api.raachateg.com"
         required: true
+      aab:
+        description: "ابنِ كمان حزمة جوجل بلاي الموقَّعة (AAB) — محتاجة أسرار التوقيع"
+        type: boolean
+        default: false
   push:
     branches: [main]
     # بس لما حاجة تخصّ التطبيق تتغيّر — مش على كل commit توثيق
@@ -110,6 +118,77 @@ jobs:
           name: raachat-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # ---------- حزمة جوجل بلاي (AAB) موقَّعة ----------
+      # بتشتغل بس لما تتطلب من شاشة التشغيل اليدوي (`aab: true`) — مش على كل
+      # push: التوقيع بيلمس أسرارًا، والرفع لبلاي قرار مش أثر جانبي لنشرة.
+      #
+      # 🔴 والحارس **قبل** البناء مش بعده بس: لو سرّ ناقص، جريدل مابيفشلش —
+      # بيطلّع `.aab` **غير موقَّعة** وبلاي هي اللي ترفضها بعد الرفع، يعني
+      # تشغيلة خضرا وناتج مكسور. فالفحص ده بيسمّي السرّ الناقص ويقف.
+      - name: فحص أسرار التوقيع
+        if: inputs.aab
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          miss=""
+          for v in KS KS_PASS ALIAS KEY_PASS; do
+            eval "x=\$$v"
+            [ -n "$x" ] || miss="$miss $v"
+          done
+          if [ -n "$miss" ]; then
+            echo "missing signing secrets:$miss"
+            echo "needed: ANDROID_KEYSTORE_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD"
+            exit 1
+          fi
+          echo "SECRETS-PRESENT"
+
+      - name: بناء AAB موقَّعة
+        if: inputs.aab
+        working-directory: mobile/android
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # رقم التشغيلة بيزيد لوحده ومابيرجعش، وبلاي مابتقبلش رقمًا مستهلَكًا.
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          # المفتاح بيتكتب **برّه الريبو** ($RUNNER_TEMP) عشان مايتلقطش في أي
+          # artifact ولا يتسرّب في commit، وبصلاحية 600، وبيتمسح في كل الحالات.
+          KS="$RUNNER_TEMP/upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$KS"
+          trap 'rm -f "$KS"' EXIT
+          chmod 600 "$KS"
+          test -s "$KS"
+          export ANDROID_KEYSTORE_PATH="$KS"
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+
+      - name: فحص الـ AAB
+        if: inputs.aab
+        run: |
+          AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
+          test -f "$AAB"
+          SIZE=$(stat -c%s "$AAB")
+          echo "حجم الـ AAB: $((SIZE/1048576)) ميجا"
+          test "$SIZE" -gt 1000000
+          # الواجهة جوّاها فعلًا — حزمة من غير `index.html` بتتثبّت وتفتح فاضية
+          unzip -l "$AAB" | grep -q "base/assets/public/index.html"
+          # 🔴 موقَّعة فعلًا: ده الفرق بين حزمة بلاي تقبلها وحزمة بترفضها بعد
+          # الرفع، و`bundleRelease` بينجح في الحالتين فمفيش حاجة تانية تقوله.
+          jarsigner -verify "$AAB" | grep -q "jar verified"
+          echo "AAB-SIGNED"
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.aab
+        with:
+          name: raachat-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 7
 
       # نشر الـ APK كـRelease عشان الموقع التعريفي يقدر يوديله برابط عام.
       #

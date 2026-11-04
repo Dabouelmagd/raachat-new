@@ -7,7 +7,11 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.7.2'
+        // 8.9.2 مش 8.7.2: الأخير أقصى `compileSdk` بيعرفه ٣٥، فـ٣٦ بيطلّع
+        // تحذيرًا وبيحتاج `suppressUnsupportedCompileSdk` — يعني بناء على SDK
+        // الـAGP نفسه مش فاهمه. و8.9 بيتطلّب Gradle 8.11.1 وJDK 17، والاتنين
+        // متوفّران (الـwrapper 8.11.1 ووظيفة البناء على Java 21).
+        classpath 'com.android.tools.build:gradle:8.9.2'
         classpath 'com.google.gms:google-services:4.4.2'
 
         // NOTE: Do not place your application dependencies here; they belong

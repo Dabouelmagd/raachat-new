@@ -7,8 +7,13 @@ android {
         applicationId "com.raachateg.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // 🔴 `versionCode` لازم **يزيد مع كل رفعة** على بلاي، والرقم المحجوز
+        // مابيرجعش أبدًا — فلو فضل ١ مكتوبًا بالإيد، تاني رفعة بتترفض
+        // («Version code 1 has already been used»). فبياخد رقم تشغيلة
+        // الوظيفة (`github.run_number`) وهو بيزيد لوحده ومابيرجعش.
+        // والافتراضي ١ عشان البناء المحلي والتجريبي يفضل زي ما هو.
+        versionCode (System.getenv("ANDROID_VERSION_CODE") ?: "1") as Integer
+        versionName System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +21,31 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // 🔴 مفتاح التوقيع **ولا قيمة منه بتتكتب في أي ملف في الريبو** — كله من
+    // متغيّرات بيئة بتتملّى من GitHub Secrets في الوظيفة. ومفيش
+    // `storeFile` افتراضي: لو المتغيّر مش موجود، الكتلة دي مابتتعرّفش خالص
+    // والـ`release` يفضل **بلا توقيع** زي ما كان — فالبناء المحلي
+    // و`assembleDebug` ما يتأثروش.
+    //
+    // ⚠️ وعدم التوقيع **مش بيفشّل** `bundleRelease` — جريدل بيطلّع ملفًا
+    // غير موقَّع وبلاي بترفضه بعد الرفع. فالحارس في الوظيفة: بتتأكد إن
+    // الأسرار موجودة **قبل** البناء، وبتتحقق إن الناتج موقَّع **بعده**.
+    if (System.getenv("ANDROID_KEYSTORE_PATH")) {
+        signingConfigs {
+            release {
+                storeFile file(System.getenv("ANDROID_KEYSTORE_PATH"))
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (System.getenv("ANDROID_KEYSTORE_PATH")) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

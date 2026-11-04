@@ -38,11 +38,15 @@ function walk(dir: string): string[] {
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (BUILD_DIRS.includes(e.name)) continue;
-      // `cap sync` بينسخ بناء الواجهة (اللي فيه عنوان الـ API) جوه مشروع
-      // أندرويد — ناتج بناء متجاهل في git، فلو ما اتعدّاش الحارس يسقط على
-      // ناتج بناء بدل ما يسقط على كود مكتوب بالإيد. و`public/` بتاعة الريبو
-      // نفسها **لازم** تتفحص، فالاستثناء على اللي جوه `assets` بس.
-      if (e.name === "public" && dir.includes(path.join("main", "assets"))) continue;
+      // `cap sync` بينسخ بناء الواجهة (اللي فيه عنوان الـ API) جوه مشروعَي
+      // أندرويد (`android/app/src/main/assets/public`) وiOS
+      // (`ios/App/App/public`) — ناتج بناء متجاهل في git، فلو ما اتعدّاش
+      // الحارس يسقط على ناتج بناء بدل ما يسقط على كود مكتوب بالإيد.
+      // و`public/` بتاعة الريبو نفسها **لازم** تتفحص، فالاستثناء على المسارين
+      // دول بالظبط. (متحقَّق: نسخة iOS فيها `assets/index-*.js` وجوّاه
+      // الدومين فعلًا، فمن غير السطر ده الحارس بيسقط على كود سليم.)
+      const copied = [path.join("main", "assets"), path.join("ios", "App", "App")];
+      if (e.name === "public" && copied.some((p) => dir.endsWith(p))) continue;
       out.push(...walk(rel));
     } else if (EXT.test(e.name)) out.push(rel);
   }

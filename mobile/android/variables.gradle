@@ -1,7 +1,15 @@
 ext {
     minSdkVersion = 23
-    compileSdkVersion = 35
-    targetSdkVersion = 35
+    // 🔴 ٣٦ **مطلوب من جوجل بلاي** للرفع (أندرويد ١٦، صدر يونيو ٢٠٢٦ والمهلة
+    // خلصت ٣١ أغسطس ٢٠٢٦) — كان ٣٥ عن قصد عشان البناء التجريبي يبقى مضمون،
+    // وده ماعادش ينفع مع الرفع. و`compileSdk` لازم يكون ٣٦ كمان، وده بيتطلّب
+    // AGP 8.9+ (في `build.gradle`) — وAGP 8.9 بيتطلّب Gradle 8.11.1 وهو
+    // اللي عندنا بالظبط في `gradle-wrapper.properties`.
+    //
+    // وedge-to-edge **مش جديد هنا**: أندرويد ١٥ (API 35) بيفرضه أصلًا على
+    // اللي بيستهدفه، وأندرويد ١٦ بس بيشيل الـopt-out اللي إحنا مش مستخدمينه.
+    compileSdkVersion = 36
+    targetSdkVersion = 36
     androidxActivityVersion = '1.9.2'
     androidxAppCompatVersion = '1.7.0'
     androidxCoordinatorLayoutVersion = '1.2.0'
