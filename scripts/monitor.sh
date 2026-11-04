@@ -13,6 +13,15 @@
 # الإيميل عبر Resend (نفس مفتاح كود التحقق). مفيش أي سر بيتطبع على الشاشة.
 set -uo pipefail
 cd "$(dirname "$0")/.."
+
+# 🔴 **stdin مقفول لكل السكربت** — ومن غير السطر ده المراقبة **بتعلّق للأبد**
+# لو اتشغلت بالإيد من الشِل: `docker compose exec -T` بيوصّل stdin للحاوية
+# ويفضل مستنيه يقفل **بعد** ما الأمر الجوّاني يخلص — والطرفية عمرها ما بتقفل.
+# وكرون stdin بتاعه `/dev/null` فبيقفل فورًا — وعشان كده العطل كان
+# **مخفيًا شهرًا**: الإنتاج سليم والأداة اللي بنتحقق بيها مكسورة في إيدينا (٤ نوفمبر ٢٠٢٦).
+# والنداءات اللي محتاجة stdin فعلًا عندها `< ملف` صريح فمابتتأثرش.
+exec < /dev/null
+
 DC="docker compose -f docker-compose.prod.yml --env-file .env.production"
 STATE=.monitor-state
 REMIND_HOURS=${REMIND_HOURS:-12}   # إعادة التنبيه على نفس المشكلة بعد كام ساعة
@@ -104,14 +113,14 @@ c=$(curl -so /dev/null -w '%{http_code}' --max-time 10 -H "Host: app.$DOMAIN" ht
 [ "$c" = "200" ] && ok "caddy" "127.0.0.1:8085 (Host: app.$DOMAIN) → 200" || fail "caddy" "الواجهة الداخلية بترجّع HTTP $c"
 
 # ٤) الكونتينرات: كلها شغالة
-running=$(timeout 30 $DC ps --services --filter status=running 2>/dev/null | sort | tr '\n' ' ')
+running=$(timeout -k 5 30 $DC ps --services --filter status=running 2>/dev/null | sort | tr '\n' ' ')
 for s in db api caddy backup; do
   echo "$running" | grep -qw "$s" && ok "container:$s" "شغّال" || fail "container:$s" "كونتينر $s مش شغّال (الشغّال: $running)"
 done
 
 # ٥) الداتابيز بترد فعلًا
-if timeout 30 $DC exec -T backup pg_isready -h db -U rachat -q >/dev/null 2>&1; then
-  n=$(timeout 30 $DC exec -T backup psql -h db -U rachat -d rachat -At -c 'SELECT count(*) FROM "User"' 2>/dev/null | tr -d '\r')
+if timeout -k 5 30 $DC exec -T backup pg_isready -h db -U rachat -q >/dev/null 2>&1; then
+  n=$(timeout -k 5 30 $DC exec -T backup psql -h db -U rachat -d rachat -At -c 'SELECT count(*) FROM "User"' 2>/dev/null | tr -d '\r')
   # **لازم مستخدم واحد على الأقل.** الفحص كان `[ -n "$n" ]`، و"0" نص مش فاضي —
   # يعني قاعدة اتمسحت أو migration غلط كانت بتطلع «✅ db: بترد — 0 مستخدم».
   case "${n:-}" in
@@ -138,7 +147,7 @@ $dfd
 fi
 
 # ٧) النسخة الاحتياطية: موجودة وحديثة وحجمها معقول
-bk=$(timeout 30 $DC exec -T backup sh -c '
+bk=$(timeout -k 5 30 $DC exec -T backup sh -c '
   d=$(ls -1t /backups/db-*.dump 2>/dev/null | head -1 || true)
   [ -n "$d" ] || { echo "none 0 0"; exit 0; }
   echo "$(basename "$d") $(wc -c < "$d") $(( ( $(date +%s) - $(date -r "$d" +%s) ) / 3600 ))"' 2>/dev/null | tr -d '\r')
@@ -151,7 +160,7 @@ else ok "backup" "$bname · $bsize بايت · عمرها $bage ساعة"; fi
 # ٧ب) أرشيف المرفوعات: نص النسخة الاحتياطية، ومكانش متفحوص خالص.
 # (حلقة النسخ بتعمل الأرشيف بـ `tar > الاسم النهائي` من غير ملف مؤقت، فأرشيف
 #  فاشل بياخد الاسم النهائي ويزقّ نسخة سليمة برّه الـ١٤.)
-up=$(timeout 30 $DC exec -T backup sh -c '
+up=$(timeout -k 5 30 $DC exec -T backup sh -c '
   u=$(ls -1t /backups/uploads-*.tgz 2>/dev/null | head -1 || true)
   [ -n "$u" ] || { echo "none 0 0"; exit 0; }
   echo "$(basename "$u") $(wc -c < "$u") $(( ( $(date +%s) - $(date -r "$u" +%s) ) / 3600 ))"' 2>/dev/null | tr -d '\r')
@@ -192,8 +201,8 @@ fi
 # ٨) TURN للمكالمات — **بس لو متضبط** (مش متضبط = مش فحص فاشل، دي حالة معروفة)
 if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRET=.+' .env.production 2>/dev/null; then
   tsec=$(grep -E '^TURN_SECRET=' .env.production | cut -d= -f2-)
-  tcid=$(timeout 30 $DC ps -q turn 2>/dev/null | tr -d '\r')
-  tapi=$(timeout 30 $DC ps -q api 2>/dev/null | tr -d '\r')
+  tcid=$(timeout -k 5 30 $DC ps -q turn 2>/dev/null | tr -d '\r')
+  tapi=$(timeout -k 5 30 $DC ps -q api 2>/dev/null | tr -d '\r')
   # **العنوان من `TURN_URLS` نفسه، مش من `$DOMAIN`** — ده اللي بيتبعت للمتصفح.
   # `$DOMAIN` (kenoz.org) مالوش سجل DNS أصلًا، فالفحص كان بيفشل دايمًا بـ
   # ENOTFOUND على TURN شغّال: تنبيه كاذب، **وأعمى عن العطل الحقيقي**.
@@ -214,14 +223,14 @@ if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRE
     #
     # **`exec` جوه الـ api الشغّال، مش `run` بحاوية جديدة** (بطلب داليا، ١٤ أكتوبر):
     # الفحص بيتكرر كل ١٠ دقايق = ١٤٤ حاوية في اليوم على سيرفر مشترك. و`--rm`
-    # بيتنفّذ لما الأمر يخلص بنظافة — لكن `timeout 40` بيقتل الـ CLI، وساعتها
+    # بيتنفّذ لما الأمر يخلص بنظافة — لكن `timeout -k 5 40` بيقتل الـ CLI، وساعتها
     # الحاوية بتفضل متبهدلة في `docker ps -a` وتتراكم في سكوت. و`exec` كمان أسرع
     # (مفيش إنشاء/تشغيل حاوية) وبيستهلك قرصًا أقل.
     # **وطريق الشبكة هو هو**: حاوية `run` كانت على نفس شبكة compose بتاعة الـ api،
     # فالـ Allocate بيخرج من نفس المكان بالظبط — الفحص ما اتغيّرش معناه.
     # و`--input-type=module` صريح لأن الفاحص ESM والقراءة من stdin بتعتمد على
     # `"type": "module"` في package.json بتاعة مجلد العمل — نفس اللي فحص Push بيعمله.
-    if tout=$(timeout 40 $DC exec -T \
+    if tout=$(timeout -k 5 40 $DC exec -T \
         -e TURN_HOST="$thost" -e TURN_PORT="$tport" -e TURN_SECRET="$tsec" -e TURN_USER=monitor \
         api node --input-type=module - < scripts/lib/turncheck.mjs 2>&1) && echo "$tout" | grep -q "allocate ok"; then
       ok "turn" "Allocate ناجح على turn:$thost:$tport"
@@ -243,9 +252,9 @@ fi
 # تقول «غير متاح». الفحص بـ `pushprobe.mjs` **جوه الحاوية** مش بـ curl، لأن
 # المسار ورا التوكن وبيرجّع 401 لأي نداء من سكربت.
 if grep -qE '^VAPID_PRIVATE=.+' .env.production 2>/dev/null; then
-  if ! vout=$(timeout 30 $DC exec -T api node --input-type=module - < scripts/lib/vapidcheck.mjs 2>&1); then
+  if ! vout=$(timeout -k 5 30 $DC exec -T api node --input-type=module - < scripts/lib/vapidcheck.mjs 2>&1); then
     fail "push" "مفاتيح VAPID مش سليمة جوه الـ API — كل إشعار هيترفض في سكوت. الناتج: $(echo "$vout" | tail -n 2)"
-  elif ! pout=$(timeout 30 $DC exec -T api node --input-type=module - < scripts/lib/pushprobe.mjs 2>&1); then
+  elif ! pout=$(timeout -k 5 30 $DC exec -T api node --input-type=module - < scripts/lib/pushprobe.mjs 2>&1); then
     fail "push" "المفتاح العام مابيوصلش للمتصفحات — الواجهة تقول «الإشعارات غير متاحة». الناتج: $(echo "$pout" | tail -n 2)"
   else
     ok "push" "$(echo "$vout" | tail -n 1) · $(echo "$pout" | tail -n 1)"
