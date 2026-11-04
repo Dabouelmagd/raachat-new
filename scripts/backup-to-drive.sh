@@ -20,6 +20,9 @@ ENVF=.env.production
 REMOTE="${RCLONE_REMOTE:-rachat-drive}"
 FOLDER="${DRIVE_FOLDER:-raachat-backups}"
 KEEP="${KEEP:-14}"
+# علامة النجاح اللي المراقبة بتفحص عمرها — من غيرها مفيش أي تنبيه لو الرفع وقف.
+# shellcheck source=scripts/lib/drivemark.sh
+. scripts/lib/drivemark.sh
 
 [ -f "$ENVF" ] || { echo "❌ مفيش $ENVF"; exit 1; }
 command -v rclone >/dev/null || { echo "❌ rclone مش مثبّت — الخطوات في docs/backup-offsite.md"; exit 1; }
@@ -60,6 +63,13 @@ if [ "${1:-}" = "--check" ]; then
   rclone lsl "$REMOTE:$FOLDER" 2>/dev/null | sort -k2 | tail -8 || echo "   (فاضي)"
   n=$(rclone lsf "$REMOTE:$FOLDER" 2>/dev/null | grep -c . || true)
   echo "عدد الملفات على درايف: ${n:-0}"
+  age=$(drive_mark_age_h "$DRIVE_MARK")
+  case "$age" in
+    missing) echo "علامة آخر رفع ناجح: مفيش — الرفع عمره ما نجح من هنا" ;;
+    bad)     echo "علامة آخر رفع ناجح: الملف $DRIVE_MARK مبهدل — مش دليل نجاح" ;;
+    future)  echo "علامة آخر رفع ناجح: وقتها في المستقبل — ساعة السيرفر أو الملف فيهم مشكلة" ;;
+    *)       echo "آخر رفع ناجح: قبل $age ساعة ($(head -1 "$DRIVE_MARK" | cut -d' ' -f2-))" ;;
+  esac
   exit 0
 fi
 
@@ -136,4 +146,14 @@ for pat in 'db-' 'uploads-'; do
 done
 
 [ "$ok" = "1" ] || { echo "❌ فيه نسخة ما اترفعتش"; exit 1; }
+
+# 🔴 العلامة **بعد** الحارس فوق، فمابتتكتبش إلا لو كل نسخة اترفعت واتحقّقت.
+# ولو اتكتبت فوق الحارس، أي فشل رفع كان بيسيب علامة طازة والمراقبة تقول تمام.
+#
+# **وبتتكتب كمان لما مفيش جديد يترفع** (`⏭ مرفوعة قبل كده`) عن قصد: الوصول
+# لدرايف متحقَّق في أول السكربت (`rclone lsd`)، وأحدث نسخة محلية موجودة هناك
+# فعلًا — فالرفع مش واقف. ولو كتبناها على الرفع الجديد وحده، أي يوم النسخة
+# المحلية ما اتجدّدتش فيه (وده عطل **فحص ٧** بيقوله) كان هيطلّع تنبيهًا تانيًا
+# على نفس السبب: ضجيج بيدرّب الواحد إنه يتجاهل التنبيه.
+drive_mark_write "$(basename "$DB")${UP:+ $(basename "$UP")}"
 echo "✅ خلص — آخر $KEEP نسخة لكل نوع على درايف، كلها مشفّرة."

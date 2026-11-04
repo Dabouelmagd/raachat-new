@@ -18,6 +18,9 @@ import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const SCRIPT = path.join(ROOT, "scripts/backup-to-drive.sh");
+const LIB = path.join(ROOT, "scripts/lib/drivemark.sh");
+const MONITOR = path.join(ROOT, "scripts/monitor.sh");
+const MARK = ".drive-backup-ok";
 const made: string[] = [];
 afterEach(() => { for (const d of made.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
@@ -55,7 +58,9 @@ function world(opts: { gpg?: string; key?: string; files?: string[] } = {}) {
   }
   fs.writeFileSync(path.join(dir, ".env.production"), `JWT_SECRET=x\nBACKUP_KEY=${opts.key ?? "test-backup-key"}\n`);
   fs.writeFileSync(path.join(dir, "docker-compose.prod.yml"), "services:\n  backup: {}\n");
+  fs.mkdirSync(path.join(dir, "scripts/lib"), { recursive: true });
   fs.copyFileSync(SCRIPT, path.join(dir, "scripts/backup-to-drive.sh"));
+  fs.copyFileSync(LIB, path.join(dir, "scripts/lib/drivemark.sh"));
 
   // docker: بيحوّل `compose … exec -T backup <أمر>` لتنفيذ على مجلد النسخ المحلي
   // بيحوّل `compose … exec -T backup <أمر>` لتنفيذ على مجلد النسخ المحلي:
@@ -202,5 +207,147 @@ describe("رفع النسخ على جوجل درايف", () => {
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("مختلف عن الأصل");
     expect(onDrive(w)).toEqual([]);
+  });
+
+  /**
+   * علامة النجاح اللي المراقبة بتفحص عمرها.
+   *
+   * 🔴 ليه موجودة: من غيرها **مفيش أي تنبيه لو الرفع على درايف وقف** — التوكن
+   * يتلغي أو درايف يمتلي، والنسخ المحلية تفضل سليمة والمراقبة تقول تمام، وكرون
+   * يكتب الخطأ في لوج محدش بيقراه، وأحدث نسخة على درايف تقدم في سكوت.
+   */
+  const markOf = (w: ReturnType<typeof world>) =>
+    fs.existsSync(path.join(w.dir, MARK)) ? fs.readFileSync(path.join(w.dir, MARK), "utf8").trim() : null;
+
+  it("🔴 بيكتب علامة نجاح بوقتها، وبـUTC فعلًا", () => {
+    const w = world();
+    expect(run(w, [], { TZ: "Asia/Tokyo" }).code).toBe(0);
+    const line = markOf(w);
+    expect(line, "مفيش علامة نجاح").toBeTruthy();
+    const epoch = Number(line!.split(" ")[0]);
+    expect(Number.isInteger(epoch), `أول حقل في العلامة مش رقم: ${line}`).toBe(true);
+    // الحكم على الوقت نفسه مش على وجود الكلمة: `date` بلا `-u` بتطلّع توقيت
+    // طوكيو والعلامة تبقى بتكدب في عمرها — والمراقبة تحكم بساعة غلط.
+    expect(Math.abs(epoch * 1000 - Date.now()), `وقت العلامة مش UTC: ${line}`).toBeLessThan(2 * 60_000);
+    expect(line).toContain(DUMP); // ومكتوب فيها اللي اترفع، للقراءة بالعين
+  });
+
+  it("🔴 الرفع الفاشل **مابيسيبش** علامة نجاح", () => {
+    const w = world();
+    fs.writeFileSync(path.join(w.bin, "rclone"), fs.readFileSync(path.join(w.bin, "rclone"), "utf8")
+      .replace('rcat) mkdir -p "$(dirname "$D/$tgt")"; cat > "$D/$tgt"; exit 0 ;;',
+               'rcat) mkdir -p "$(dirname "$D/$tgt")"; cat > /dev/null; exit 1 ;;'));
+    fs.chmodSync(path.join(w.bin, "rclone"), 0o755);
+    expect(run(w).code).not.toBe(0);
+    // لو العلامة اتكتبت فوق الحارس، كل فشل رفع كان بيسيب علامة طازة
+    // والمراقبة تقول تمام على رفع واقف.
+    expect(markOf(w), "علامة نجاح على رفع فاشل").toBeNull();
+  });
+
+  it("🔴 التشغيلة اللي مفيش فيها جديد **بتجدّد** العلامة (وإلا تنبيه كاذب)", () => {
+    const w = world();
+    expect(run(w).code).toBe(0);
+    fs.rmSync(path.join(w.dir, MARK));
+    const r2 = run(w);
+    expect(r2.code, r2.out).toBe(0);
+    expect(r2.out).toContain("مرفوعة قبل كده");
+    // الوصول لدرايف متحقَّق وأحدث نسخة محلية موجودة هناك، فالرفع مش واقف.
+    // ولو العلامة على الرفع الجديد وحده، أي يوم النسخة المحلية ما اتجدّدتش فيه
+    // (عطل **فحص ٧**) كان هيطلّع تنبيهًا تانيًا على نفس السبب.
+    expect(markOf(w), "مفيش علامة بعد تشغيلة ناجحة بلا جديد").toBeTruthy();
+  });
+
+  it("--check بيقول عمر آخر رفع ناجح", () => {
+    const w = world();
+    expect(run(w, ["--check"]).out).toContain("الرفع عمره ما نجح");
+    expect(run(w).code).toBe(0);
+    // 🔴 المطابقة على **الرقم** مش على جملة «آخر رفع ناجح»: دي موجودة في فرع
+    // «مفيش علامة» كمان، فالفحص عليها كان **بيعدّي** على سكربت مابيكتبش علامة
+    // خالص (ظهر في ارتداد فعلي). نفس درس «الحالة اللي بتفرّق بين الصح والغلط
+    // القريب لازم تكون متفحوصة، وإلا الحارس بيوافق على الاتنين».
+    expect(run(w, ["--check"]).out).toMatch(/آخر رفع ناجح: قبل \d+ ساعة/);
+  });
+});
+
+/**
+ * فحص المراقبة على عمر الرفع.
+ *
+ * الحكم على **سلوك الكتلة نفسها**: بناخد قسم `٧ج` من `monitor.sh` بحدوده
+ * ونشغّله ببدائل لـ`fail`/`ok` — فأي ارتداد في الشرط بيبان، والاختبار مش
+ * بيعدّي على وجود النصّ في الملف (نفس نمط `deployPrune` و`turnCheck`).
+ */
+describe("المراقبة: عمر الرفع على درايف", () => {
+  const section = () => {
+    const src = fs.readFileSync(MONITOR, "utf8");
+    const a = src.indexOf("# ٧ج)");
+    const b = src.indexOf("# ٨)", a);
+    expect(a, "قسم ٧ج مش موجود في monitor.sh").toBeGreaterThan(0);
+    expect(b, "قسم ٨ مش موجود بعده").toBeGreaterThan(a);
+    const body = src.slice(a, b);
+    expect(body).toContain("drive_mark_age_h"); // الكتلة بتنادي الفاحص فعلًا
+    return body;
+  };
+
+  /** بيشغّل القسم في مجلد مؤقت: `key` = قيمة BACKUP_KEY، و`mark` = محتوى العلامة */
+  function runCheck(opts: { key?: string; mark?: string | null } = {}) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rc-drivemon-"));
+    made.push(dir);
+    fs.mkdirSync(path.join(dir, "scripts/lib"), { recursive: true });
+    fs.copyFileSync(LIB, path.join(dir, "scripts/lib/drivemark.sh"));
+    fs.writeFileSync(path.join(dir, ".env.production"), `JWT_SECRET=x\nBACKUP_KEY=${opts.key ?? "k"}\n`);
+    if (opts.mark != null) fs.writeFileSync(path.join(dir, MARK), opts.mark);
+    const script = [
+      "set -uo pipefail",
+      "MAX_DRIVE_AGE_H=${MAX_DRIVE_AGE_H:-26}",
+      'fail() { echo "FAIL $1: $2"; }',
+      'ok() { echo "OK $1: $2"; }',
+      section(),
+    ].join("\n");
+    fs.writeFileSync(path.join(dir, "sec.sh"), script);
+    const r = spawnSync("bash", [path.join(dir, "sec.sh")], { cwd: dir, encoding: "utf8", timeout: 20_000 });
+    return (r.stdout ?? "") + (r.stderr ?? "");
+  }
+
+  const mark = (hoursAgo: number) => {
+    const t = Math.floor(Date.now() / 1000) - hoursAgo * 3600;
+    return `${t} ${new Date(t * 1000).toISOString().slice(0, 19).replace("T", " ")}UTC db-x.dump\n`;
+  };
+
+  it("رفع حديث = ✅", () => {
+    expect(runCheck({ mark: mark(2) })).toContain("OK backup:drive");
+  });
+
+  it("🔴 رفع واقف من يومين = ❌ (ودي الحالة اللي مكانش فيها ولا تنبيه)", () => {
+    const out = runCheck({ mark: mark(48) });
+    expect(out).toContain("FAIL backup:drive");
+    expect(out).toContain("48");
+  });
+
+  it("🔴 مفيش علامة خالص مع BACKUP_KEY متضبط = ❌", () => {
+    expect(runCheck({ mark: null })).toContain("FAIL backup:drive");
+  });
+
+  it("🔴 **الحكم على الوقت المكتوب جوّه الملف مش على mtime**", () => {
+    // علامة عمرها يومين اتعمل لها `cp` أو `touch` النهاردة: `mtime` بيبقى
+    // اللحظة دي فتبان **طازة** والمراقبة تقول تمام على رفع واقف. والسطر اللي
+    // السكربت كتبه مابيكدبش على نفسه.
+    const out = runCheck({ mark: mark(48) }); // الملف اتكتب دلوقتي، ومحتواه قديم
+    expect(out, "العلامة اتحكم عليها بـmtime بدل محتواها").toContain("FAIL backup:drive");
+  });
+
+  it("🔴 علامة مبهدلة مابتتحسبش نجاحًا", () => {
+    expect(runCheck({ mark: "ok\n" })).toContain("FAIL backup:drive");
+    expect(runCheck({ mark: "" })).toContain("FAIL backup:drive");
+  });
+
+  it("🔴 وقت في المستقبل مابيتحسبش نجاحًا", () => {
+    const t = Math.floor(Date.now() / 1000) + 86_400;
+    expect(runCheck({ mark: `${t} future\n` })).toContain("FAIL backup:drive");
+  });
+
+  it("بلا BACKUP_KEY مفيش فحص ومفيش تنبيه (الرفع الخارجي مش متضبط = حالة معروفة)", () => {
+    const out = runCheck({ key: "", mark: null });
+    expect(out).not.toContain("FAIL");
+    expect(out).not.toContain("OK backup:drive");
   });
 });

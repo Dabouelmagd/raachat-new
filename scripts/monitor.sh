@@ -8,7 +8,8 @@
 #   (crontab -l 2>/dev/null; echo '*/10 * * * * cd /opt/rachat && bash scripts/monitor.sh >> /var/log/rachat-monitor.log 2>&1') | crontab -
 #
 # بيفحص: الـ API من بره وجوه · الواجهة واللوحة · الداتابيز · الكونتينرات ·
-#        مساحة القرص · عمر وحجم أحدث نسخة احتياطية · صلاحية الشهادة.
+#        مساحة القرص · عمر وحجم أحدث نسخة احتياطية · عمر آخر رفع ناجح على
+#        درايف · صلاحية الشهادة.
 # الإيميل عبر Resend (نفس مفتاح كود التحقق). مفيش أي سر بيتطبع على الشاشة.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -17,6 +18,7 @@ STATE=.monitor-state
 REMIND_HOURS=${REMIND_HOURS:-12}   # إعادة التنبيه على نفس المشكلة بعد كام ساعة
 MIN_DUMP=${MIN_DUMP:-4096}         # بايت — أقل من كده النسخة فاشلة
 MAX_DUMP_AGE_H=${MAX_DUMP_AGE_H:-26}
+MAX_DRIVE_AGE_H=${MAX_DRIVE_AGE_H:-26}   # عمر آخر رفع ناجح على درايف (الجدولة يومية)
 MAX_DISK_PCT=${MAX_DISK_PCT:-85}
 MIN_CERT_DAYS=${MIN_CERT_DAYS:-20}
 
@@ -158,6 +160,34 @@ if [ "$uname" = "none" ]; then fail "backup:uploads" "مفيش أي أرشيف �
 elif [ "${usize:-0}" -lt 100 ]; then fail "backup:uploads" "أحدث أرشيف ($uname) حجمه $usize بايت — فاضي/ناقص"
 elif [ "${uage:-99}" -gt "$MAX_DUMP_AGE_H" ]; then fail "backup:uploads" "أحدث أرشيف ($uname) عمره $uage ساعة — نسخ المرفوعات واقفة"
 else ok "backup:uploads" "$uname · $usize بايت · عمره $uage ساعة"; fi
+
+# ٧ج) الرفع على درايف — **بس لو متضبط** (مش متضبط = حالة معروفة مش عطل)
+#
+# ليه لازم: الفحصان فوق على النسخة **المحلية**. لو الرفع على درايف وقف، النسخ
+# المحلية تفضل سليمة والمراقبة تقول تمام، وكرون يكتب الخطأ في لوج محدش بيقراه،
+# وأحدث نسخة على درايف **تقدم في سكوت** — والاكتشاف يوم ما السيرفر يموت، وهو
+# بالظبط اليوم اللي النسخة موجودة عشانه. والنسخة المحلية مش نسخة خارجية.
+#
+# وبلا أي `rclone` من هنا (١٤٤ نداء في اليوم على مفتاح مشترك): السكربت بيكتب
+# علامة نجاح والمراقبة بتفحص **الوقت المكتوب جوّاها**، مش `mtime`.
+if grep -qE '^BACKUP_KEY=.+' .env.production 2>/dev/null; then
+  # shellcheck source=scripts/lib/drivemark.sh
+  . scripts/lib/drivemark.sh
+  dage=$(drive_mark_age_h "$DRIVE_MARK")
+  case "$dage" in
+    missing)
+      # BACKUP_KEY متضبط = الرفع مفروض يشتغل. مفيش علامة = عمره ما نجح من هنا.
+      fail "backup:drive" "مفيش ولا رفع ناجح على درايف — النسخ كلها على نفس السيرفر اللي بتحميه. شغّلي: bash scripts/backup-to-drive.sh" ;;
+    bad|future)
+      fail "backup:drive" "علامة الرفع ($DRIVE_MARK) مش مقروءة ($dage) — مش دليل نجاح، والرفع ممكن يكون واقف. شغّلي: bash scripts/backup-to-drive.sh --check" ;;
+    *)
+      if [ "$dage" -gt "$MAX_DRIVE_AGE_H" ]; then
+        fail "backup:drive" "آخر رفع ناجح على درايف قبل $dage ساعة (الحد $MAX_DRIVE_AGE_H) — الرفع الخارجي واقف والنسخ كلها على نفس السيرفر. راجعي: bash scripts/backup-to-drive.sh --check · tail /var/log/rachat-backup-drive.log"
+      else
+        ok "backup:drive" "آخر رفع ناجح قبل $dage ساعة"
+      fi ;;
+  esac
+fi
 
 # ٨) TURN للمكالمات — **بس لو متضبط** (مش متضبط = مش فحص فاشل، دي حالة معروفة)
 if grep -qE '^TURN_URLS=.+' .env.production 2>/dev/null && grep -qE '^TURN_SECRET=.+' .env.production 2>/dev/null; then
