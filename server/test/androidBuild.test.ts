@@ -469,3 +469,59 @@ describe("حزمة جوجل بلاي", () => {
     expect(s.slice(from), "|| true بيخلّي الفشل يعدّي").not.toMatch(/\|\|\s*true/);
   });
 });
+
+/**
+ * الإشعارات الأصلية (FCM) في الـAPK.
+ *
+ * 🔴 العطل اللي الحوارس دي بتمنعه **صامت بالكامل**: الـAPK بيتبني ويتثبّت
+ * ويفتح ويشتغل، والمستخدم بس مايستلمش ولا إشعار — مفيش خطأ في أي مكان، لا في
+ * البناء ولا في اللوج ولا على الشاشة. وده بيحصل من تلات طرق: `google-services`
+ * مش متكتوب، أو الواجهة مابتسجّلش التوكن، أو الإضافة مش متركّبة في المشروع.
+ */
+describe("إشعارات الـAPK", () => {
+  const wf = () => read(".github/workflows/android.yml");
+  const cmds = () => wf().split("\n").map((l) => l.replace(/#.*$/, "")).join("\n");
+
+  it("الوظيفة بتكتب google-services قبل البناء وبتتحقق من اسم الحزمة", () => {
+    const s = cmds();
+    const fb = s.indexOf("google-services.json");
+    const build = s.indexOf("assembleDebug");
+    expect(fb, "خطوة Firebase مش موجودة").toBeGreaterThan(-1);
+    expect(build).toBeGreaterThan(-1);
+    expect(fb, "لازم تتكتب قبل جريدل — بعده مالهاش أي أثر").toBeLessThan(build);
+    // قيمة مبهدلة في الـSecret بتخلّي جريدل يفشل برسالة غامضة بعد دقايق بناء
+    expect(s, "مفيش تحقّق من اسم الحزمة في الملف").toContain("com.raachateg.app");
+  });
+
+  it("الملف متجاهل في git (الريبو عام)", () => {
+    expect(read("mobile/android/.gitignore")).toMatch(/^google-services\.json$/m);
+    expect(fs.existsSync(path.join(ROOT, "mobile/android/app/google-services.json")),
+      "الملف ده مايتحفظش في الريبو").toBe(false);
+  });
+
+  it("إضافة الإشعارات متركّبة في مشروع أندرويد", () => {
+    // ⚠️ **مش** `capacitor.plugins.json`: الملف ده **متجاهَل في git** بـ
+    // `.gitignore` بتاع Capacitor، فاختبار بيقراه بيعدّي عندنا ويسقط في CI
+    // على نسخة نضيفة (حصل فعلًا ٢٠ أكتوبر وكلّفنا ٢٦ ساعة CI أحمر، والحارس
+    // `testedFilesTracked` مسكها هنا تاني). الاتنين دول متتبَّعان.
+    expect(read("mobile/package.json")).toContain("@capacitor/push-notifications");
+    expect(read("mobile/android/app/capacitor.build.gradle")).toContain("capacitor-push-notifications");
+    expect(read("mobile/android/app/src/main/AndroidManifest.xml")).toContain("android.permission.POST_NOTIFICATIONS");
+  });
+
+  /**
+   * مودیول موجود ومحدش بينادیه = ميزة ميتة في سكوت (درس `adsFor("story")`).
+   * والحكم على **النداء** مش على سطر الاستيراد — الاستيراد بيفضل موجود بعد ما
+   * النداء يتشال (درس `threadNameClass`).
+   */
+  it("الواجهة بتبدأ التسجيل فعلًا", () => {
+    // 🔴 الحكم على الكود **بعد شيل التعليقات** — وده مش تجميل: أول نسخة من
+    // الحارس ده **عدّت على الارتداد** لأني علّقت السطر بـ`//` والنصّ فضل
+    // موجود. نفس فخّ حارس `Capacitor.Plugins` و`threadNameClass`.
+    const code = read("src/push/PushBridge.tsx")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/startNativePush\(/);
+    // والإضافة من المصدر الواحد — القراءة المباشرة بترجّع undefined في الـAPK
+    expect(read("src/push/native.ts")).toMatch(/capPlugin<[^>]*>\("PushNotifications"\)/);
+  });
+});

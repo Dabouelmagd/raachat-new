@@ -59,6 +59,10 @@ const Env = z.object({
   VAPID_PUBLIC: z.string().optional(),
   VAPID_PRIVATE: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:admin@example.com"),
+  // إشعارات أصلية (FCM HTTP v1) للتطبيق المثبَّت — Web Push فوق مابيشتغلش جوه
+  // WebView. base64 لملف حساب الخدمة من Firebase؛ فاضي = الإشعارات الأصلية
+  // متوقفة والويب زي ما هو. الضبط: scripts/set-fcm-key.sh
+  FCM_SERVICE_ACCOUNT: z.string().optional(),
   // أصحاب النظام (مالك): أرقام/إيميلات مفصولة بفاصلة. أول دخول بيها بيتحوّل لمالك تلقائيًا.
   OWNER_CONTACTS: z.string().default(""),
   BANNED_WORDS: z.string().default(""), // كلمات ممنوعة مفصولة بفاصلة (فلتر المحتوى المسيء)

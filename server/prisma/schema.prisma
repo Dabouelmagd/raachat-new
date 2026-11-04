@@ -77,6 +77,7 @@ model User {
   blockedBy   Block[]      @relation("Blocked")
   roomParticipants RoomParticipant[]
   pushSubs    PushSub[]
+  deviceTokens DeviceToken[]
   stars       Star[]
   pollVotes   PollVote[]
   modStatus   String    @default("active") // active | suspended | banned (من لوحة الإدارة)
@@ -368,6 +369,20 @@ model PushSub {
   endpoint  String   @unique
   p256dh    String
   auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// توكن إشعارات **أصلي** (FCM على أندرويد، APNs على iOS لاحقًا) — غير
+/// `PushSub` اللي هو Web Push للمتصفح. الاتنين بيعيشوا مع بعض: نفس المستخدم
+/// ممكن يكون فاتح التطبيق على المتصفح ومثبّت الـAPK في نفس الوقت.
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

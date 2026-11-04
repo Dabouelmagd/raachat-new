@@ -35,6 +35,7 @@ export async function eraseUser(
   await db.$transaction([
     db.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } }),
     db.pushSub.deleteMany({ where: { userId } }),
+    db.deviceToken.deleteMany({ where: { userId } }),
     db.adminHandoff.deleteMany({ where: { userId } }),
     db.attachment.deleteMany({ where: { message: { authorId: userId } } }),
     db.message.updateMany({ where: { authorId: userId }, data: { deleted: true, text: "" } }),

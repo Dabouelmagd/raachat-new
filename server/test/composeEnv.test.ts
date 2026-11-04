@@ -49,13 +49,17 @@ const KNOWN_UNPASSED: Record<string, string> = {
   APP_URL: "بيرجع لأول أصل **غير محلّي** في CORS_ORIGIN (firstPublicOrigin) — الصح",
   PUBLIC_URL: "اختياري، مستخدم في روابط المرفقات بافتراضي سليم",
   ACCESS_TTL_MIN: "الافتراضي مقصود",
+  // ⏸️ مستني موافقة داليا على سطر في compose — تعديل `docker-compose.prod.yml`
+  // بيتطلّب طلب صريح. ومن غير السطر ده المفتاح **مابيوصلش للعملية** (درس
+  // RETENTION) فالإشعارات الأصلية بتفضل متوقفة وبيطلع تحذير في اللوج.
+  // أول ما السطر يتضاف، الاختبار اللي تحت بيفشّل المدخل ده ويخلّينا نشيله.
+  FCM_SERVICE_ACCOUNT: "⏸️ محتاج سطر في compose — مستني موافقة داليا (scripts/set-fcm-key.sh بيكشف غيابه ويقف)",
   REFRESH_TTL_DAYS: "الافتراضي مقصود",
   RATE_LIMIT: "الافتراضي = مفعّل؛ بيتقفل في الاختبارات بس",
   RING_TIMEOUT_MS: "الافتراضي ٤٥ ثانية مقصود",
   TRANSLATE_DAILY_CHARS: "الافتراضي ١٥٠٠٠ شغّال؛ تغييره محتاج سطر (مكتوب في CLAUDE.md)",
   TRANSLATE_USER_DAILY_CHARS: "الافتراضي ٣٠٠٠ شغّال؛ نفس الملحوظة",
   OTP_DEV_CODE: "**ممنوع** في الإنتاج — loadConfig بيرمي لو اتضبط",
-  NODE_ENV: "متضبط صريح في compose كـ production",
 };
 
 describe("متغيرات الإنتاج توصل للكونتينر فعلًا", () => {
@@ -81,8 +85,13 @@ describe("متغيرات الإنتاج توصل للكونتينر فعلًا",
   });
 
   it("قايمة المعروف مافيهاش مفاتيح ما بقتش موجودة (ما تتراكمش)", () => {
-    const stale = Object.keys(KNOWN_UNPASSED).filter((k) => !configKeys.includes(k) && !apiEnv.has(k));
-    expect(stale, `مفاتيح في KNOWN_UNPASSED مش موجودة في config.ts خلاص: ${stale.join(", ")}`).toEqual([]);
+    const gone = Object.keys(KNOWN_UNPASSED).filter((k) => !configKeys.includes(k) && !apiEnv.has(k));
+    expect(gone, `مفاتيح في KNOWN_UNPASSED مش موجودة في config.ts خلاص: ${gone.join(", ")}`).toEqual([]);
+    // ومفتاح بقى **ممرَّرًا فعلًا** في compose ماينفعش يفضل في قايمة «المعروف
+    // إنه مش ممرَّر» — المدخل ساعتها بيقول كلامًا مش صحيحًا عن الإنتاج، وبيخفي
+    // السبب اللي اتكتب عشانه. (حصل: FCM اتضاف للقايمة بانتظار سطر compose.)
+    const passed = Object.keys(KNOWN_UNPASSED).filter((k) => apiEnv.has(k));
+    expect(passed, `المفاتيح دي بقت في compose فعلًا — شيليها من KNOWN_UNPASSED: ${passed.join(", ")}`).toEqual([]);
   });
 
   it("فلتر المحتوى: القايمة الفاضية معناها الفلتر بيعدّي كل حاجة — فالمفتاح مش رفاهية", () => {

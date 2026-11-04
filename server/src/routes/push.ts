@@ -26,6 +26,37 @@ export function pushRoutes(ctx: Ctx) {
     res.status(204).end();
   }));
 
+  /**
+   * توكن الإشعارات الأصلي للتطبيق المثبَّت (FCM). منفصل عن `/push/subscribe`
+   * لأن ده مش Web Push: مفيش `endpoint` ولا مفاتيح تشفير، والتوكن نفسه هو
+   * العنوان. والاتنين بيعيشوا مع بعض — نفس المستخدم على متصفح وعلى APK.
+   */
+  r.post("/push/device", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const b = z.object({
+      token: z.string().min(16).max(500),
+      platform: z.enum(["android", "ios"]),
+    }).parse(req.body);
+    // نفس الجهاز لو دخل بحساب تاني: التوكن **ينتقل** للحساب الحالي. لو سبناه
+    // على القديم، إشعارات صاحب الحساب الأول تروح لجهاز حد تاني — تسريب
+    // محتوى رسائل في الإشعار نفسه.
+    await ctx.db.deviceToken.upsert({
+      where: { token: b.token },
+      create: { userId: me, token: b.token, platform: b.platform },
+      update: { userId: me, platform: b.platform },
+    });
+    const all = await ctx.db.deviceToken.findMany({ where: { userId: me }, orderBy: { createdAt: "desc" }, select: { id: true } });
+    if (all.length > MAX_DEVICES) await ctx.db.deviceToken.deleteMany({ where: { id: { in: all.slice(MAX_DEVICES).map((x) => x.id) } } });
+    res.status(204).end();
+  }));
+
+  r.post("/push/device/remove", wrap(async (req, res) => {
+    const me = (req as AuthedRequest).userId;
+    const b = z.object({ token: z.string().max(500) }).parse(req.body);
+    await ctx.db.deviceToken.deleteMany({ where: { token: b.token, userId: me } });
+    res.status(204).end();
+  }));
+
   r.post("/push/unsubscribe", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
     const b = z.object({ endpoint: z.string().max(1000) }).parse(req.body);

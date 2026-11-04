@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import type { Config } from "../config.js";
 import type { Ctx } from "../context.js";
+import { DeadTokenError } from "./fcm.js";
 
 export interface PushPayload {
   kind: "message" | "call" | "missed" | "notice";
@@ -43,12 +44,40 @@ export function createWebPush(c: Config): PushSender | undefined {
   };
 }
 
-export const hasPushSubs = async (ctx: Ctx, userId: string) =>
-  !!ctx.push && (await ctx.db.pushSub.count({ where: { userId } })) > 0;
+/**
+ * «ينفع نوصل للمستخدم ده وهو مقفول؟» — لازم تشوف **القناتين**: متصفح مشترك
+ * بـWeb Push، أو تطبيق مثبَّت بتوكن FCM. لو فضلت على `pushSub` وحدها، صاحب
+ * الـAPK (اللي مالوش Web Push أصلًا — WebView مافيهاش `PushManager`) بيتحسب
+ * «مش قابل للوصول» ومكالمته بتتلغى من غير ما ترنّ عنده.
+ */
+/**
+ * «فيه قناة إشعارات شغّالة أصلًا؟» — **المصدر الوحيد** لهذا الحكم.
+ *
+ * 🔴 ولزومه إن `if (ctx.push)` كان مكتوبًا في مسارَي الرسالة والاستطلاع، فأول
+ * ما FCM يتضبط وVAPID لأ، النداء **مابيوصلش لـ`notifyPush` خالص** — يعني
+ * إصلاح الفان-أوت جوّه بلا قيمة، والتطبيق المثبَّت مايستلمش ولا إشعار و**مفيش
+ * ولا خطأ**. نفس درس «الحارس على مسار واحد يبان مطبَّقًا وهو متخطّى بخطوة».
+ */
+export const pushEnabled = (ctx: Ctx) => !!(ctx.push || ctx.native);
+
+export const hasPushSubs = async (ctx: Ctx, userId: string) => {
+  if (ctx.push && (await ctx.db.pushSub.count({ where: { userId } })) > 0) return true;
+  if (ctx.native && (await ctx.db.deviceToken.count({ where: { userId } })) > 0) return true;
+  return false;
+};
 
 /** يبعت لكل أجهزة المستخدمين، ويمسح الاشتراكات الميتة. مبيرميش أبدًا (الإشعار best-effort). */
 export async function notifyPush(ctx: Ctx, userIds: string[], payload: PushPayload) {
-  if (!ctx.push || userIds.length === 0) return;
+  // 🔴 **أو** مش **و**: الاتنين مستقلّان. لو VAPID وحده متضبط، التطبيق المثبَّت
+  // مايوصلوش؛ ولو FCM وحده متضبط، المتصفح مايوصلوش — وأي شرط `&&` هنا بيطفّي
+  // القناة الشغّالة **في سكوت** لأن الإشعار best-effort ومابيرميش أبدًا.
+  if ((!ctx.push && !ctx.native) || userIds.length === 0) return;
+  await Promise.all([webFanout(ctx, userIds, payload), nativeFanout(ctx, userIds, payload)]);
+}
+
+/** Web Push للمتصفح — بيمسح الاشتراك الميت. */
+async function webFanout(ctx: Ctx, userIds: string[], payload: PushPayload) {
+  if (!ctx.push) return;
   try {
     const subs = await ctx.db.pushSub.findMany({ where: { userId: { in: userIds } } });
     await Promise.all(subs.map(async (s) => {
@@ -60,6 +89,24 @@ export async function notifyPush(ctx: Ctx, userIds: string[], payload: PushPaylo
       }
     }));
   } catch (e) { console.error("push error", e); }
+}
+
+/** FCM للتطبيق المثبَّت — بيمسح التوكن الميت بس (مش أي فشل). */
+async function nativeFanout(ctx: Ctx, userIds: string[], payload: PushPayload) {
+  if (!ctx.native) return;
+  try {
+    const rows = await ctx.db.deviceToken.findMany({ where: { userId: { in: userIds } } });
+    await Promise.all(rows.map(async (t) => {
+      try { await ctx.native!.send(t.token, payload); }
+      catch (e) {
+        // المسح على الميت المؤكَّد بس — فشل مؤقت (٥٠٠ · انقطاع) بيمسح توكن
+        // سليم ويخلّي الجهاز من غير إشعارات للأبد، لأنه مابيعيدش التسجيل إلا
+        // لما FCM نفسه يجدّد التوكن.
+        if (e instanceof DeadTokenError) await ctx.db.deviceToken.deleteMany({ where: { token: t.token } });
+        else console.error("native push failed", e instanceof Error ? e.message : e);
+      }
+    }));
+  } catch (e) { console.error("native push error", e); }
 }
 
 /** مين من الـ ids مش متصل بـ socket دلوقتي */

@@ -6,7 +6,7 @@ import { bad, forbidden, notFound, wrap } from "../lib/errors.js";
 import { assertClean } from "../lib/contentFilter.js";
 import { assertNotBlocked, blockedByMe, blockersOf } from "../lib/blocks.js";
 import { emitToUsers } from "../realtime.js";
-import { notifyPush, offlineOf } from "../lib/push.js";
+import { notifyPush, offlineOf, pushEnabled } from "../lib/push.js";
 import { messageInclude, messageView, threadView, type MsgRow } from "../serialize.js";
 import { assertCanPost, assertMember, assertNotRestricted } from "./threads.js";
 
@@ -143,7 +143,7 @@ export function messageRoutes(ctx: Ctx) {
     const members = (await memberIds(ctx, threadId)).map((m) => m.userId).filter((id) => id === me || !blockers.has(id));
     const view = emitMessage(ctx, members, "message:new", created, me);
     res.status(201).json(view);
-    if (ctx.push) void pushNewMessage(ctx, threadId, me, members, created.attachment ? (created.attachment.voiceDuration != null ? "🎤" : "📎 " + created.attachment.name) : "", b.text.trim());
+    if (pushEnabled(ctx)) void pushNewMessage(ctx, threadId, me, members, created.attachment ? (created.attachment.voiceDuration != null ? "🎤" : "📎 " + created.attachment.name) : "", b.text.trim());
   }));
 
   async function ownMessage(id: string, me: string) {
@@ -251,7 +251,7 @@ export function messageRoutes(ctx: Ctx) {
     const members = (await memberIds(ctx, threadId)).map((m) => m.userId).filter((id) => id === me || !blockers.has(id));
     const view = emitMessage(ctx, members, "message:new", created, me);
     res.status(201).json(view);
-    if (ctx.push) void pushNewMessage(ctx, threadId, me, members, "📊 " + b.question, "");
+    if (pushEnabled(ctx)) void pushNewMessage(ctx, threadId, me, members, "📊 " + b.question, "");
   }));
 
   /** تصويت: الاختيار الواحد بيستبدل صوتي القديم، والمتعدد بيحدّد القايمة كلها. */

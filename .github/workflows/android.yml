@@ -97,6 +97,30 @@ jobs:
           npx cap sync android
           test -f android/app/src/main/assets/public/index.html
 
+      # ── إشعارات FCM: ملف إعداد Firebase ─────────────────────────────────
+      # من غير الملف ده الـplugin مابيتطبّقش (الشرط في app/build.gradle)،
+      # والـAPK بيتبني وبيتثبّت **ومابيستلمش ولا إشعار** — ومفيش حاجة تقول كده.
+      # فالسطر التحذيري تحت مقصود: بناء بلا إشعارات حالة صالحة للتجربة، إنما
+      # لازم تبان في اللوج مش تعدّي في سكوت.
+      #
+      # والملف في Secrets مش في الريبو: الريبو **عام**، والملف فيه معرّفات
+      # مشروع Firebase. (مش مفتاح إرسال — ده حساب الخدمة على السيرفر.)
+      - name: إعداد Firebase للإشعارات
+        env:
+          GS: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GS" ]; then
+            printf '%s' "$GS" > mobile/android/app/google-services.json
+            # فحص إيجابي: ملف JSON سليم وفيه اسم الحزمة بتاعنا — قيمة مبهدلة
+            # في Secret بتخلّي جريدل يفشل برسالة غامضة بعد دقايق بناء.
+            node -e "const j=require('./mobile/android/app/google-services.json');
+              const ids=(j.client||[]).map(c=>c.client_info.android_client_info.package_name);
+              if(!ids.includes('com.raachateg.app')) { console.error('google-services.json مش لحزمة com.raachateg.app: '+ids.join(',')); process.exit(1); }
+              console.log('FIREBASE-OK '+j.project_info.project_id);"
+          else
+            echo "⚠️ GOOGLE_SERVICES_JSON مش متضبط — الـAPK هيتبني **بلا إشعارات أصلية**."
+          fi
+
       - name: بناء الـ APK
         working-directory: mobile/android
         run: |

@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createDb } from "./db.js";
 import { createWebPush } from "./lib/push.js";
+import { createNativePush } from "./lib/fcm.js";
 import { consoleSender, providerSender } from "./lib/senders.js";
 import { attachRealtime } from "./realtime.js";
 import { startRetention } from "./lib/retention.js";
@@ -16,6 +17,7 @@ const ctx: Ctx = {
   sender: config.NODE_ENV === "production" ? providerSender(config) : consoleSender,
   fetch,
   push: createWebPush(config),
+  native: createNativePush(config),
 };
 if (config.NODE_ENV === "production") {
   const sms = !!(config.TWILIO_SID && config.TWILIO_TOKEN && config.TWILIO_FROM);
@@ -23,6 +25,7 @@ if (config.NODE_ENV === "production") {
   if (!sms && !mail) console.error("⚠️ مفيش Twilio ولا Resend متضبطين: محدش هيقدر يستلم كود التحقق ويسجّل دخول.");
   if (config.JWT_SECRET.length < 32) console.error("⚠️ JWT_SECRET أقصر من ٣٢ حرف — استخدمي openssl rand -hex 32.");
   if (!ctx.push) console.warn("ℹ️ VAPID غير متضبط: إشعارات المكالمات والرسايل (Push) متوقفة — npm run vapid.");
+  if (!ctx.native) console.warn("ℹ️ FCM غير متضبط: التطبيق المثبَّت (APK) مش هيستلم ولا إشعار — bash scripts/set-fcm-key.sh");
   if (!config.TURN_URLS) console.warn("ℹ️ TURN غير مفعّل: المكالمات هتفشل خلف بعض الشبكات.");
 }
 const server = http.createServer(createApp(ctx));
