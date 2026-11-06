@@ -202,12 +202,23 @@ export default function RoomsScreen() {
               {t("الهوية المؤقتة غير مرتبطة بحسابك وتُحذف نهائيًا عند المغادرة", "A temporary identity isn't linked to your account and is permanently deleted when you leave")}
             </p>
             <div className="mt-5 flex flex-col gap-2.5">
-              <button
-                onClick={() => chooseIdentity("temp")}
-                className="flex items-center justify-center gap-2 rounded-xl border border-rachat-gold py-2.5 text-sm font-bold text-rachat-gold"
-              >
-                <Eye size={16} /> {t("ادخل بهوية مؤقتة", "Join with temporary identity")}
-              </button>
+              {/*
+                الهوية المؤقتة ١٨+ وحدها، **والقرار من السيرفر** (`tempIdentityAllowed`)
+                مش من الواجهة. و`=== false` مقصودة: `undefined` معناها الرد لسه ما جاش،
+                ومانقفلش زرارًا ممكن يكون مسموحًا (درس `topupReady`).
+              */}
+              {pendingRoom.tempIdentityAllowed === false ? (
+                <p role="status" className="rounded-xl border border-rachat-gold/40 px-3 py-2.5 text-xs text-rachat-gold">
+                  {t("الدخول بهوية مؤقتة متاح من سن ١٨ سنة — تقدر تدخل بهويتك الحقيقية", "Joining with a temporary identity is available from age 18 — you can join with your real identity")}
+                </p>
+              ) : (
+                <button
+                  onClick={() => chooseIdentity("temp")}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-rachat-gold py-2.5 text-sm font-bold text-rachat-gold"
+                >
+                  <Eye size={16} /> {t("ادخل بهوية مؤقتة", "Join with temporary identity")}
+                </button>
+              )}
               <button
                 onClick={() => chooseIdentity("real")}
                 className="flex items-center justify-center gap-2 rounded-xl border border-rachat-maroon py-2.5 text-sm text-rachat-papyrus"

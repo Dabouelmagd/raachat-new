@@ -3,7 +3,8 @@ import { z } from "zod";
 import { assertClean } from "../lib/contentFilter.js";
 import { requireAuth, type AuthedRequest } from "../auth.js";
 import type { Ctx } from "../context.js";
-import { forbidden, notFound, wrap } from "../lib/errors.js";
+import { forbidden, HttpError, notFound, wrap } from "../lib/errors.js";
+import { ADULT_AGE, isAdult } from "../lib/age.js";
 import { peerKey } from "../rtc.js";
 
 const TEMP = [
@@ -30,11 +31,35 @@ export function roomRoutes(ctx: Ctx) {
   const db = ctx.db;
   const include = { participants: { include: { user: { select: { name: true, color: true } } }, orderBy: { joinedAt: "asc" as const } } };
 
-  const view = (room: { id: string; name: string; ownerId: string; participants: P[] }, me: string) => {
+  /**
+   * **الهوية المؤقتة ١٨+ وحدها (قرار داليا ٦ نوفمبر ٢٠٢٦).**
+   *
+   * بند جوجل بلاي (٢٦ أغسطس ٢٠٢٦) يقيس **الوظيفة الأساسية** ويفرض «١٨+ وبس» على
+   * التطبيقات التي غرضها تواصل مجهول مع الغرباء. ومحور رع شات ليس ذلك (رسائل مع
+   * جهات اتصالك)، لكن الحكم حكمهم — فالقرار: نقصر الهوية المؤقتة على ١٨+ بأنفسنا،
+   * ونعلن في المتجر **١٨+ وحدها** بلا ادعاء ١٣–١٧.
+   *
+   * ⚠️ **والحارس لا يؤثّر على أحد اليوم** — التسجيل ١٨+ من ١٣ أكتوبر و`PATCH /me`
+   * يرفض دون ١٨ من ٢٦ أكتوبر، فكل حساب في الإنتاج سنّه محدَّد وبالغ. وجوده لحالة
+   * **غير محدَّد السن**: صفّ يدخل القاعدة من خارج هذه المسارات (استرجاع نسخة
+   * قديمة · تعديل مباشر في القاعدة) كان سيأخذ **معاملة البالغ في سكوت** — وهو
+   * بالظبط سبب بقاء فرع `!isAdult` في `ads.ts` وحارس السن في `/translate`. فشلٌ
+   * مقفول على مجموعة فارغة، لا ميزة تُحذف لأنها لا تنفَّذ.
+   *
+   * **والحكم في السيرفر لا في الواجهة** (نمط حارس المحفظة): لا يُتلفّ من الواجهة،
+   * والواجهة تقرأ `tempIdentityAllowed` من نفس الرد فلا تعرض زرارًا ميتًا — ولو
+   * تغيّرت القاعدة يومًا، تتغيّر معها بلا نشر واجهة (نمط `topupReady`).
+   */
+  const tempAllowed = async (me: string) => {
+    const u = await db.user.findUnique({ where: { id: me }, select: { birthDate: true } });
+    return isAdult(u?.birthDate);
+  };
+
+  const view = (room: { id: string; name: string; ownerId: string; participants: P[] }, me: string, temp: boolean) => {
     const mine = room.participants.find((p) => p.userId === me);
     return {
       id: room.id, name: room.name, createdByMe: room.ownerId === me, joined: !!mine, myIdentityMode: (mine?.identity as "real" | "temp" | undefined) ?? null,
-      count: room.participants.length,
+      count: room.participants.length, tempIdentityAllowed: temp,
       me: mine ? (mine.identity === "temp" ? { name: seat(room.id, room.ownerId, mine).name, color: seat(room.id, room.ownerId, mine).color } : { name: mine.user.name, color: mine.user.color }) : null,
       participants: room.participants.filter((p) => p.userId !== me).map((p) => seat(room.id, room.ownerId, p)),
     };
@@ -49,7 +74,8 @@ export function roomRoutes(ctx: Ctx) {
   r.get("/rooms", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
     const rooms = await db.room.findMany({ where: { closedAt: null }, include, orderBy: { createdAt: "desc" }, take: 50 });
-    res.json(rooms.map((x) => view(x, me)));
+    const temp = await tempAllowed(me);
+    res.json(rooms.map((x) => view(x, me, temp)));
   }));
 
   r.post("/rooms", wrap(async (req, res) => {
@@ -60,12 +86,18 @@ export function roomRoutes(ctx: Ctx) {
     assertClean(ctx, b.name);
     const room = await db.room.create({ data: { name: b.name, ownerId: me }, include });
     changed(room.id);
-    res.status(201).json(view(room, me));
+    res.status(201).json(view(room, me, await tempAllowed(me)));
   }));
 
   r.post("/rooms/:id/join", wrap(async (req, res) => {
     const me = (req as AuthedRequest).userId;
     const b = z.object({ identity: z.enum(["real", "temp"]) }).parse(req.body);
+    // الهوية المؤقتة ١٨+ وحدها — والدخول بالهوية الحقيقية مفتوح زي ما هو (الغرفة
+    // نفسها مش خدمة ١٨+، المقصور هو **إخفاء الهوية** اللي بند بلاي بيقيسه).
+    const temp = await tempAllowed(me);
+    if (b.identity === "temp" && !temp) {
+      throw new HttpError(403, "age_restricted", `الدخول بهوية مؤقتة متاح من سن ${ADULT_AGE} سنة — تقدر تدخل بهويتك الحقيقية`);
+    }
     const room = await load(String(req.params.id));
     if (!room.participants.some((p) => p.userId === me) && room.participants.length >= MAX_PER_ROOM) throw forbidden("الغرفة مكتملة");
     // مستخدم في غرفة واحدة بس في نفس الوقت
@@ -75,7 +107,7 @@ export function roomRoutes(ctx: Ctx) {
       create: { roomId: room.id, userId: me, identity: b.identity },
     });
     changed(room.id);
-    res.json(view(await load(room.id), me));
+    res.json(view(await load(room.id), me, temp));
   }));
 
   r.post("/rooms/:id/leave", wrap(async (req, res) => {

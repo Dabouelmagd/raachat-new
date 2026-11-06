@@ -114,6 +114,13 @@ export interface VoiceRoom {
   myIdentityMode: "real" | "temp" | null;
   me?: { name: string; color: string } | null; // هويتي في الغرفة (من السيرفر)
   count?: number;
+  /**
+   * هل مسموح لي أدخل بهوية مؤقتة؟ **القرار من السيرفر** (الهوية المؤقتة ١٨+ وحدها
+   * — قرار داليا ٦ نوفمبر ٢٠٢٦)، فالواجهة مابتحكمش بنفسها ولا تعرض زرارًا ميتًا.
+   * و`undefined` معناها الرد لسه ما جاش (أو بناء الديمو) — فالمقارنة بـ`=== false`
+   * مش `!flag`، زي درس `topupReady`: مانكتبش «ممنوع» على حاجة ممكن تكون مسموحة.
+   */
+  tempIdentityAllowed?: boolean;
 }
 
 export interface Story {
