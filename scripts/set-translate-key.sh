@@ -8,7 +8,9 @@
 # المفتاح مابيظهرش على الشاشة ولا بيتسجّل في history.
 # التشغيل:  cd /opt/rachat && bash scripts/set-translate-key.sh
 #
-# للإلغاء (إيقاف الترجمة المدفوعة): bash scripts/set-translate-key.sh --off
+# للإلغاء (شيل المفتاح المدفوع): bash scripts/set-translate-key.sh --off
+# ⚠️ و`--off` **مابيوقّفش الترجمة** — هي بتفضل شغّالة بالمجاني. اللي بيوقّفها
+# خالص هو LIBRETRANSLATE_URL فاضي في .env.production.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f .env.production ] || { echo "❌ مفيش .env.production"; exit 1; }
@@ -32,7 +34,23 @@ restart() {
 if [ "${1:-}" = "--off" ]; then
   set_kv GOOGLE_TRANSLATE_KEY ""
   chmod 600 .env.production
-  echo "✅ الترجمة المدفوعة اتوقفت (التطبيق هيرجع لقاموس العبارات)"
+  # 🔴 الرسالة لازم تقول الحقيقة: من ٣٠ أكتوبر ٢٠٢٦ الترجمة بتفضل **شغّالة**
+  # بالخدمة المجانية جوّه السيرفر بعد شيل المفتاح المدفوع — فجملة «هيرجع لقاموس
+  # العبارات» بقت مضلّلة، وبتخلّي اللي بيشغّل السكربت يفتكر إنه عطّل ميزة.
+  # و**الشرطة من غير نقطتين** في compose هي اللي بتحكم: السطر **غايب** من
+  # .env.production = شغّال بالافتراضي · و**فاضي** = إيقاف صريح. فقراءة الملف
+  # لازم تفرّق بين الاتنين، وإلا الرسالة تقلب المعنى.
+  lt=$(python3 - <<'PY'
+import re
+m = re.findall(r'^LIBRETRANSLATE_URL=(.*)$', open('.env.production').read(), re.M)
+print("off" if m and not m[-1].strip().strip('"\'') else "on")
+PY
+)
+  if [ "$lt" = "off" ]; then
+    echo "✅ المفتاح المدفوع اتشال — ومفيش ترجمة آلية خالص (LIBRETRANSLATE_URL فاضي)، فالتطبيق على قاموس العبارات"
+  else
+    echo "✅ المفتاح المدفوع اتشال — والترجمة بتفضل شغّالة بالخدمة المجانية جوّه السيرفر (LibreTranslate)"
+  fi
   restart
   exit 0
 fi
