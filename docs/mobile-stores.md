@@ -118,6 +118,16 @@ GitHub ← **Actions** ← «APK للموبايل» ← **Run workflow** ← ف�
 على الماك، بعد `git pull`:
 
 ```bash
+npm ci
+```
+
+🔴 **السطر ده (تبعيات الجذر) كان ناقصًا من الملف لحد ٢٤ نوفمبر ٢٠٢٦** — ومن
+غيره `npx vite build` اللي بعده بيقع، لأن بناء الواجهة محتاج تبعيات **الجذر**
+(react وvite وغيرهم) مش تبعيات `mobile/`. والترتيب ده هو نفسه اللي
+`.github/workflows/android.yml` ماشي عليه (`npm ci` ← `npx vite build` ←
+`cd mobile && npm ci` ← `cap sync`)، ومحمي باختبار بيقارن الملف بالوظيفة.
+
+```bash
 cd mobile && npm ci
 ```
 

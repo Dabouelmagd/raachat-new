@@ -152,4 +152,52 @@ describe("مشروع iOS", () => {
       expect(ig, `${p} مش متجاهل`).toContain(p);
     }
   });
+
+  /**
+   * 🔴 خطوات بناء iOS في `docs/mobile-stores.md` هي **الأداة الوحيدة** للبناء
+   * ده — مفيش ماك هنا، فالملف ده بيقوم مقام الوظيفة. وخطوة ناقصة فيه بتوقّع
+   * البناء على جهاز داليا وأنا مش شايف.
+   *
+   * وده حصل فعلًا (اتصلح ٢٤ نوفمبر ٢٠٢٦): `npm ci` بتاعة **الجذر** كانت
+   * ناقصة، والقسم بيبدأ بـ`cd mobile && npm ci` — فـ`npx vite build` اللي
+   * بعدها بيقع على تبعيات مش موجودة، لأن بناء الواجهة من الجذر.
+   *
+   * والحارس **مشروط بالوظيفة**: بيتأكد الأول إن `android.yml` لسه ماشي على
+   * نفس الترتيب (جذر ثم mobile)، فلو الترتيب اتغيّر يومًا الفحص يسقط ويقول إن
+   * الفرضية اتغيّرت بدل ما يفضل بيحرس خطوة بقت غلط (درس `OUR_DOMAINS`).
+   */
+  it("خطوات آبل في التوثيق بتبني الجذر قبل الواجهة — زي وظيفة أندرويد", () => {
+    const wf = read(".github/workflows/android.yml");
+    const wRoot = wf.indexOf("\n          npm ci");
+    const wVite = wf.indexOf("npx vite build");
+    const wMobile = wf.indexOf("working-directory: mobile");
+    expect(wRoot, "الفرضية اتغيّرت: مفيش npm ci على الجذر في الوظيفة").toBeGreaterThan(-1);
+    expect(wVite, "الفرضية اتغيّرت: مفيش npx vite build في الوظيفة").toBeGreaterThan(wRoot);
+    expect(wMobile, "الفرضية اتغيّرت: الوظيفة بتبني mobile قبل الواجهة").toBeGreaterThan(wVite);
+
+    const doc = read("docs/mobile-stores.md");
+    const from = doc.indexOf("## ٤)");
+    const to = doc.indexOf("## ٥)");
+    expect(from, "قسم آبل مش موجود في التوثيق").toBeGreaterThan(-1);
+    expect(to, "مفيش قسم بعد قسم آبل — الحدّ مش معروف").toBeGreaterThan(from);
+
+    const section = doc.slice(from, to);
+    const steps = [...section.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1].trim());
+    expect(steps.length, "مفيش أوامر في قسم آبل").toBeGreaterThan(4);
+
+    expect(steps[0], "أول خطوة لازم npm ci على الجذر — بلا cd").toBe("npm ci");
+
+    const vite = steps.findIndex((s) => s.includes("npx vite build"));
+    expect(vite, "مفيش بناء واجهة في خطوات آبل").toBeGreaterThan(0);
+    for (const v of ["VITE_API_URL", "VITE_SITE_URL", "VITE_PUBLIC_SITE"]) {
+      expect(steps[vite], `${v} ناقص من بناء الواجهة`).toContain(v);
+    }
+
+    const mobileCi = steps.findIndex((s) => s.includes("mobile") && s.includes("npm ci"));
+    expect(mobileCi, "مفيش npm ci لـmobile").toBeGreaterThan(0);
+    expect(mobileCi, "تبعيات mobile لازم بعد الجذر").toBeGreaterThan(0);
+
+    const sync = steps.findIndex((s) => s.includes("cap sync ios"));
+    expect(sync, "مفيش cap sync ios").toBeGreaterThan(vite);
+  });
 });
