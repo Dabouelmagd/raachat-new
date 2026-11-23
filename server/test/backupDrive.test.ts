@@ -53,9 +53,15 @@ function world(opts: { gpg?: string; key?: string; files?: string[] } = {}) {
   for (const d of [bin, backups, drive, path.join(dir, "scripts")]) fs.mkdirSync(d, { recursive: true });
 
   // محتوى **ثنائي** زي النسخ الحقيقية (pg_dump و tar) — مش نصّ
-  for (const f of opts.files ?? [DUMP, TGZ]) {
-    fs.writeFileSync(path.join(backups, f), Buffer.concat([Buffer.from(f), Buffer.from(Array.from({ length: 256 }, (_, i) => i))]));
-  }
+  // الترتيب بالـ mtime مقصود: `locals` بتستخدم `ls -1t`، فالأحدث لازم يكون
+  // محدَّدًا بالظبط — من غير كده اختبار التدارك بيحكم على ترتيب عشوائي.
+  const files = opts.files ?? [DUMP, TGZ];
+  files.forEach((f, i) => {
+    const p = path.join(backups, f);
+    fs.writeFileSync(p, Buffer.concat([Buffer.from(f), Buffer.from(Array.from({ length: 256 }, (_, i2) => i2))]));
+    const t = new Date(Date.now() - (files.length - i) * 86_400_000);
+    fs.utimesSync(p, t, t);
+  });
   fs.writeFileSync(path.join(dir, ".env.production"), `JWT_SECRET=x\nBACKUP_KEY=${opts.key ?? "test-backup-key"}\n`);
   fs.writeFileSync(path.join(dir, "docker-compose.prod.yml"), "services:\n  backup: {}\n");
   fs.mkdirSync(path.join(dir, "scripts/lib"), { recursive: true });
@@ -75,6 +81,7 @@ eval "$(printf '%s' "$*" | sed 's#\\(^\\| \\)/backups/#\\1${backups}/#g')"
   fs.writeFileSync(path.join(bin, "rclone"), `#!/bin/sh
 D='${drive}'
 sub="$1"; shift
+echo "$sub" >> '${dir}/rclone-calls'
 tgt=$(printf '%s' "$1" | sed 's#^[^:]*:##')
 case "$sub" in
   lsd) exit 0 ;;
@@ -87,8 +94,45 @@ esac
 exit 0
 `);
   fs.writeFileSync(path.join(bin, "gpg"), opts.gpg ?? GPG_REAL);
-  for (const f of ["docker", "rclone", "gpg"]) fs.chmodSync(path.join(bin, f), 0o755);
+  // بديل `sleep`: مابينامش وبيسجّل كل انتظار. التراجع الحقيقي بالدقايق، فبدون
+  // البديل ده أي اختبار فشل بياخد ٣ دقايق ويضرب مهلة الاختبار — والأهم إننا
+  // بنحكم على **التراجع نفسه** (كام محاولة وكل واحدة استنت قد إيه).
+  fs.writeFileSync(path.join(bin, "sleep"), `#!/bin/sh
+echo "$1" >> '${dir}/slept'
+`);
+  for (const f of ["docker", "rclone", "gpg", "sleep"]) fs.chmodSync(path.join(bin, f), 0o755);
   return { dir, bin, backups, drive };
+}
+
+/** الانتظارات اللي السكربت طلبها (بالثواني) — دليل التراجع الزمني */
+const slept = (w: { dir: string }) =>
+  fs.existsSync(path.join(w.dir, "slept"))
+    ? fs.readFileSync(path.join(w.dir, "slept"), "utf8").trim().split("\n").filter(Boolean).map(Number)
+    : [];
+/** عدد نداءات rclone بنوعها — دليل استهلاك الحصة */
+const calls = (w: { dir: string }) =>
+  fs.existsSync(path.join(w.dir, "rclone-calls"))
+    ? fs.readFileSync(path.join(w.dir, "rclone-calls"), "utf8").trim().split("\n").filter(Boolean)
+    : [];
+/** rclone بيفشل في `rcat` أول `n` مرات وبعدها ينجح — زي ضرب حدّ الاستعلامات */
+function rcatFailsTimes(w: { bin: string; dir: string }, n: number) {
+  const p = path.join(w.bin, "rclone");
+  fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(
+    'rcat) mkdir -p "$(dirname "$D/$tgt")"; cat > "$D/$tgt"; exit 0 ;;',
+    `rcat) c=$(cat '${w.dir}/rcat-n' 2>/dev/null || echo 0); c=$((c+1)); echo "$c" > '${w.dir}/rcat-n'
+       if [ "$c" -le ${n} ]; then cat > /dev/null; exit 1; fi
+       mkdir -p "$(dirname "$D/$tgt")"; cat > "$D/$tgt"; exit 0 ;;`));
+  fs.chmodSync(p, 0o755);
+}
+/** rclone بيفشل في `rcat` من النداء رقم `k` وطالع — عشان نستهدف التدارك وحده */
+function rcatFailsFrom(w: { bin: string; dir: string }, k: number) {
+  const p = path.join(w.bin, "rclone");
+  fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(
+    'rcat) mkdir -p "$(dirname "$D/$tgt")"; cat > "$D/$tgt"; exit 0 ;;',
+    `rcat) c=$(cat '${w.dir}/rcat-n' 2>/dev/null || echo 0); c=$((c+1)); echo "$c" > '${w.dir}/rcat-n'
+       if [ "$c" -ge ${k} ]; then cat > /dev/null; exit 1; fi
+       mkdir -p "$(dirname "$D/$tgt")"; cat > "$D/$tgt"; exit 0 ;;`));
+  fs.chmodSync(p, 0o755);
 }
 
 function run(w: ReturnType<typeof world>, args: string[] = [], env: Record<string, string> = {}) {
@@ -266,6 +310,92 @@ describe("رفع النسخ على جوجل درايف", () => {
     // خالص (ظهر في ارتداد فعلي). نفس درس «الحالة اللي بتفرّق بين الصح والغلط
     // القريب لازم تكون متفحوصة، وإلا الحارس بيوافق على الاتنين».
     expect(run(w, ["--check"]).out).toMatch(/آخر رفع ناجح: قبل \d+ ساعة/);
+  });
+
+  /**
+   * 🔴 الثقوب الدائمة — العطل اللي حصل فعلًا (١٠ و١٤ نوفمبر ٢٠٢٦).
+   *
+   * جوجل ردّت `403 Quota exceeded ... 'Requests per minute' ... consumer
+   * 'project_number:202264815644'` (مشروع rclone المشترك، مش مشروعنا). القاعدة
+   * عدّت لأنها بتترفع الأول، والمرفوعات أكلت الضربة. و`newest` بتاخد **أحدث
+   * ملف وبس**، فتشغيلة بكرة مشيت على نسخة أحدث و**عمرها ما رجعت** — فالفشلة
+   * العابرة بقت ثقبًا **دايمًا**، والتنبيه قفل من نفسه تاني يوم والثقب فضل
+   * مكانه في سكوت: `uploads-20261109` و`uploads-20261113` ناقصتان من درايف
+   * والقاعدة كاملة ١٤ يوم.
+   */
+  const D1 = "db-20261001-000000.dump";
+  const D2 = "db-20261002-000000.dump";
+  const D3 = "db-20261003-000000.dump";
+  /** درايف فيه D1 بس — فـD2 ثقب وD3 هي الأحدث */
+  const withHole = () => {
+    const w = world({ files: [D1, D2, D3, TGZ] });
+    const d = path.join(w.drive, "bk");
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, `${D1}.gpg`), "x");
+    return w;
+  };
+
+  it("🔴 بيتدارك نسخة قديمة ناقصة — الثقب مابقاش دايمًا", () => {
+    const w = withHole();
+    const r = run(w);
+    expect(r.code, r.out).toBe(0);
+    // الأحدث لازم توصل، **والناقصة كمان** — دي اللي الكود القديم مكانش بيرجع لها
+    expect(onDrive(w)).toContain(`${D3}.gpg`);
+    expect(onDrive(w), "النسخة الناقصة ما اتداركتش").toContain(`${D2}.gpg`);
+  });
+
+  it("🔴 الفشل العابر بيتعاد بتراجع **بالدقايق** بدل ما يبقى ثقبًا", () => {
+    const w = world();
+    rcatFailsTimes(w, 1); // أول رفع يفشل زي ضرب الحد، والتاني ينجح
+    const r = run(w);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("إعادة المحاولة");
+    expect(onDrive(w)).toEqual([`${DUMP}.gpg`, `${TGZ}.gpg`].sort());
+    // 🔴 الحكم على **قد إيه استنى**: الحد نفسه «لكل دقيقة»، فإعادة محاولة بعد
+    // ثواني بتضرب نفس الحائط — تراجع بالثواني بيبقى شكل إصلاح بلا إصلاح.
+    expect(slept(w)[0], `الانتظارات: ${slept(w).join(",")}`).toBeGreaterThanOrEqual(60);
+  });
+
+  it("🔴 فشل التدارك **مابيفشّلش** التشغيلة ولا بيلغي العلامة", () => {
+    const w = withHole();
+    rcatFailsFrom(w, 3); // الأحدث والمرفوعات ينجحوا، والتدارك يفشل
+    const r = run(w);
+    // ثقب قديم مش انقطاع جاري: لو قلب العلامة هيفضل تنبيه دائم على ملف ممكن
+    // يكون اتدوّر محليًا أصلًا — ضجيج بيدرّب الواحد إنه يتجاهل التنبيه.
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("التدارك ما نجحش");
+    expect(fs.existsSync(path.join(w.dir, MARK)), "التدارك الفاشل لغى علامة النجاح").toBe(true);
+  });
+
+  it("🔴 --check بيسمّي النسخ الناقصة، وبيقول «مفيش ثقوب» لما تكمل", () => {
+    const w = withHole();
+    const r = run(w, ["--check"]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain(D2);
+    expect(r.out).not.toContain("مفيش ثقوب");
+    // ولما تكمل: نفس الأمر لازم يقول إنها كاملة — وإلا التقرير بيصرخ للأبد
+    expect(run(w, [], { CATCHUP_MAX: "9" }).code).toBe(0);
+    expect(run(w, ["--check"]).out).toContain("مفيش ثقوب");
+  });
+
+  it("🔴 التشغيلة بتسأل درايف **مرة واحدة** — ده استهلاك الحصة نفسه", () => {
+    const w = world();
+    expect(run(w).code).toBe(0);
+    fs.rmSync(path.join(w.dir, "rclone-calls"));
+    const r2 = run(w);
+    expect(r2.code, r2.out).toBe(0);
+    // قبل كده: نداءا `lsf` لكل نسخة لمجرد «هي مرفوعة؟» + نداءين للتنضيف = ٦،
+    // وكلها من نفس الحصة اللي بتوقّعنا. دلوقتي قايمة واحدة بتتفحص محليًا.
+    const lsf = calls(w).filter((c) => c === "lsf").length;
+    expect(lsf, `نداءات rclone: ${calls(w).join(",")}`).toBe(1);
+  });
+
+  it("سقف التدارك بيمنع محاولة ١٤ يوم مرة واحدة (وده نفسه بيفجّر الحد)", () => {
+    const w = world({ files: [D1, D2, D3, TGZ] }); // التلاتة ناقصة
+    const r = run(w, [], { CATCHUP_MAX: "1" });
+    expect(r.code, r.out).toBe(0);
+    expect(onDrive(w).filter((f) => f.startsWith("db-")).length).toBe(2); // الأحدث + واحدة
+    expect(r.out).toContain("التشغيلة الجاية");
   });
 });
 

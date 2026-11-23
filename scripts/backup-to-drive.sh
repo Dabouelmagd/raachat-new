@@ -20,6 +20,22 @@ ENVF=.env.production
 REMOTE="${RCLONE_REMOTE:-rachat-drive}"
 FOLDER="${DRIVE_FOLDER:-raachat-backups}"
 KEEP="${KEEP:-14}"
+# 🔴 إعادة المحاولة بتراجع زمني — **علاج حدّ الاستعلامات مش علاج الشبكة**.
+# العطل الحقيقي اللي حصل مرتين (١٠ و١٤ نوفمبر ٢٠٢٦) كان:
+#   Error 403: Quota exceeded ... 'Requests per minute' ... consumer 'project_number:202264815644'
+# والرقم ده **مشروع rclone نفسه** مش مشروعنا — يعني إحنا بنتشارك حصة واحدة مع
+# كل مستخدمي rclone في العالم (ده الافتراضي لما `rclone authorize` يتشغّل بلا
+# `client_id` خاص بينا). فالفشل خارج سيطرتنا تمامًا، وبيضرب **المرفوعات**
+# (٨٫٤ ميجا) لأنها بتتنادى بعد القاعدة (٤٦ كيلو) فبتاكل الضربة.
+#
+# والتراجع بالدقايق مش بالثواني **عن قصد**: الحد في حدّ ذاته «لكل دقيقة»، فإعادة
+# محاولة فورية بتضرب نفس الحائط. والحل الجذري `client_id` خاص — شوفي
+# docs/backup-offsite.md — وده تخفيف مش بديل.
+RETRIES="${UP_RETRIES:-3}"
+BACKOFF="${UP_BACKOFF:-60}"
+# أقصى عدد نسخ قديمة ناقصة نتداركها في التشغيلة الواحدة (لكل نوع). محدود عشان
+# تدارك ١٤ يوم مرة واحدة هو نفسه اللي بيفجّر الحد.
+CATCHUP="${CATCHUP_MAX:-2}"
 # علامة النجاح اللي المراقبة بتفحص عمرها — من غيرها مفيش أي تنبيه لو الرفع وقف.
 # shellcheck source=scripts/lib/drivemark.sh
 . scripts/lib/drivemark.sh
@@ -57,12 +73,49 @@ if [ "$(printf '%s' "$PROBE" | base64 -d | gpg --batch --yes --quiet --decrypt -
   exit 1
 fi
 
+newest() { $DC exec -T backup sh -c "ls -1t /backups/$1 2>/dev/null | head -1" | tr -d '\r\n'; }
+# كل النسخ المحلية من نوع، **الأحدث الأول** — بيتبني عليها التدارك.
+locals() { $DC exec -T backup sh -c "ls -1t /backups/$1 2>/dev/null" | tr -d '\r'; }
+
+# 🔴 قايمة درايف **بتتجاب مرة واحدة** وبتتفحص محليًا بعد كده.
+# قبل كده كل نسخة كانت بتاخد نداءين `lsf` لمجرد السؤال «هي مرفوعة؟» — وده
+# استهلاك من نفس الحصة اللي بتوقّعنا. دلوقتي نداء واحد للتشغيلة كلها، والتنضيف
+# بيستخدم نفس القايمة بدل ما يسأل تاني. يعني نداءات أقل = احتمال ضرب الحد أقل،
+# وهو جزء من العلاج مش تحسينًا شكليًا.
+LIST=""
+list_drive() { LIST=$({ rclone lsf "$REMOTE:$FOLDER" 2>/dev/null || true; } | { grep . || true; }); }
+# `-F` **لازمة**: اسم الملف فيه نقط، و`.` في grep بتطابق أي حرف — فبدونها
+# `db-x.dump.gpg` ممكن تطابق اسمًا تانيًا وتتحسب «مرفوعة» وهي مش موجودة.
+on_drive() { printf '%s\n' "$LIST" | grep -Fqx -- "$1"; }
+
+# أسماء النسخ المحلية اللي **مش** على درايف — ثقوب فعلية.
+holes() { # holes <النمط>
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    on_drive "$(basename "$f").gpg" || basename "$f"
+  done <<EOF
+$(locals "$1")
+EOF
+}
+
 # ---------- وضع الاطمئنان: بيقول الحالة ومابيرفعش ----------
 if [ "${1:-}" = "--check" ]; then
   echo "الريموت: $REMOTE:$FOLDER"
   rclone lsl "$REMOTE:$FOLDER" 2>/dev/null | sort -k2 | tail -8 || echo "   (فاضي)"
-  n=$(rclone lsf "$REMOTE:$FOLDER" 2>/dev/null | grep -c . || true)
+  list_drive
+  n=$(printf '%s\n' "$LIST" | grep -c . || true)
   echo "عدد الملفات على درايف: ${n:-0}"
+  # 🔴 الثقوب: نسخة محلية مالهاش مقابل على درايف. من غير السطر ده مفيش طريق
+  # نعرف بيه إن فيه يوم ناقص غير إننا نعدّ الأسماء بالعين — وده بالظبط اللي
+  # خلّى `uploads-20261109` و`uploads-20261113` يعيشوا أسابيع في سكوت.
+  gaps=$( { holes 'db-*.dump'; holes 'uploads-*.tgz'; } | { grep . || true; } )
+  if [ -n "$gaps" ]; then
+    echo "⚠️  نسخ محلية مش موجودة على درايف:"
+    printf '%s\n' "$gaps" | sed 's/^/   /'
+  else
+    echo "✅ مفيش ثقوب — كل نسخة محلية ليها مقابل على درايف"
+  fi
   age=$(drive_mark_age_h "$DRIVE_MARK")
   case "$age" in
     missing) echo "علامة آخر رفع ناجح: مفيش — الرفع عمره ما نجح من هنا" ;;
@@ -73,16 +126,15 @@ if [ "${1:-}" = "--check" ]; then
   exit 0
 fi
 
-newest() { $DC exec -T backup sh -c "ls -1t /backups/$1 2>/dev/null | head -1" | tr -d '\r\n'; }
-
+# up_one بترجّع: 0 = اترفعت واتحقّقت · 2 = موجودة قبل كده · 1 = فشل
 up_one() { # up_one <مسار جوه الحاوية>
   local src="$1" base dst hash back
   base=$(basename "$src")
   dst="$base.gpg"
 
-  if rclone lsf "$REMOTE:$FOLDER/$dst" >/dev/null 2>&1 && [ -n "$(rclone lsf "$REMOTE:$FOLDER/$dst" 2>/dev/null)" ]; then
+  if on_drive "$dst"; then
     echo "   ⏭  $base مرفوعة قبل كده"
-    return 0
+    return 2
   fi
 
   # بصمة الأصل جوه الحاوية — دي اللي هنقارن بيها بعد التنزيل
@@ -110,7 +162,49 @@ up_one() { # up_one <مسار جوه الحاوية>
     rclone deletefile "$REMOTE:$FOLDER/$dst" >/dev/null 2>&1 || true
     return 1
   fi
+  LIST=$(printf '%s\n%s' "$LIST" "$dst")  # عشان التنضيف تحت يشوفها بلا نداء تاني
   echo "   ✅ $dst — متحقَّقة (نزلت واتفكّت وطابقت الأصل)"
+}
+
+# up_try: نفس up_one ومعاها إعادة محاولة بتراجع زمني. بترجّع نفس الأكواد.
+# **بتعيد تشغيل الماسورة من أولها** (قراءة جديدة من الحاوية) لأن `rclone rcat`
+# بيقرا من stdin — والمدخل بيتستهلك مرة واحدة، فـ`--retries` بتاعة rclone
+# **مابتنفعش هنا أصلًا**. دي السبب إن فشلة واحدة كانت بتبقى نهائية.
+up_try() {
+  local src="$1" n=1 wait=$BACKOFF rc=0
+  while :; do
+    rc=0; up_one "$src" || rc=$?
+    case "$rc" in 0 | 2) return "$rc" ;; esac
+    [ "$n" -ge "$RETRIES" ] && return 1
+    echo "   ⏳ إعادة المحاولة بعد $wait ثانية ($n/$RETRIES)"
+    sleep "$wait"
+    n=$((n + 1)); wait=$((wait * 2))
+  done
+}
+# نجاح للحارس = اترفعت (0) أو موجودة قبل كده (2)
+up_ok() { local rc=0; up_try "$1" || rc=$?; [ "$rc" = 0 ] || [ "$rc" = 2 ]; }
+
+# 🔴 تدارك الثقوب القديمة — ده اللي كان ناقص خالص.
+# `newest` بتاخد **أحدث ملف وبس**، فتشغيلة بكرة بتمشي على نسخة أحدث و**عمرها
+# ما بترجع** للي فشلت. يعني فشلة عابرة كانت بتتحوّل لثقب **دايم** على درايف،
+# والتنبيه بيقفل من نفسه تاني يوم والثقب بيفضل مكانه في سكوت. حصل فعلًا:
+# `uploads-20261109` و`uploads-20261113` ناقصتان والقاعدة كاملة ١٤ يوم.
+#
+# والفشل هنا **مابيفشّلش التشغيلة** عن قصد: ثقب قديم مش انقطاع جاري، ولو
+# خلّيناه يقلب العلامة هيفضل تنبيه دائم على ملف ممكن يكون اترجّع محليًا أصلًا.
+catch_up() { # catch_up <النمط> <مسار الأحدث — اتعمل فوق>
+  local pat="$1" skip="$2" n=0 f rc
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ "$f" != "$skip" ] || continue
+    on_drive "$(basename "$f").gpg" && continue
+    [ "$n" -ge "$CATCHUP" ] && { echo "   … فيه نسخ ناقصة تانية، هتتدارك في التشغيلة الجاية"; break; }
+    n=$((n + 1))
+    echo "   ↩️  تدارك نسخة ناقصة: $(basename "$f")"
+    rc=0; up_try "$f" || rc=$?
+    [ "$rc" = 0 ] || echo "   ⚠️  التدارك ما نجحش دلوقتي — التشغيلة الجاية تحاول تاني"
+  done <<EOF
+$(locals "$pat")
+EOF
 }
 
 DB=$(newest 'db-*.dump')
@@ -125,11 +219,16 @@ UP=$(newest 'uploads-*.tgz')
 # وقت تعديل الملف. و**UTC صريحة** لأن السيرفر وكرون الاتنين UTC والمستخدم
 # بتوقيت القاهرة (+٢/+٣) — نفس درس `cairo.ts`: أي وقت يُسمّى منطقته.
 echo "=== $(date -u '+%F %T') UTC — رفع على $REMOTE:$FOLDER"
+list_drive
 ok=1
-up_one "$DB" || ok=0
+up_ok "$DB" || ok=0
 # المرفوعات بتترفع **حتى لو القاعدة فشلت** ولا العكس — نفس درس حلقة النسخ:
 # فشل واحدة ماينفعش يمنع التانية (كانت جوّه فرع نجاح القاعدة فضاعت معاها).
-if [ -n "$UP" ]; then up_one "$UP" || ok=0; fi
+if [ -n "$UP" ]; then up_ok "$UP" || ok=0; fi
+
+# التدارك **بعد** الأحدث عن قصد: لو الحصة ضيّقة، أهم نسخة توصل الأول.
+catch_up 'db-*.dump' "$DB"
+if [ -n "$UP" ]; then catch_up 'uploads-*.tgz' "$UP"; fi
 
 # ---------- تنضيف القديم على درايف ----------
 # بنشيل الأقدم من آخر $KEEP لكل نوع. الحذف محدود بمجلدنا وبنوعين الأسماء بس.
@@ -139,7 +238,7 @@ if [ -n "$UP" ]; then up_one "$UP" || ok=0; fi
 # رفع ناجح، فيخرج بفشل والسطر الأخير مايتطبعش. وde فلتر مش حكم: الحكم في
 # `up_one` فوق وفي `ok`.
 for pat in 'db-' 'uploads-'; do
-  { rclone lsf "$REMOTE:$FOLDER" 2>/dev/null || true; } | { grep "^$pat" || true; } | sort | head -n -"$KEEP" | while read -r f; do
+  printf '%s\n' "$LIST" | { grep "^$pat" || true; } | sort | head -n -"$KEEP" | while read -r f; do
     [ -n "$f" ] || continue
     rclone deletefile "$REMOTE:$FOLDER/$f" >/dev/null 2>&1 && echo "   🧹 اتشالت القديمة $f"
   done
