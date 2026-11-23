@@ -491,11 +491,18 @@ describe("حزمة جوجل بلاي", () => {
     // الفحوص لازم تبقى **قبل** جريدل، وإلا بتفحص بعد ما العطل حصل.
     expect(pre, "مفيش فحص إن المخزن بيتفتح").toMatch(/keytool -list -keystore/);
     expect(pre, "مفيش فحص إن الاسم البديل موجود").toMatch(/keytool -list -alias/);
+    // 🔴 لازم **توقيع حقيقي** بـjarsigner: `keytool -certreq -keypass` بيعدّي
+    // بأي كلمة سر على مخزن PKCS12 (متقاس)، فهو حارس أعمى — والمخزن اللي keytool
+    // بيعمله افتراضيًّا PKCS12. وjarsigner بينادي نفس `KeyStore.getKey` بتاعة جريدل.
     expect(
       pre,
-      "لازم -certreq: هو الوحيد اللي بيقرا المفتاح الخاص فعلًا، فـ-list لوحده بيعدّي على كلمة سر مفتاح غلط",
-    ).toMatch(/keytool -certreq -alias/);
-    expect(pre, "-certreq لازم ياخد كلمة سر المفتاح وإلا مابيفحصهاش").toContain("-keypass");
+      "لازم توقيع حقيقي بـjarsigner — keytool -certreq بيعدّي على كلمة سر مفتاح غلط في PKCS12",
+    ).toMatch(/jarsigner -keystore/);
+    expect(pre, "التوقيع التجريبي لازم ياخد كلمة سر المفتاح وإلا مابيفحصهاش").toContain("-keypass");
+    expect(
+      pre,
+      "-certreq حارس أعمى على PKCS12 ومايتعمدش عليه",
+    ).not.toMatch(/keytool -certreq/);
     // وكل فرع فشل يسمّي **سرًّا واحدًا بالاسم** — وإلا رجعنا لرسالة مابتفرّقش.
     for (const name of ["ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD"]) {
       expect(pre, `رسالة الفشل مش بتسمّي ${name}`).toContain(name);

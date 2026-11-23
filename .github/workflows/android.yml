@@ -209,11 +209,22 @@ jobs:
             -storepass "$ANDROID_KEYSTORE_PASSWORD" > /dev/null 2>&1 \
             || { echo "FAIL: ANDROID_KEY_ALIAS not found in the keystore"; exit 1; }
           echo "ALIAS-OK"
-          # `-certreq` بيقرا **المفتاح الخاص** فعلًا، فهو الفحص الوحيد اللي
-          # بيثبّت كلمة سر المفتاح؛ `-list` بيعدّي بكلمة سر المخزن وحدها.
-          keytool -certreq -alias "$ANDROID_KEY_ALIAS" -keystore "$KS" \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" > /dev/null 2>&1 \
-            || { echo "FAIL: ANDROID_KEY_PASSWORD is wrong (the store opened and the alias exists)"; exit 1; }
+          echo "keystore type: $(keytool -list -keystore "$KS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>/dev/null | sed -n 's/^Keystore type: //p')"
+          # 🔴 و`keytool -certreq -keypass` **مابيفحصش** كلمة سر المفتاح على مخزن
+          # PKCS12 (وهو افتراضي keytool من جافا ٩): الصيغة دي بتشفّر المفتاح
+          # بكلمة سر **المخزن**، وkeytool بيتجاهل `-keypass` فبيعدّي بأي قيمة.
+          # متقاس محليًّا: `-certreq` بكلمة سر مفتاح غلط **عدّى**، وjarsigner
+          # بنفسها **سقط**. وحصل فعلًا (٢٣ نوفمبر ٢٠٢٦): الحارس طلّع KEY-OK
+          # وجريدل وقع بعده بـ«Get Key failed: Given final block not properly
+          # padded». فالفحص بقى **توقيع حقيقي**: `jarsigner` بينادي
+          # `KeyStore.getKey(alias, keyPassword)` زي جريدل بالظبط.
+          printf 'x' > "$RUNNER_TEMP/kc.txt"
+          ( cd "$RUNNER_TEMP" && jar cf kc.jar kc.txt )
+          jarsigner -keystore "$KS" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -keypass "$ANDROID_KEY_PASSWORD" "$RUNNER_TEMP/kc.jar" "$ANDROID_KEY_ALIAS" > /dev/null 2>&1 \
+            || { echo "FAIL: ANDROID_KEY_PASSWORD cannot decrypt the key — on a PKCS12 keystore it must be byte-identical to ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          rm -f "$RUNNER_TEMP/kc.jar" "$RUNNER_TEMP/kc.txt"
           echo "KEY-OK"
           export ANDROID_KEYSTORE_PATH="$KS"
           chmod +x gradlew
