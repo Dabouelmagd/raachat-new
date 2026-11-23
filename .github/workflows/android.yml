@@ -184,10 +184,37 @@ jobs:
           # المفتاح بيتكتب **برّه الريبو** ($RUNNER_TEMP) عشان مايتلقطش في أي
           # artifact ولا يتسرّب في commit، وبصلاحية 600، وبيتمسح في كل الحالات.
           KS="$RUNNER_TEMP/upload.jks"
-          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$KS"
           trap 'rm -f "$KS"' EXIT
+          # 🔴 المسافات والتابات بتتشال قبل الفك — و`base64 -d` **بيتجاهل فواصل
+          # الأسطر لوحده** إنما **بيرفض المسافة والتاب** (متقاس: سطر في الآخر
+          # بينجح، ومسافة واحدة في الآخر بترجّع كود خروج ١). ومسافة في آخر سرّ
+          # ملزوق أثر لصق عادي جدًّا، فمن غير التنضيف دي الفك بيفشل كله.
+          printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '\n\r \t' | base64 -d > "$KS" 2>/dev/null \
+            || { echo "FAIL: ANDROID_KEYSTORE_B64 is not valid base64"; exit 1; }
           chmod 600 "$KS"
-          test -s "$KS"
+          test -s "$KS" || { echo "FAIL: ANDROID_KEYSTORE_B64 decoded to an empty file"; exit 1; }
+          # البصمة والحجم مش سرًّا، وبيهما نقارن الملف اللي وصل بالملف اللي على
+          # جهاز المالكة: اختلافهما = السرّ اتبهدل في النقل، تطابقهما = الملف سليم.
+          echo "keystore bytes: $(stat -c%s "$KS")"
+          echo "keystore sha256: $(sha256sum "$KS" | cut -c1-12)"
+          # 🔴 فحص إيجابي قبل جريدل، وكل فرع بيسمّي سببًا واحدًا. من غيره الفشل
+          # بيطلع من جريدل كـ`signReleaseBundle ... DerInputStream.getLength():
+          # lengthTag=NN, too big` — وهي بصمة **مابتفرّقش** بين تلات أسباب
+          # مختلفة العلاج: ملف مبهدل · كلمة سر المخزن · كلمة سر المفتاح.
+          # حصل فعلًا في أول بناء AAB حقيقي (٢٣ نوفمبر ٢٠٢٦).
+          keytool -list -keystore "$KS" -storepass "$ANDROID_KEYSTORE_PASSWORD" > /dev/null 2>&1 \
+            || { echo "FAIL: cannot open the keystore — ANDROID_KEYSTORE_B64 is corrupt or ANDROID_KEYSTORE_PASSWORD is wrong"; exit 1; }
+          echo "STORE-OK"
+          keytool -list -alias "$ANDROID_KEY_ALIAS" -keystore "$KS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" > /dev/null 2>&1 \
+            || { echo "FAIL: ANDROID_KEY_ALIAS not found in the keystore"; exit 1; }
+          echo "ALIAS-OK"
+          # `-certreq` بيقرا **المفتاح الخاص** فعلًا، فهو الفحص الوحيد اللي
+          # بيثبّت كلمة سر المفتاح؛ `-list` بيعدّي بكلمة سر المخزن وحدها.
+          keytool -certreq -alias "$ANDROID_KEY_ALIAS" -keystore "$KS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" > /dev/null 2>&1 \
+            || { echo "FAIL: ANDROID_KEY_PASSWORD is wrong (the store opened and the alias exists)"; exit 1; }
+          echo "KEY-OK"
           export ANDROID_KEYSTORE_PATH="$KS"
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon

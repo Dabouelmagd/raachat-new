@@ -468,6 +468,57 @@ describe("حزمة جوجل بلاي", () => {
     expect(from).toBeGreaterThan(-1);
     expect(s.slice(from), "|| true بيخلّي الفشل يعدّي").not.toMatch(/\|\|\s*true/);
   });
+
+  /**
+   * 🔴 الفحص القبلي على المفتاح نفسه — ودرسه من أول بناء AAB حقيقي
+   * (٢٣ نوفمبر ٢٠٢٦): جريدل سقط بـ`signReleaseBundle ... DerInputStream
+   * .getLength(): lengthTag=73, too big`، وهي بصمة واحدة **لتلات أسباب**
+   * مختلفة العلاج تمامًا: الملف اتبهدل في النقل · كلمة سر المخزن غلط · كلمة
+   * سر المفتاح غلط. ومن الرسالة دي مفيش طريق نفرّق — نفس عائلة درس «البصمة
+   * الواحدة بسببين» في postgres، ونفس درس «ECONNREFUSED مش الدليل القاطع».
+   *
+   * والفحص على **قراءة المفتاح الخاص فعلًا** مش على `-list`: الأخير بيعدّي
+   * بكلمة سر المخزن وحدها، فحارس قايم عليه بيوافق على كلمة سر مفتاح غلط.
+   */
+  it("بيتحقق من المفتاح قبل جريدل وبيسمّي السبب الواحد", () => {
+    const s = cmds();
+    const from = s.indexOf("بناء AAB");
+    expect(from).toBeGreaterThan(-1);
+    const step = s.slice(from);
+    const gradle = step.indexOf("gradlew bundleRelease");
+    expect(gradle, "مفيش نداء جريدل في الخطوة").toBeGreaterThan(-1);
+    const pre = step.slice(0, gradle);
+    // الفحوص لازم تبقى **قبل** جريدل، وإلا بتفحص بعد ما العطل حصل.
+    expect(pre, "مفيش فحص إن المخزن بيتفتح").toMatch(/keytool -list -keystore/);
+    expect(pre, "مفيش فحص إن الاسم البديل موجود").toMatch(/keytool -list -alias/);
+    expect(
+      pre,
+      "لازم -certreq: هو الوحيد اللي بيقرا المفتاح الخاص فعلًا، فـ-list لوحده بيعدّي على كلمة سر مفتاح غلط",
+    ).toMatch(/keytool -certreq -alias/);
+    expect(pre, "-certreq لازم ياخد كلمة سر المفتاح وإلا مابيفحصهاش").toContain("-keypass");
+    // وكل فرع فشل يسمّي **سرًّا واحدًا بالاسم** — وإلا رجعنا لرسالة مابتفرّقش.
+    for (const name of ["ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD"]) {
+      expect(pre, `رسالة الفشل مش بتسمّي ${name}`).toContain(name);
+    }
+  });
+
+  /**
+   * ⚠️ وتصحيح لفرضية كتبتها أنا وطلعت غلط: مكتوب إن التنضيف للحماية من **فواصل
+   * الأسطر** — و`base64 -d` بيتجاهلها لوحده (متقاس: ارتداد شيل `tr -d` مع سرّ
+   * فيه فواصل أسطر **عدّى**). اللي بيرفضه فعلًا هو **المسافة والتاب**، ومسافة
+   * واحدة في آخر سرّ ملزوق بتفشّل الفك بالكامل — ودي أثر لصق عادي. والارتداد
+   * الصح (مسافة في الآخر) سقط فعلًا، فالتنضيف محمول مش شكلي.
+   *
+   * والدرس: الارتداد لازم يتأكد إنه **غيّر سلوكًا** قبل ما نحكم على الحارس —
+   * ارتدادي الأول كان no-op فبان الحارس نافعًا وهو بيحرس السبب الغلط.
+   */
+  it("الفك بيتحمّل فواصل الأسطر وبيطبع بصمة الملف", () => {
+    const s = cmds();
+    const from = s.indexOf("بناء AAB");
+    const step = s.slice(from, s.indexOf("gradlew bundleRelease", from));
+    expect(step, "مفيش تنضيف للمسافات وفواصل الأسطر قبل الفك").toMatch(/tr -d/);
+    expect(step, "مفيش بصمة للمقارنة بملف المالكة").toMatch(/sha256sum/);
+  });
 });
 
 /**
