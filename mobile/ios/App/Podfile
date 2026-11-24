@@ -1,6 +1,10 @@
 require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
-platform :ios, '15.0'
+# نسخة iOS الأدنى — مصدر واحد للـPodfile وللحزم كلها.
+# لازم تطابق IPHONEOS_DEPLOYMENT_TARGET في project.pbxproj (محمي باختبار).
+IOS_MIN = '15.0'
+
+platform :ios, IOS_MIN
 use_frameworks!
 
 # workaround to avoid Xcode caching of Pods that requires
@@ -25,4 +29,17 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+
+  # assertDeploymentTarget بتاعة Capacitor بترفع الحزمة لـ14.0 وبس، وكل حزمة
+  # بتعلن رقمها في podspec بتاعها — والرقم ده بيتغلّب على سطر platform فوق.
+  # فمن غير الحلقة دي البناء بيقع بخطأ واحد مكرَّر على كل حزمة:
+  # "IPHONEOS_DEPLOYMENT_TARGET is set to 14.0, but the range of supported…".
+  # والرفع هنا لأعلى بس — حزمة محتاجة نسخة أحدث مابتتنزّلش.
+  configs = installer.pods_project.build_configurations +
+            installer.pods_project.targets.flat_map(&:build_configurations)
+  configs.each do |config|
+    if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < IOS_MIN.to_f
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = IOS_MIN
+    end
+  end
 end

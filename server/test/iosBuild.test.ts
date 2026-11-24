@@ -188,9 +188,29 @@ describe("مشروع iOS", () => {
       (v[0] ?? 0) < min[0] || ((v[0] ?? 0) === min[0] && (v[1] ?? 0) < (min[1] ?? 0));
 
     const podfile = read("mobile/ios/App/Podfile");
-    const pod = podfile.match(/^platform :ios, '([\d.]+)'/m);
-    expect(pod, "مفيش سطر platform :ios في Podfile").not.toBeNull();
+    const pod = podfile.match(/^IOS_MIN = '([\d.]+)'/m);
+    expect(pod, "مفيش ثابت IOS_MIN في Podfile").not.toBeNull();
     const podVersion = pod![1];
+
+    expect(podfile, "platform لازم ياخد IOS_MIN مش رقمًا مكتوبًا").toMatch(
+      /^platform :ios, IOS_MIN$/m,
+    );
+
+    /**
+     * 🔴 سطر `platform` وحده **مش كفاية**: كل حزمة بتعلن نسختها في podspec
+     * بتاعها وبتتغلّب عليه، و`assertDeploymentTarget` بتاعة Capacitor بترفع
+     * لـ14.0 وبس. فمن غير حلقة في `post_install` بترفع كل إعدادات مشروع الـPods،
+     * البناء بيقع بخطأ مكرَّر على كل حزمة — وده اللي حصل فعلًا في ٢٤ نوفمبر.
+     */
+    const after = podfile.slice(podfile.indexOf("post_install"));
+    expect(after, "مفيش post_install في Podfile").not.toBe("");
+    expect(
+      after,
+      "post_install لازم يرفع IPHONEOS_DEPLOYMENT_TARGET لكل الحزم — سطر platform وحده مابيكفيش",
+    ).toMatch(/IPHONEOS_DEPLOYMENT_TARGET'\]\s*=\s*IOS_MIN/);
+    expect(after, "الرفع لازم يبقى مشروطًا عشان ماينزّلش حزمة محتاجة أحدث").toContain(
+      "< IOS_MIN.to_f",
+    );
 
     const pbx = read(PBX);
     const targets = [...pbx.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([\d.]+);/g)].map((m) => m[1]);
