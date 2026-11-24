@@ -166,6 +166,45 @@ describe("مشروع iOS", () => {
    * نفس الترتيب (جذر ثم mobile)، فلو الترتيب اتغيّر يومًا الفحص يسقط ويقول إن
    * الفرضية اتغيّرت بدل ما يفضل بيحرس خطوة بقت غلط (درس `OUR_DOMAINS`).
    */
+  /**
+   * 🔴 أول أرشيف حقيقي وقع على ده (٢٤ نوفمبر ٢٠٢٦): `Podfile` و`project.pbxproj`
+   * كانا على **iOS 14.0**، وXcode الحالي بيرفض أي رقم أقلّ من الحدّ اللي في الـSDK
+   * نفسه — فالبناء بيقع بـ٩ أخطاء، سطر واحد مكرَّر على كل حزمة:
+   * «IPHONEOS_DEPLOYMENT_TARGET is set to 14.0, but the range of supported…».
+   *
+   * والرقم ده **مش قابل للتخمين من هنا** (مفيش ماك ولا SDK في بيئة Claude)،
+   * ومصدره `MinimumDeploymentTarget` في `SDKSettings.plist` بتاعة الـSDK —
+   * متقاس على جهاز المالكة يوم ٢٤ نوفمبر ٢٠٢٦ = **15.0**.
+   *
+   * فالحارس على حاجتين: **التطابق** بين الملفين (اللي اختلافه بيطلّع نفس عائلة
+   * الأخطاء دي بين التطبيق والـPods)، و**ألّا ينزل** تحت الحدّ المقيس. ولو Xcode
+   * أحدث رفع الحدّ يومًا، يُرفع الرقمان في الملفين **ومعاهم `MIN_IOS` هنا** —
+   * الاختبار بيسقط وقتها ويقول إن الفرضية اتغيّرت، مش بيعدّي في سكوت.
+   */
+  it("نسخة iOS الأدنى متطابقة في Podfile وproject.pbxproj ومش تحت الحدّ المقيس", () => {
+    const MIN_IOS = [15, 0];
+    const parse = (v: string) => v.split(".").map((n) => parseInt(n, 10));
+    const below = (v: number[], min: number[]) =>
+      (v[0] ?? 0) < min[0] || ((v[0] ?? 0) === min[0] && (v[1] ?? 0) < (min[1] ?? 0));
+
+    const podfile = read("mobile/ios/App/Podfile");
+    const pod = podfile.match(/^platform :ios, '([\d.]+)'/m);
+    expect(pod, "مفيش سطر platform :ios في Podfile").not.toBeNull();
+    const podVersion = pod![1];
+
+    const pbx = read(PBX);
+    const targets = [...pbx.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([\d.]+);/g)].map((m) => m[1]);
+    expect(targets.length, "مفيش IPHONEOS_DEPLOYMENT_TARGET في المشروع").toBeGreaterThan(0);
+
+    for (const t of targets) {
+      expect(t, `المشروع على ${t} وPodfile على ${podVersion} — لازم يتطابقوا`).toBe(podVersion);
+    }
+    expect(
+      below(parse(podVersion), MIN_IOS),
+      `نسخة iOS الأدنى ${podVersion} تحت الحدّ المقيس ${MIN_IOS.join(".")} — البناء هيقع على Xcode الحالي`,
+    ).toBe(false);
+  });
+
   it("خطوات آبل في التوثيق بتبني الجذر قبل الواجهة — زي وظيفة أندرويد", () => {
     const wf = read(".github/workflows/android.yml");
     const wRoot = wf.indexOf("\n          npm ci");
