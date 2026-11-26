@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.raachateg.app"
+    namespace "com.datalife.raachat"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.raachateg.app"
+        applicationId "com.datalife.raachat"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // 🔴 `versionCode` لازم **يزيد مع كل رفعة** على بلاي، والرقم المحجوز

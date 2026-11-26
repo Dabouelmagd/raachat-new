@@ -1,4 +1,4 @@
-package com.raachateg.app;
+package com.datalife.raachat;
 
 import com.getcapacitor.BridgeActivity;
 

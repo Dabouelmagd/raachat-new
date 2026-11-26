@@ -115,7 +115,7 @@ jobs:
             # في Secret بتخلّي جريدل يفشل برسالة غامضة بعد دقايق بناء.
             node -e "const j=require('./mobile/android/app/google-services.json');
               const ids=(j.client||[]).map(c=>c.client_info.android_client_info.package_name);
-              if(!ids.includes('com.raachateg.app')) { console.error('google-services.json مش لحزمة com.raachateg.app: '+ids.join(',')); process.exit(1); }
+              if(!ids.includes('com.datalife.raachat')) { console.error('google-services.json مش لحزمة com.datalife.raachat: '+ids.join(',')); process.exit(1); }
               console.log('FIREBASE-OK '+j.project_info.project_id);"
           else
             echo "⚠️ GOOGLE_SERVICES_JSON مش متضبط — الـAPK هيتبني **بلا إشعارات أصلية**."
@@ -180,7 +180,21 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           # رقم التشغيلة بيزيد لوحده ومابيرجعش، وبلاي مابتقبلش رقمًا مستهلَكًا.
           ANDROID_VERSION_CODE: ${{ github.run_number }}
+          # 🔴 أعلى رقم بناء منشور على بلاي للستة com.datalife.raachat (2.0.5).
+          # بلاي بترفض أي رفعة رقمها أقل من أو يساوي ده، ورقم التشغيلة ممكن يرجع
+          # للصفر لو الوظيفة اتسمّت من جديد — فبناء بيخلص **أخضر** وحزمته
+          # مستحيل ترتفع. متقاس من صفحة التطبيق العامة في ٢٦ نوفمبر ٢٠٢٦.
+          PLAY_MIN_VERSION_CODE: "38"
+          # اسم النسخة المعروض للمستخدم. المنشور 2.0.5، فالافتراضي "1.0" بتاع
+          # build.gradle كان هيبان **تنزيلًا** في اللستة. لازم يفضل أعلى منه.
+          ANDROID_VERSION_NAME: "2.1.0"
         run: |
+          # رقم أقل من المنشور = حزمة مرفوضة بعد الرفع، فالرفض هنا أرخص.
+          if [ "$ANDROID_VERSION_CODE" -le "$PLAY_MIN_VERSION_CODE" ]; then
+            echo "FAIL: versionCode $ANDROID_VERSION_CODE <= المنشور على بلاي $PLAY_MIN_VERSION_CODE"
+            exit 1
+          fi
+          echo "VERSION-OK: code=$ANDROID_VERSION_CODE name=$ANDROID_VERSION_NAME"
           # المفتاح بيتكتب **برّه الريبو** ($RUNNER_TEMP) عشان مايتلقطش في أي
           # artifact ولا يتسرّب في commit، وبصلاحية 600، وبيتمسح في كل الحالات.
           KS="$RUNNER_TEMP/upload.jks"

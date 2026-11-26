@@ -46,7 +46,7 @@
 
 1. [console.firebase.google.com](https://console.firebase.google.com) ← أنشئي
    مشروعًا (أو استخدمي واحدًا موجودًا).
-2. **Add app ← Android** واسم الحزمة بالظبط: `com.raachateg.app`.
+2. **Add app ← Android** واسم الحزمة بالظبط: `com.datalife.raachat`.
    (أي اسم تاني = الإشعارات مش هتشتغل، والوظيفة بتفحص ده وبتفشل بصراحة.)
 3. نزّلي `google-services.json`، وحطّيه في **GitHub Secrets** باسم
    `GOOGLE_SERVICES_JSON` (محتواه كامل). **مش في الريبو** — الريبو عام، والملف

@@ -148,7 +148,7 @@ cd ../.. && npm run open:ios
 ```
 
 وبعدها في Xcode: **Signing & Capabilities** ← اختاري الـTeam بتاعتك (اسم الحزمة
-`com.raachateg.app` متضبط أصلًا ومحمي باختبار) ← **Product > Archive** ←
+`com.datalife.raachat` متضبط أصلًا ومحمي باختبار) ← **Product > Archive** ←
 **Distribute App**.
 
 **اللي متضبط في الريبو:** اسم الحزمة · الاسم المعروض «رع شات» · أيقونة المتجر

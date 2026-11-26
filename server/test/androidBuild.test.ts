@@ -547,8 +547,33 @@ describe("إشعارات الـAPK", () => {
     expect(fb, "خطوة Firebase مش موجودة").toBeGreaterThan(-1);
     expect(build).toBeGreaterThan(-1);
     expect(fb, "لازم تتكتب قبل جريدل — بعده مالهاش أي أثر").toBeLessThan(build);
-    // قيمة مبهدلة في الـSecret بتخلّي جريدل يفشل برسالة غامضة بعد دقايق بناء
-    expect(s, "مفيش تحقّق من اسم الحزمة في الملف").toContain("com.raachateg.app");
+    // قيمة مبهدلة في الـSecret بتخلّي جريدل يفشل برسالة غامضة بعد دقايق بناء.
+    // والاسم بيتقرا من capacitor.config.ts مش مكتوبًا هنا: مكتوبًا بالإيد كان
+    // بيفضل على اسم قديم بعد أي تغيير، فالفحص يعدّي على حزمة غلط.
+    const appId = /appId:\s*"([^"]+)"/.exec(read("mobile/capacitor.config.ts"))?.[1];
+    expect(appId, "مفيش appId").toBeTruthy();
+    expect(s, "مفيش تحقّق من اسم الحزمة في الملف").toContain(appId!);
+  });
+
+  // بلاي بترفض أي رفعة رقم بنائها أقل من أو يساوي المنشور، ورقم التشغيلة ممكن
+  // يرجع للصفر لو الوظيفة اتسمّت من جديد — فالبناء يخلص أخضر وحزمته ميتة.
+  it("البناء بيرفض رقم نسخة أقل من المنشور على بلاي", () => {
+    const s = cmds();
+    expect(s, "مفيش سقف أدنى لرقم البناء").toMatch(/PLAY_MIN_VERSION_CODE/);
+    expect(s, "مفيش فحص يقارن رقم التشغيلة بالمنشور")
+      .toMatch(/ANDROID_VERSION_CODE"?\s*-le\s*"?\$PLAY_MIN_VERSION_CODE/);
+  });
+
+  // الافتراضي في build.gradle هو "1.0"، والمنشور 2.0.5 — فمن غير ضبطه صراحةً
+  // التحديث بيبان للمستخدم كأنه تنزيل.
+  it("اسم النسخة متضبط وأعلى من المنشور", () => {
+    const m = /ANDROID_VERSION_NAME:\s*"?([\d.]+)"?/.exec(cmds());
+    expect(m, "ANDROID_VERSION_NAME مش متضبط في الوظيفة").not.toBeNull();
+    const num = (v: string) => v.split(".").map(Number);
+    const [a, b, c] = num(m![1]);
+    const [x, y, z] = num("2.0.5");
+    const bigger = a > x || (a === x && (b > y || (b === y && c > z)));
+    expect(bigger, `اسم النسخة ${m![1]} لازم يكون أعلى من المنشور 2.0.5`).toBe(true);
   });
 
   it("الملف متجاهل في git (الريبو عام)", () => {
