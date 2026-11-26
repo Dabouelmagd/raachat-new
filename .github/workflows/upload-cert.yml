@@ -1,0 +1,73 @@
+name: upload-certificate
+
+# بيطلّع **شهادة** مفتاح الرفع (`upload_certificate.pem`) من المفتاح اللي في
+# Secrets — ودي اللي جوجل بتطلبها في "Request upload key reset".
+#
+# 🔴 الشهادة **ملف عام** (بلاي نفسها بتعرض بصمتها وبتتيح تنزيلها)، فطباعتها في
+# اللوج ورفعها كـartifact مافيهاش أي سرّ. **المفتاح الخاص مابيخرجش من الرنر**:
+# بيتكتب برّه الريبو في `$RUNNER_TEMP` بصلاحية 600 وبيتمسح بـ`trap` مهما حصل.
+#
+# ولزومه إن `openssl` بتاع الماك (LibreSSL 2.8) **مابيقراش** مخزن PKCS12 بـMAC
+# من نوع SHA-256 — وده الافتراضي في `keytool` — فالاستخراج محليًّا بيفشل من غير
+# تثبيت JDK أو openssl أحدث. الرنر عنده الاتنين أصلًا.
+#
+# يدوي بس — مابيشتغلش على أي push.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cert:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Export the upload certificate
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+
+          # سرّ ناقص مابيطلّعش من keytool رسالة مفهومة، فبنسمّي الناقص هنا.
+          for v in ANDROID_KEYSTORE_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS; do
+            if [ -z "${!v}" ]; then echo "FAIL: missing secret $v"; exit 1; fi
+          done
+
+          KS="$RUNNER_TEMP/upload.jks"
+          trap 'rm -f "$KS"' EXIT
+          umask 077
+
+          # المسافات والتابات بتتشال قبل الفك — `base64 -d` بيتجاهل فواصل الأسطر
+          # لوحده إنما بيرفض المسافة، وأثر لصق عادي بيسيب واحدة في الآخر.
+          printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '\n\r \t' | base64 -d > "$KS" 2>/dev/null \
+            || { echo "FAIL: ANDROID_KEYSTORE_B64 is not valid base64"; exit 1; }
+          test -s "$KS" || { echo "FAIL: ANDROID_KEYSTORE_B64 decoded to an empty file"; exit 1; }
+
+          # بصمة وحجم عشان المقارنة بالملف اللي على الماك — ومش سرّ.
+          echo "keystore bytes: $(stat -c%s "$KS")"
+          echo "keystore sha256: $(sha256sum "$KS" | cut -c1-12)"
+
+          keytool -exportcert -rfc \
+            -keystore "$KS" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" -file upload_certificate.pem \
+            || { echo "FAIL: cannot export the certificate — wrong ANDROID_KEYSTORE_PASSWORD or ANDROID_KEY_ALIAS"; exit 1; }
+
+          # فحص إيجابي: الناتج شهادة بتتفكّ فعلًا، مش ملف فاضي ولا رسالة خطأ.
+          head -1 upload_certificate.pem | grep -q 'BEGIN CERTIFICATE' \
+            || { echo "FAIL: output is not a PEM certificate"; exit 1; }
+          openssl x509 -in upload_certificate.pem -noout \
+            || { echo "FAIL: the PEM does not parse as a certificate"; exit 1; }
+
+          echo "CERT-OK"
+          openssl x509 -in upload_certificate.pem -noout -fingerprint -sha256
+          openssl x509 -in upload_certificate.pem -noout -subject -enddate
+          echo "----- upload_certificate.pem -----"
+          cat upload_certificate.pem
+          echo "----- end -----"
+
+      - name: Upload the certificate
+        uses: actions/upload-artifact@v4
+        with:
+          name: upload-certificate
+          path: upload_certificate.pem
+          retention-days: 7

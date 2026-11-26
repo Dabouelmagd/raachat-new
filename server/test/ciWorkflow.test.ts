@@ -205,7 +205,17 @@ describe("الموقع التعريفي في الـCI", () => {
  * واللي بياخد باله مستخدم بلاغ مش فحص.
  */
 describe("نسخة الـrunner مثبّتة", () => {
-  const files = ["ci.yml", "android.yml"];
+  // 🔴 القايمة بتتقرا من المجلد مش مكتوبة بالإيد: أي وظيفة جديدة تتضاف كانت
+  // **بتخرج من الحارس في سكوت** وترجع لـ`ubuntu-latest` بلا ما حد ياخد باله
+  // (نفس فخّ «الثابت اللي محدش بينادیه»). والعدّ تحتها عشان قايمة فاضية
+  // مابتخليش الفحصين يعدّوا بلا معنى.
+  const files = fs
+    .readdirSync(path.join(ROOT, ".github/workflows"))
+    .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
+
+  it("🔴 الحارس بيلفّ على ملفات الوظائف فعلًا", () => {
+    expect(files.length, "مفيش ولا ملف وظيفة اتقرا").toBeGreaterThanOrEqual(2);
+  });
 
   it("🔴 مفيش ولا وظيفة على `ubuntu-latest`", () => {
     for (const f of files) {
